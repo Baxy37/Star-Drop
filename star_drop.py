@@ -457,7 +457,7 @@ STATIC_FILES = {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=2">
+    <link rel="stylesheet" href="/static/style.css?v=3">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -615,7 +615,7 @@ STATIC_FILES = {
         </div>
     </div>
 
-    <script src="/static/script.js?v=2"></script>
+    <script src="/static/script.js?v=3"></script>
 </body>
 </html>""",
     "style.css": """* {
@@ -659,7 +659,7 @@ body.theme-hard {
     --accent-glow: #f4433666;
 }
 
-/* Анимированный фон с элементами, летящими в разные стороны */
+/* Анимированный фон */
 .stars-background {
     position: fixed;
     top: 0;
@@ -682,7 +682,6 @@ body.theme-hard {
     animation-delay: var(--delay);
 }
 
-/* Разные направления и скорости */
 .stars-background span:nth-child(1) { left: 5%; top: 10%; --duration: 12s; --delay: 0s; animation: float1 12s ease-in-out infinite alternate; }
 .stars-background span:nth-child(2) { left: 15%; top: 20%; --duration: 15s; --delay: 2s; animation: float2 15s ease-in-out infinite alternate; }
 .stars-background span:nth-child(3) { left: 25%; top: 5%; --duration: 10s; --delay: 1s; animation: float3 10s ease-in-out infinite alternate; }
@@ -708,7 +707,6 @@ body.theme-hard {
 .stars-background span:nth-child(23) { left: 45%; top: 20%; --duration: 16s; --delay: 4.8s; animation: float23 16s ease-in-out infinite alternate; }
 .stars-background span:nth-child(24) { left: 60%; top: 45%; --duration: 10s; --delay: 1.3s; animation: float24 10s ease-in-out infinite alternate; }
 
-/* Анимации для каждого элемента с разными направлениями */
 @keyframes float1 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(30px, -20px) rotate(30deg); } }
 @keyframes float2 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-20px, 40px) rotate(-20deg); } }
 @keyframes float3 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(40px, -10px) rotate(45deg); } }
@@ -734,7 +732,7 @@ body.theme-hard {
 @keyframes float23 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(25px, 10px) rotate(35deg); } }
 @keyframes float24 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-15px, -10px) rotate(-15deg); } }
 
-/* Остальные стили (как ранее) */
+/* Остальные стили */
 #top-bar {
     display: flex;
     justify-content: space-between;
@@ -1407,10 +1405,8 @@ if (window.Telegram && window.Telegram.WebApp) {
 
 // Загружаем данные пользователя
 fetchUserData().then(() => {
-    // После загрузки данных инициализируем игры
     initGames();
 }).catch(() => {
-    // Если ошибка, всё равно инициализируем игры
     initGames();
 });
 
@@ -1530,25 +1526,89 @@ function initGames() {
     applyTheme('light');
     drawWheel();
     updateSpinCost();
-    // Запускаем медленное вращение рулетки
     startSlowSpin();
     const initialBet = parseInt(document.getElementById('bet-range').value);
     document.getElementById('bet-display').textContent = initialBet;
     drawRocket(0, 'idle');
     document.getElementById('rocket-countdown').textContent = '0';
+    // Запускаем автоматические раунды ракетки
+    startAutoRocket();
+}
+
+// === Автоматические раунды ракетки ===
+let autoRocketTimer = null;
+function startAutoRocket() {
+    if (autoRocketTimer) clearInterval(autoRocketTimer);
+    autoRocketTimer = setInterval(() => {
+        // Запускаем автоматический раунд, если ракетка не активна
+        if (!rocketActive) {
+            // Симулируем раунд
+            const fakeBet = 500 + Math.floor(Math.random() * 500) * 10; // 500-5500
+            simulateRocketRound(fakeBet);
+        }
+    }, 10000 + Math.random() * 15000); // 10-25 секунд
+}
+
+// Симуляция раунда ракетки
+function simulateRocketRound(bet) {
+    const win = Math.random() < 0.35; // 35% шанс выигрыша
+    const crashMultiplier = win ? 1.1 + Math.random() * 2.0 : 0.5 + Math.random() * 0.5;
+    // Показываем анимацию
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += 0.02;
+        if (progress >= 1) {
+            clearInterval(interval);
+            if (win) {
+                const winAmount = Math.floor(bet * crashMultiplier);
+                // Добавляем фейковый выигрыш в ленту
+                addFakeWin(winAmount);
+            }
+            // Сброс состояния
+            document.getElementById('rocket-multiplier').textContent = '0.00';
+            document.getElementById('rocket-status').textContent = 'Ожидание';
+            drawRocket(0, 'idle');
+            return;
+        }
+        const currentMultiplier = win ? 1 + progress * crashMultiplier : progress * 0.8;
+        document.getElementById('rocket-multiplier').textContent = currentMultiplier.toFixed(2);
+        if (win) {
+            document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
+            drawRocket(currentMultiplier, 'active');
+        } else {
+            if (progress > 0.6) {
+                document.getElementById('rocket-status').textContent = '💥 Упала!';
+                drawRocket(currentMultiplier, 'crashed');
+            } else {
+                document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
+                drawRocket(currentMultiplier, 'active');
+            }
+        }
+    }, 200);
+}
+
+// Добавление фейковых выигрышей в ленту
+function addFakeWin(amount) {
+    const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 'player_' + (200000 + Math.floor(Math.random()*800000)), 'gamer_' + (300000 + Math.floor(Math.random()*700000))];
+    const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
+    const prizeName = '🎰 Слот';
+    const list = document.getElementById('feed-list');
+    const li = document.createElement('li');
+    li.textContent = '@' + username + ' выиграл ' + prizeName + ' (+' + amount + ' токенов)';
+    list.insertBefore(li, list.firstChild);
+    if (list.children.length > 10) list.removeChild(list.lastChild);
 }
 
 // === Медленное вращение рулетки ===
 function startSlowSpin() {
     if (isSpinning) return;
-    // Плавное вращение с помощью requestAnimationFrame
     let lastTime = 0;
     function spinStep(time) {
-        if (isSpinning) return; // если идёт резкое вращение, останавливаем
+        if (isSpinning) return;
         if (!lastTime) lastTime = time;
         const delta = (time - lastTime) / 1000;
         lastTime = time;
-        slowRotation += delta * 10; // скорость 10 градусов в секунду
+        slowRotation += delta * 10;
         canvas.style.transform = `rotate(${slowRotation}deg)`;
         requestAnimationFrame(spinStep);
     }
@@ -1661,13 +1721,11 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         const data = await resp.json();
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
-            // Резкое вращение с последующей остановкой
             const extraSpins = 5 + Math.floor(Math.random()*3);
             const randomAngle = Math.random()*360;
             currentRotation += (extraSpins*360) + randomAngle;
             canvas.style.transition = 'transform 2s cubic-bezier(0.2, 0.8, 0.2, 1)';
             canvas.style.transform = `rotate(${currentRotation}deg)`;
-            // Через 2 секунды показываем результат и возвращаем медленное вращение
             setTimeout(() => {
                 document.getElementById('result-message').textContent = data.message;
                 document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
@@ -1676,7 +1734,6 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
                 document.getElementById('spin-btn').disabled = false;
                 const cost = { light:25, normal:50, hard:100 }[currentMode];
                 document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
-                // Возвращаем медленное вращение
                 canvas.style.transition = 'none';
                 slowRotation = currentRotation;
                 startSlowSpin();
@@ -1966,7 +2023,6 @@ document.getElementById('withdraw-btn').addEventListener('click', async () => {
         const data = await resp.json();
         if (resp.ok) {
             alert('✅ Заявка на вывод отправлена!');
-            // Обновляем баланс
             fetchUserData();
         } else alert('❌ ' + data.detail);
     } catch (e) { alert('Ошибка соединения'); console.error(e); }
