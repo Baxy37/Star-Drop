@@ -27,37 +27,37 @@ SPIN_COSTS = {
     "hard": 100
 }
 
-# Короткие названия с эмодзи для отображения на колесе
+# Призы для бекенда (используются при вычислении выигрыша)
 PRIZES = {
     "light": [
-        {"name": "🎈", "value": 15},
-        {"name": "🍬", "value": 20},
-        {"name": "⭐", "value": 25},
-        {"name": "🌸", "value": 40},
-        {"name": "💨", "value": 0},
-        {"name": "💨", "value": 0},
-        {"name": "💨", "value": 0},
-        {"name": "💨", "value": 0},
+        {"name": "🧸 Мишка", "value": 15},
+        {"name": "🍬 Конфета", "value": 20},
+        {"name": "⭐ Звезда", "value": 25},
+        {"name": "🌹 Роза", "value": 40},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "🧸 Мишка", "value": 10},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "⭐ Звезда", "value": 20},
     ],
     "normal": [
-        {"name": "🎮", "value": 120},
-        {"name": "📱", "value": 200},
-        {"name": "🎧", "value": 150},
-        {"name": "⌚", "value": 250},
-        {"name": "💨", "value": 0},
-        {"name": "💨", "value": 0},
-        {"name": "💨", "value": 0},
-        {"name": "💨", "value": 0},
+        {"name": "💍 Кольцо", "value": 120},
+        {"name": "💎 Бриллиант", "value": 200},
+        {"name": "🧁 Торт", "value": 150},
+        {"name": "🏆 Кубок", "value": 250},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "💍 Кольцо", "value": 100},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "💎 Бриллиант", "value": 180},
     ],
     "hard": [
-        {"name": "👑", "value": 600},
-        {"name": "💎", "value": 800},
-        {"name": "🚁", "value": 700},
-        {"name": "🛸", "value": 1000},
-        {"name": "💨", "value": 0},
-        {"name": "💨", "value": 0},
-        {"name": "💨", "value": 0},
-        {"name": "💨", "value": 0},
+        {"name": "👑 Корона", "value": 600},
+        {"name": "🧢 Кепка Дурова", "value": 800},
+        {"name": "🚀 Ракета", "value": 700},
+        {"name": "🛸 НЛО", "value": 1000},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "👑 Корона", "value": 500},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "🚀 Ракета", "value": 650},
     ]
 }
 
@@ -330,6 +330,7 @@ app.add_middleware(
 STATIC_DIR = "static"
 os.makedirs(STATIC_DIR, exist_ok=True)
 
+# ==================== НОВЫЕ СТАТИЧЕСКИЕ ФАЙЛЫ ====================
 STATIC_FILES = {
     "index.html": """<!DOCTYPE html>
 <html lang="ru">
@@ -339,7 +340,12 @@ STATIC_FILES = {
     <title>Star Drop</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body class="theme-light">
+    <!-- Фоновые летящие звёздочки -->
+    <div class="stars-background">
+        <span>⭐</span><span>✨</span><span>🌟</span><span>💫</span><span>⭐</span><span>✨</span><span>🌟</span><span>💫</span>
+    </div>
+
     <div id="top-bar">
         <div id="username" style="cursor:pointer;">@user</div>
         <div id="balance">
@@ -348,6 +354,8 @@ STATIC_FILES = {
             <button id="gifts-btn">Мои подарки</button>
         </div>
     </div>
+
+    <!-- Меню пополнения (Payment Links) -->
     <div id="deposit-menu" style="display: none;">
         <div style="width:100%; text-align:center; margin-bottom:10px; font-weight:bold; color:var(--accent-color);">Пополнить баланс</div>
         <button class="deposit-option" data-amount="100">100₽</button>
@@ -356,6 +364,7 @@ STATIC_FILES = {
         <button class="deposit-option" data-amount="1000">1000₽</button>
         <button id="close-deposit">✖</button>
     </div>
+
     <div id="referral-modal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
         <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:300px; width:90%; text-align:center; border:1px solid var(--accent-color);">
             <h3 style="color:var(--accent-color); margin-bottom:10px;">Реферальная система</h3>
@@ -368,41 +377,54 @@ STATIC_FILES = {
             <button id="close-ref-modal" style="background:#333; border:none; color:#fff; padding:8px 20px; border-radius:6px; cursor:pointer;">Закрыть</button>
         </div>
     </div>
+
     <div id="main-title">
         <h1>РУЛЕТКА STAR DROP</h1>
-        <p>Испытай удачу и выиграй крипто-подарки!</p>
+        <p>Испытай удачу и выиграй Telegram-подарки!</p>
     </div>
+
     <div id="prizes-list">
-        <div class="prize-item">Telegram Username x1</div>
-        <div class="prize-item">Rolex x1</div>
-        <div class="prize-item">Cash x1</div>
-        <div class="prize-item">Premium x1</div>
-        <div class="prize-item">Ring x1</div>
-        <div class="prize-item">Gold Bar x1</div>
+        <div class="prize-item">🧸 Мишка</div>
+        <div class="prize-item">💎 Бриллиант</div>
+        <div class="prize-item">💍 Кольцо</div>
+        <div class="prize-item">🧁 Торт</div>
+        <div class="prize-item">🧢 Кепка Дурова</div>
+        <div class="prize-item">🚀 Ракета</div>
     </div>
+
+    <!-- Режимы: Low (жёлтый), Normal (синий), Hard (красный) -->
     <div id="mode-selector">
-        <button class="mode-btn active" data-mode="light">Light</button>
+        <button class="mode-btn active" data-mode="light">Low</button>
         <button class="mode-btn" data-mode="normal">Normal</button>
         <button class="mode-btn" data-mode="hard">Hard</button>
     </div>
+
     <div id="wheel-container">
+        <!-- Указатель рулетки сверху -->
+        <div id="wheel-pointer">▼</div>
         <canvas id="wheelCanvas" width="300" height="300"></canvas>
     </div>
+
     <div id="spin-area">
         <div id="spin-info">1 спин = <span id="spin-cost">25</span> монет</div>
         <button id="spin-btn">КРУТИТЬ <span id="spin-cost-label">25 Токенов</span></button>
     </div>
+
     <div id="result-message"></div>
+
     <div id="notification-feed">
         <h3>Последние выигрыши</h3>
         <ul id="feed-list"></ul>
     </div>
+
     <button id="withdraw-btn">Вывести токены</button>
+
     <div id="bottom-nav">
         <button class="nav-btn active" data-tab="roulette">Рулетка</button>
         <button class="nav-btn" data-tab="tasks">Задания</button>
         <button class="nav-btn" data-tab="top">Топ</button>
     </div>
+
     <script src="/static/script.js"></script>
 </body>
 </html>""",
@@ -412,6 +434,7 @@ STATIC_FILES = {
     box-sizing: border-box;
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
+
 :root {
     --accent-color: #ffd700;
     --accent-glow: #ffd70066;
@@ -420,6 +443,7 @@ STATIC_FILES = {
     --card-bg: #111;
     --border-color: #333;
 }
+
 body {
     background: var(--bg-dark);
     color: var(--text-light);
@@ -428,7 +452,11 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    overflow-x: hidden;
+    position: relative;
 }
+
+/* Цветовые темы для режимов */
 body.theme-light {
     --accent-color: #ffd700;
     --accent-glow: #ffd70066;
@@ -441,22 +469,58 @@ body.theme-hard {
     --accent-color: #f44336;
     --accent-glow: #f4433666;
 }
+
+/* Анимированный фоновый элемент (падающие звёздочки) */
+.stars-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -1;
+    overflow: hidden;
+}
+
+.stars-background span {
+    position: absolute;
+    display: block;
+    animation: fall linear infinite;
+    opacity: 0.3;
+}
+
+.stars-background span:nth-child(1) { left: 10%; animation-duration: 7s; font-size: 14px; }
+.stars-background span:nth-child(2) { left: 30%; animation-duration: 10s; font-size: 18px; animation-delay: 2s; }
+.stars-background span:nth-child(3) { left: 50%; animation-duration: 6s; font-size: 12px; animation-delay: 1s; }
+.stars-background span:nth-child(4) { left: 70%; animation-duration: 9s; font-size: 20px; animation-delay: 3s; }
+.stars-background span:nth-child(5) { left: 85%; animation-duration: 8s; font-size: 15px; animation-delay: 0.5s; }
+.stars-background span:nth-child(6) { left: 20%; animation-duration: 11s; font-size: 16px; animation-delay: 4s; }
+.stars-background span:nth-child(7) { left: 60%; animation-duration: 7s; font-size: 19px; animation-delay: 2.5s; }
+.stars-background span:nth-child(8) { left: 90%; animation-duration: 12s; font-size: 13px; animation-delay: 1.5s; }
+
+@keyframes fall {
+    0% { transform: translateY(-20px) rotate(0deg); opacity: 0; }
+    20% { opacity: 0.6; }
+    80% { opacity: 0.6; }
+    100% { transform: translateY(105vh) rotate(360deg); opacity: 0; }
+}
+
 #top-bar {
     display: flex;
     justify-content: space-between;
     width: 100%;
     padding: 10px 0;
     border-bottom: 1px solid var(--border-color);
+    z-index: 2;
 }
+
 #username {
     font-size: 18px;
     font-weight: 600;
     color: var(--accent-color);
     cursor: pointer;
 }
-#username:hover {
-    text-decoration: underline;
-}
+
 #balance {
     font-size: 18px;
     display: flex;
@@ -464,9 +528,11 @@ body.theme-hard {
     gap: 8px;
     color: var(--accent-color);
 }
+
 #balance-amount {
     font-weight: 700;
 }
+
 #deposit-btn {
     background: var(--accent-color);
     border: none;
@@ -477,7 +543,10 @@ body.theme-hard {
     font-weight: bold;
     color: #0a0a0a;
     cursor: pointer;
+    transition: transform 0.2s;
 }
+#deposit-btn:hover { transform: scale(1.1); }
+
 #gifts-btn {
     background: var(--accent-color);
     border: none;
@@ -488,6 +557,7 @@ body.theme-hard {
     cursor: pointer;
     font-size: 12px;
 }
+
 #deposit-menu {
     background: var(--card-bg);
     border: 1px solid var(--accent-color);
@@ -498,7 +568,10 @@ body.theme-hard {
     flex-wrap: wrap;
     gap: 10px;
     justify-content: center;
+    z-index: 10;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 }
+
 .deposit-option {
     background: var(--accent-color);
     color: #0a0a0a;
@@ -507,7 +580,10 @@ body.theme-hard {
     border-radius: 8px;
     font-weight: 600;
     cursor: pointer;
+    transition: filter 0.2s;
 }
+.deposit-option:hover { filter: brightness(1.1); }
+
 #close-deposit {
     background: transparent;
     color: var(--accent-color);
@@ -515,21 +591,27 @@ body.theme-hard {
     font-size: 20px;
     cursor: pointer;
 }
+
 #main-title {
     text-align: center;
     margin: 20px 0 10px;
+    z-index: 2;
 }
+
 #main-title h1 {
     font-size: 24px;
     font-weight: 900;
     color: var(--accent-color);
     letter-spacing: 2px;
+    text-shadow: 0 0 10px var(--accent-glow);
 }
+
 #main-title p {
     color: #aaa;
     font-size: 14px;
     margin-top: 4px;
 }
+
 #prizes-list {
     display: flex;
     flex-wrap: wrap;
@@ -538,7 +620,9 @@ body.theme-hard {
     margin: 15px 0;
     width: 100%;
     max-width: 400px;
+    z-index: 2;
 }
+
 .prize-item {
     background: #1a1a1a;
     border: 1px solid var(--border-color);
@@ -547,11 +631,14 @@ body.theme-hard {
     font-size: 13px;
     color: #ccc;
 }
+
 #mode-selector {
     display: flex;
     gap: 12px;
     margin: 10px 0;
+    z-index: 2;
 }
+
 .mode-btn {
     background: #222;
     color: #aaa;
@@ -568,29 +655,49 @@ body.theme-hard {
     color: #0a0a0a;
     box-shadow: 0 0 15px var(--accent-glow);
 }
+
 #wheel-container {
     position: relative;
     width: 280px;
     height: 280px;
-    margin: 10px auto;
+    margin: 15px auto;
+    z-index: 2;
 }
+
+#wheel-pointer {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 24px;
+    color: var(--accent-color);
+    z-index: 5;
+    text-shadow: 0 0 8px var(--accent-glow);
+}
+
 #wheelCanvas {
     width: 100%;
     height: 100%;
     border-radius: 50%;
     box-shadow: 0 0 30px var(--accent-glow);
+    border: 4px solid var(--accent-color);
+    transition: transform 3s cubic-bezier(0.15, 0.7, 0.1, 1);
 }
+
 #spin-area {
     display: flex;
     flex-direction: column;
     align-items: center;
     margin: 15px 0;
+    z-index: 2;
 }
+
 #spin-info {
     font-size: 14px;
     color: #aaa;
     margin-bottom: 8px;
 }
+
 #spin-btn {
     background: var(--accent-color);
     color: #0a0a0a;
@@ -601,26 +708,33 @@ body.theme-hard {
     font-size: 18px;
     cursor: pointer;
     box-shadow: 0 0 20px var(--accent-glow);
-    transition: 0.1s;
+    transition: transform 0.1s, box-shadow 0.2s;
     display: flex;
     flex-direction: column;
     align-items: center;
     line-height: 1.2;
 }
+
 #spin-btn:active {
     transform: scale(0.95);
 }
+
 #spin-btn span {
     font-size: 14px;
     font-weight: 400;
 }
+
 #result-message {
     margin: 10px 0;
     font-size: 18px;
     font-weight: 600;
     min-height: 40px;
     text-align: center;
+    z-index: 2;
+    color: var(--accent-color);
+    text-shadow: 0 0 10px var(--accent-glow);
 }
+
 #notification-feed {
     width: 100%;
     max-width: 400px;
@@ -628,26 +742,29 @@ body.theme-hard {
     border-radius: 12px;
     padding: 12px;
     margin: 20px 0;
+    z-index: 2;
+    border: 1px solid var(--border-color);
 }
+
 #notification-feed h3 {
     color: var(--accent-color);
     margin-bottom: 8px;
     font-size: 16px;
 }
+
 #feed-list {
     list-style: none;
     max-height: 150px;
     overflow-y: auto;
 }
+
 #feed-list li {
     padding: 6px 0;
     border-bottom: 1px solid var(--border-color);
     font-size: 13px;
     color: #ddd;
 }
-#feed-list li:last-child {
-    border-bottom: none;
-}
+
 #withdraw-btn {
     background: var(--accent-color);
     color: #0a0a0a;
@@ -658,7 +775,10 @@ body.theme-hard {
     font-size: 16px;
     margin-top: 10px;
     cursor: pointer;
+    box-shadow: 0 0 15px var(--accent-glow);
+    z-index: 2;
 }
+
 #bottom-nav {
     position: fixed;
     bottom: 0;
@@ -669,7 +789,9 @@ body.theme-hard {
     justify-content: space-around;
     padding: 10px 0;
     border-top: 1px solid var(--border-color);
+    z-index: 10;
 }
+
 .nav-btn {
     background: transparent;
     color: #888;
@@ -691,15 +813,19 @@ let user_id = null;
 let balance = 0;
 let currentMode = 'light';
 let isSpinning = false;
+let currentRotation = 0;
 
-window.Telegram.WebApp.ready();
-const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
-if (tgUser && tgUser.id) {
-    user_id = tgUser.id;
-    document.getElementById('username').textContent = '@' + (tgUser.username || tgUser.first_name);
-    fetchUserData();
-} else {
-    user_id = prompt('Введите ваш Telegram ID (для теста)') || 123456789;
+if (window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.ready();
+    const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
+    if (tgUser && tgUser.id) {
+        user_id = tgUser.id;
+        document.getElementById('username').textContent = '@' + (tgUser.username || tgUser.first_name);
+        fetchUserData();
+    }
+}
+if (!user_id) {
+    user_id = prompt('Введите ваш Telegram ID (для теста):') || 123456789;
     document.getElementById('username').textContent = '@user_' + user_id;
     fetchUserData();
 }
@@ -742,18 +868,12 @@ document.getElementById('copy-ref-link').addEventListener('click', () => {
     navigator.clipboard.writeText(link).then(() => {
         alert('Ссылка скопирована!');
     }).catch(() => {
-        alert('Не удалось скопировать ссылку, скопируйте вручную: ' + link);
+        alert('Скопируйте вручную: ' + link);
     });
 });
 
-document.getElementById('referral-modal').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) {
-        document.getElementById('referral-modal').style.display = 'none';
-    }
-});
-
 document.getElementById('gifts-btn').addEventListener('click', () => {
-    alert('Здесь будут ваши выигранные подарки. Пока пусто.');
+    alert('Здесь будут ваши выигранные Telegram-подарки!');
 });
 
 function applyTheme(mode) {
@@ -765,6 +885,7 @@ function applyTheme(mode) {
 
 document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+        if (isSpinning) return;
         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentMode = btn.dataset.mode;
@@ -784,96 +905,110 @@ function updateSpinCost() {
 const canvas = document.getElementById('wheelCanvas');
 const ctx = canvas.getContext('2d');
 
+// Заполняем колесо реальными Telegram подарками для каждого режима
+function getPrizesForMode(mode) {
+    const allPrizes = {
+        light: [
+            { name: '🧸', value: 15 },
+            { name: '🍬', value: 20 },
+            { name: '⭐', value: 25 },
+            { name: '🌹', value: 40 },
+            { name: '💨', value: 0 },
+            { name: '🧸', value: 10 },
+            { name: '💨', value: 0 },
+            { name: '⭐', value: 20 }
+        ],
+        normal: [
+            { name: '💍', value: 120 },
+            { name: '💎', value: 200 },
+            { name: '🧁', value: 150 },
+            { name: '🏆', value: 250 },
+            { name: '💨', value: 0 },
+            { name: '💍', value: 100 },
+            { name: '💨', value: 0 },
+            { name: '💎', value: 180 }
+        ],
+        hard: [
+            { name: '👑', value: 600 },
+            { name: '🧢', value: 800 },
+            { name: '🚀', value: 700 },
+            { name: '🛸', value: 1000 },
+            { name: '💨', value: 0 },
+            { name: '👑', value: 500 },
+            { name: '💨', value: 0 },
+            { name: '🚀', value: 650 }
+        ]
+    };
+    return allPrizes[mode] || allPrizes.light;
+}
+
 function drawWheel() {
     const width = canvas.width;
     const height = canvas.height;
     const centerX = width / 2;
     const centerY = height / 2;
-    const radius = Math.min(width, height) / 2 - 5;
+    const radius = Math.min(width, height) / 2 - 4;
+    
     ctx.clearRect(0, 0, width, height);
     const modePrizes = getPrizesForMode(currentMode);
     const count = modePrizes.length;
     const angleStep = (2 * Math.PI) / count;
+
     for (let i = 0; i < count; i++) {
         const startAngle = i * angleStep;
         const endAngle = startAngle + angleStep;
+        
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
         ctx.arc(centerX, centerY, radius, startAngle, endAngle);
         ctx.closePath();
-        // Яркие цвета для сегментов
-        ctx.fillStyle = i % 2 === 0 ? '#ffd700' : '#b8860b';
+        
+        // Цвета секторов в зависимости от темы
+        if (currentMode === 'light') {
+            ctx.fillStyle = i % 2 === 0 ? '#ffea75' : '#e6c229';
+        } else if (currentMode === 'normal') {
+            ctx.fillStyle = i % 2 === 0 ? '#64b5f6' : '#1976d2';
+        } else {
+            ctx.fillStyle = i % 2 === 0 ? '#e57373' : '#d32f2f';
+        }
+        
         ctx.fill();
         ctx.strokeStyle = '#0a0a0a';
         ctx.lineWidth = 2;
         ctx.stroke();
+
         ctx.save();
         ctx.translate(centerX, centerY);
         ctx.rotate(startAngle + angleStep / 2);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#000';
-        ctx.font = 'bold 28px sans-serif';
-        const label = modePrizes[i].name;
-        ctx.fillText(label, radius * 0.6, 0);
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText(modePrizes[i].name, radius * 0.65, 0);
         ctx.restore();
     }
-    // Добавляем центральный круг
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 20, 0, 2 * Math.PI);
-    ctx.fillStyle = '#ffd700';
-    ctx.fill();
-    ctx.strokeStyle = '#0a0a0a';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-}
 
-function getPrizesForMode(mode) {
-    const allPrizes = {
-        light: [
-            {name: '🎈', value: 15},
-            {name: '🍬', value: 20},
-            {name: '⭐', value: 25},
-            {name: '🌸', value: 40},
-            {name: '💨', value: 0},
-            {name: '💨', value: 0},
-            {name: '💨', value: 0},
-            {name: '💨', value: 0}
-        ],
-        normal: [
-            {name: '🎮', value: 120},
-            {name: '📱', value: 200},
-            {name: '🎧', value: 150},
-            {name: '⌚', value: 250},
-            {name: '💨', value: 0},
-            {name: '💨', value: 0},
-            {name: '💨', value: 0},
-            {name: '💨', value: 0}
-        ],
-        hard: [
-            {name: '👑', value: 600},
-            {name: '💎', value: 800},
-            {name: '🚁', value: 700},
-            {name: '🛸', value: 1000},
-            {name: '💨', value: 0},
-            {name: '💨', value: 0},
-            {name: '💨', value: 0},
-            {name: '💨', value: 0}
-        ]
-    };
-    return allPrizes[mode] || allPrizes.light;
+    // Центральный кружок колеса
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 22, 0, 2 * Math.PI);
+    ctx.fillStyle = '#111';
+    ctx.fill();
+    ctx.strokeStyle = currentMode === 'light' ? '#ffd700' : (currentMode === 'normal' ? '#2196F3' : '#f44336');
+    ctx.lineWidth = 3;
+    ctx.stroke();
 }
 
 applyTheme('light');
 drawWheel();
 updateSpinCost();
 
+// Логика вращения колеса и запроса на сервер
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (isSpinning) return;
     isSpinning = true;
     document.getElementById('spin-btn').disabled = true;
     document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>Загрузка...</span>';
     document.getElementById('result-message').textContent = '';
+
     try {
         const resp = await fetch('/api/spin', {
             method: 'POST',
@@ -881,11 +1016,20 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
             body: JSON.stringify({ user_id, mode: currentMode })
         });
         const data = await resp.json();
+        
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
-            document.getElementById('result-message').textContent = data.message;
-            animateWheel();
-            if (data.win) setTimeout(fetchFeed, 1000);
+            
+            // Анимация вращения (обороты + случайный доворот)
+            const extraSpins = 5;
+            const randomAngle = Math.random() * 360;
+            currentRotation += (extraSpins * 360) + randomAngle;
+            canvas.style.transform = `rotate(${currentRotation}deg)`;
+
+            setTimeout(() => {
+                document.getElementById('result-message').textContent = data.message;
+                if (data.win) fetchFeed();
+            }, 3000);
         } else {
             document.getElementById('result-message').textContent = '❌ ' + data.detail;
         }
@@ -893,22 +1037,16 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         document.getElementById('result-message').textContent = 'Ошибка соединения';
         console.error(e);
     }
-    isSpinning = false;
-    document.getElementById('spin-btn').disabled = false;
-    const cost = { light: 25, normal: 50, hard: 100 }[currentMode];
-    document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
+
+    setTimeout(() => {
+        isSpinning = false;
+        document.getElementById('spin-btn').disabled = false;
+        const cost = { light: 25, normal: 50, hard: 100 }[currentMode];
+        document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
+    }, 3200);
 });
 
-function animateWheel() {
-    const angle = Math.random() * 2 * Math.PI * 5 + 2 * Math.PI;
-    canvas.style.transition = 'transform 2s cubic-bezier(0.17, 0.67, 0.12, 0.99)';
-    canvas.style.transform = 'rotate(' + angle + 'rad)';
-    setTimeout(() => {
-        canvas.style.transition = 'none';
-        canvas.style.transform = 'rotate(0rad)';
-    }, 2100);
-}
-
+// Работа кнопки пополнения (Payment Links)
 document.getElementById('deposit-btn').addEventListener('click', () => {
     const menu = document.getElementById('deposit-menu');
     menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
@@ -923,8 +1061,9 @@ document.querySelectorAll('.deposit-option').forEach(btn => {
             500: 'https://yookassa.ru/my/i/amMzSdZUSmIm/l',
             1000: 'https://yookassa.ru/my/i/amMzbZDBr9y2/l'
         };
-        window.open(links[amount], '_blank');
-        alert('После оплаты, пожалуйста, напишите администратору для зачисления токенов (временно).');
+        if (links[amount]) {
+            window.open(links[amount], '_blank');
+        }
     });
 });
 
@@ -988,13 +1127,12 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 """
 }
 
-# Создаём файлы только при отсутствии
+# Записываем файлы только если их нет (или перезаписываем всегда, чтобы обновить)
 for filename, content in STATIC_FILES.items():
     filepath = os.path.join(STATIC_DIR, filename)
-    if not os.path.exists(filepath):
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(content)
-        print(f"✅ Создан {filepath}")
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"✅ Обновлён {filepath}")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
