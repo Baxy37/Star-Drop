@@ -60,7 +60,7 @@ PRIZES = {
 
 WIN_CHANCE = 35
 DB_NAME = "star_drop.db"
-WEBAPP_URL = "http://127.0.0.1:8000"  # при необходимости замените на реальный домен
+WEBAPP_URL = "https://star-drop.onrender.com"  # при необходимости замените на реальный домен
 
 # ==================== БАЗА ДАННЫХ ====================
 def init_db():
