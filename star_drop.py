@@ -29,7 +29,7 @@ SPIN_COSTS = {
 
 PRIZES = {
     "light": [
-        {"name": "🎈 Воздушный шар", "value": 15},
+        {"name": "🎈 Шар", "value": 15},
         {"name": "🍬 Конфета", "value": 20},
         {"name": "⭐ Звезда", "value": 25},
         {"name": "🌸 Цветок", "value": 40},
@@ -39,7 +39,7 @@ PRIZES = {
         {"name": "💨 Пусто", "value": 0},
     ],
     "normal": [
-        {"name": "🎮 Игровая приставка", "value": 120},
+        {"name": "🎮 Приставка", "value": 120},
         {"name": "📱 Смартфон", "value": 200},
         {"name": "🎧 Наушники", "value": 150},
         {"name": "⌚ Умные часы", "value": 250},
@@ -63,7 +63,7 @@ PRIZES = {
 WIN_CHANCE = 35
 DB_NAME = "star_drop.db"
 WEBAPP_URL = "https://star-drop.onrender.com"  # ваш домен
-REFERRAL_BONUS = 50  # бонус за приведённого друга в токенах
+REFERRAL_BONUS = 50
 
 # ==================== БАЗА ДАННЫХ ====================
 def init_db():
@@ -138,30 +138,25 @@ def get_user(user_id: int) -> Optional[Dict]:
 def create_user(user_id: int, username: str = None, referrer_code: str = None):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    # Генерируем уникальный реферальный код
     import hashlib
     code = hashlib.md5(str(user_id).encode()).hexdigest()[:8]
     cur.execute(
         "INSERT OR IGNORE INTO users (user_id, username, referral_code) VALUES (?, ?, ?)",
         (user_id, username, code)
     )
-    # Если есть реферер, добавляем запись и бонус
     if referrer_code:
         cur.execute("SELECT user_id FROM users WHERE referral_code = ?", (referrer_code,))
         row = cur.fetchone()
         if row:
             referrer_id = row[0]
             if referrer_id != user_id:
-                # Проверяем, не был ли уже этот пользователь приглашён
                 cur.execute("SELECT id FROM referrals WHERE referred_id = ?", (user_id,))
                 if not cur.fetchone():
                     cur.execute(
                         "INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)",
                         (referrer_id, user_id)
                     )
-                    # Начисляем бонус рефереру
                     cur.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (REFERRAL_BONUS, referrer_id))
-                    # Записываем транзакцию
                     cur.execute(
                         "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
                         (referrer_id, "deposit", REFERRAL_BONUS, f"Бонус за приглашение пользователя {user_id}")
@@ -280,11 +275,10 @@ def get_spin_result(mode: str):
 def get_prizes_for_mode(mode: str):
     return PRIZES[mode]
 
-# ==================== ТЕЛЕГРАМ БОТ ====================
+# ==================== ТЕЛЕГРАМ БОТ (только webhook) ====================
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
-from aiogram.filters import CommandObject
 
 logging.basicConfig(level=logging.INFO)
 
@@ -298,13 +292,13 @@ def get_start_keyboard():
     )
 
 @dp.message(Command("start"))
-async def cmd_start(message: types.Message, command: CommandObject):
+async def cmd_start(message: types.Message):
+    args = message.text.split()
+    referrer_code = None
+    if len(args) > 1 and args[1].startswith("ref_"):
+        referrer_code = args[1][4:]
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
-    # Проверяем, есть ли реферальный код в аргументах
-    referrer_code = None
-    if command.args and command.args.startswith("ref_"):
-        referrer_code = command.args[4:]  # убираем "ref_"
     create_user(user_id, username, referrer_code)
     await message.answer(
         f"🎉 Приветствую тебя, {username}!\n"
@@ -331,7 +325,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Создаём папку static и файлы, если их нет
+# Создаём папку static и файлы
 STATIC_DIR = "static"
 os.makedirs(STATIC_DIR, exist_ok=True)
 
@@ -348,7 +342,7 @@ STATIC_FILES = {
     <div id="top-bar">
         <div id="username" style="cursor:pointer;">@user</div>
         <div id="balance">
-            <span id="balance-amount">0</span> 💰
+            <span id="balance-amount">0</span> $
             <button id="deposit-btn">+</button>
         </div>
     </div>
@@ -379,11 +373,11 @@ STATIC_FILES = {
     </div>
     <div id="wheel-container">
         <canvas id="wheelCanvas" width="300" height="300"></canvas>
-        <button id="spin-btn">Крутить!</button>
     </div>
     <div id="mode-info">
         <span>Стоимость спина: <span id="spin-cost">25</span> токенов</span>
     </div>
+    <button id="spin-btn">Крутить!</button>
     <div id="result-message"></div>
     <div id="notification-feed">
         <h3>Последние выигрыши</h3>
@@ -526,24 +520,20 @@ body.theme-hard {
     box-shadow: 0 0 30px var(--accent-glow);
 }
 #spin-btn {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
     background: var(--accent-color);
-    border: none;
-    border-radius: 50%;
-    width: 60px;
-    height: 60px;
-    font-weight: bold;
-    font-size: 16px;
     color: #0a0a0a;
+    border: none;
+    padding: 14px 40px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 18px;
     cursor: pointer;
     box-shadow: 0 0 20px var(--accent-glow);
     transition: 0.1s;
+    margin: 10px 0;
 }
 #spin-btn:active {
-    transform: translate(-50%, -50%) scale(0.9);
+    transform: scale(0.95);
 }
 #mode-info {
     margin: 10px 0;
@@ -609,7 +599,6 @@ if (tgUser && tgUser.id) {
     document.getElementById('username').textContent = '@' + (tgUser.username || tgUser.first_name);
     fetchUserData();
 } else {
-    // fallback для тестирования
     user_id = prompt('Введите ваш Telegram ID (для теста)') || 123456789;
     document.getElementById('username').textContent = '@user_' + user_id;
     fetchUserData();
@@ -658,7 +647,6 @@ document.getElementById('copy-ref-link').addEventListener('click', () => {
     });
 });
 
-// Закрытие по клику вне окна
 document.getElementById('referral-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) {
         document.getElementById('referral-modal').style.display = 'none';
@@ -716,10 +704,12 @@ function drawWheel() {
         ctx.save();
         ctx.translate(centerX, centerY);
         ctx.rotate(startAngle + angleStep / 2);
-        ctx.textAlign = 'right';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         ctx.fillStyle = '#0a0a0a';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText(modePrizes[i].name, radius * 0.7, 5);
+        ctx.font = 'bold 14px sans-serif';
+        const label = modePrizes[i].name;
+        ctx.fillText(label, radius * 0.65, 0);
         ctx.restore();
     }
 }
@@ -727,7 +717,7 @@ function drawWheel() {
 function getPrizesForMode(mode) {
     const allPrizes = {
         light: [
-            {name: '🎈 Воздушный шар', value: 15},
+            {name: '🎈 Шар', value: 15},
             {name: '🍬 Конфета', value: 20},
             {name: '⭐ Звезда', value: 25},
             {name: '🌸 Цветок', value: 40},
@@ -737,7 +727,7 @@ function getPrizesForMode(mode) {
             {name: '💨 Пусто', value: 0}
         ],
         normal: [
-            {name: '🎮 Игровая приставка', value: 120},
+            {name: '🎮 Приставка', value: 120},
             {name: '📱 Смартфон', value: 200},
             {name: '🎧 Наушники', value: 150},
             {name: '⌚ Умные часы', value: 250},
@@ -767,7 +757,8 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     if (isSpinning) return;
     isSpinning = true;
     document.getElementById('spin-btn').disabled = true;
-    document.getElementById('result-message').textContent = 'Крутим...';
+    document.getElementById('spin-btn').textContent = 'Крутим...';
+    document.getElementById('result-message').textContent = '';
     try {
         const resp = await fetch('/api/spin', {
             method: 'POST',
@@ -785,9 +776,11 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         }
     } catch (e) {
         document.getElementById('result-message').textContent = 'Ошибка соединения';
+        console.error(e);
     }
     isSpinning = false;
     document.getElementById('spin-btn').disabled = false;
+    document.getElementById('spin-btn').textContent = 'Крутить!';
 });
 
 function animateWheel() {
@@ -862,6 +855,7 @@ document.getElementById('withdraw-btn').addEventListener('click', async () => {
         }
     } catch (e) {
         alert('Ошибка соединения');
+        console.error(e);
     }
 });
 """
