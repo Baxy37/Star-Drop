@@ -457,7 +457,7 @@ STATIC_FILES = {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=2">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -615,7 +615,7 @@ STATIC_FILES = {
         </div>
     </div>
 
-    <script src="/static/script.js"></script>
+    <script src="/static/script.js?v=2"></script>
 </body>
 </html>""",
     "style.css": """* {
@@ -1364,36 +1364,55 @@ let isSpinning = false;
 let currentRotation = 0;
 let slowRotation = 0;
 
-// === Автоматическая авторизация через Telegram ===
+// === Получение данных пользователя из Telegram ===
 if (window.Telegram && window.Telegram.WebApp) {
     window.Telegram.WebApp.ready();
     const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
     if (tgUser && tgUser.id) {
         user_id = tgUser.id;
         localStorage.setItem('starDrop_userId', user_id);
-        // Сразу показываем username из Telegram
         document.getElementById('username').textContent = '@' + (tgUser.username || tgUser.first_name);
         const avatar = document.getElementById('avatar');
         const name = tgUser.first_name || 'U';
         avatar.textContent = name.charAt(0).toUpperCase();
         avatar.style.background = '#' + (user_id % 0xFFFFFF).toString(16).padStart(6, '0');
-        fetchUserData().then(() => initGames());
     } else {
-        alert('Пожалуйста, откройте приложение через бота Telegram');
-        document.getElementById('username').textContent = '@guest';
+        // Если Telegram не передал пользователя, используем сохранённый или гостевой
+        const savedId = localStorage.getItem('starDrop_userId');
+        if (savedId) {
+            user_id = parseInt(savedId);
+            document.getElementById('username').textContent = '@user_' + user_id;
+        } else {
+            // Генерируем временный ID для гостя
+            user_id = Math.floor(Math.random() * 1000000000) + 1000000000;
+            localStorage.setItem('starDrop_userId', user_id);
+            document.getElementById('username').textContent = '@guest_' + user_id;
+        }
+        document.getElementById('avatar').textContent = 'G';
     }
 } else {
+    // Если WebApp не доступен (тестовый режим)
     const savedId = localStorage.getItem('starDrop_userId');
     if (savedId) {
         user_id = parseInt(savedId);
         document.getElementById('username').textContent = '@user_' + user_id;
         document.getElementById('avatar').textContent = 'U';
-        fetchUserData().then(() => initGames());
     } else {
-        alert('Для работы приложения необходим Telegram');
-        document.getElementById('username').textContent = '@guest';
+        user_id = Math.floor(Math.random() * 1000000000) + 1000000000;
+        localStorage.setItem('starDrop_userId', user_id);
+        document.getElementById('username').textContent = '@guest_' + user_id;
+        document.getElementById('avatar').textContent = 'G';
     }
 }
+
+// Загружаем данные пользователя
+fetchUserData().then(() => {
+    // После загрузки данных инициализируем игры
+    initGames();
+}).catch(() => {
+    // Если ошибка, всё равно инициализируем игры
+    initGames();
+});
 
 async function fetchUserData() {
     if (!user_id) return;
@@ -1403,7 +1422,6 @@ async function fetchUserData() {
         const data = await resp.json();
         balance = data.balance;
         document.getElementById('balance-amount').textContent = balance;
-        // Если в БД есть username, используем его (он должен быть актуальным)
         if (data.username && data.username !== '') {
             document.getElementById('username').textContent = '@' + data.username;
         }
@@ -1970,15 +1988,9 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 
 for filename, content in STATIC_FILES.items():
     filepath = os.path.join(STATIC_DIR, filename)
-    if not os.path.exists(filepath):
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(content)
-        print(f"✅ Создан {filepath}")
-    else:
-        # Обновляем существующие файлы (перезаписываем)
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(content)
-        print(f"✅ Обновлён {filepath}")
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"✅ Обновлён {filepath}")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
