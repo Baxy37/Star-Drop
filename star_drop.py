@@ -6,7 +6,7 @@ import sqlite3
 import random
 import signal
 import time
-import secrets
+import string
 from datetime import datetime
 from typing import Optional, List, Dict
 import json
@@ -317,6 +317,13 @@ def use_promo(user_id: int, code: str):
 init_db()
 
 # ==================== УТИЛИТЫ ====================
+def generate_verification_code():
+    """Генерирует 4-символьный код из букв (кроме похожих) и цифр."""
+    chars = string.ascii_lowercase + string.digits
+    # исключаем похожие: 0, o, 1, l
+    chars = [c for c in chars if c not in '01ol']
+    return ''.join(random.choice(chars) for _ in range(4))
+
 def get_spin_result(mode: str):
     if mode == "light":
         win_chance = 30
@@ -444,7 +451,7 @@ STATIC_FILES = {
             <button id="login-btn">Войти через Telegram</button>
             <div id="code-section" style="display:none; margin-top:15px;">
                 <p>Введите код из Telegram</p>
-                <input type="text" id="code-input" placeholder="Код" maxlength="6" style="padding:10px; border-radius:8px; border:1px solid var(--accent-color); background:#222; color:#fff; text-align:center; font-size:20px; width:150px;">
+                <input type="text" id="code-input" placeholder="Код" maxlength="4" style="padding:10px; border-radius:8px; border:1px solid var(--accent-color); background:#222; color:#fff; text-align:center; font-size:20px; width:120px; text-transform:lowercase;">
                 <br>
                 <button id="verify-btn" style="margin-top:10px;">Подтвердить</button>
                 <p id="login-message" style="color:var(--accent-color); margin-top:8px;"></p>
@@ -744,16 +751,17 @@ body.theme-hard {
     color: #fff;
     text-align: center;
     font-size: 20px;
-    width: 150px;
+    width: 120px;
+    text-transform: lowercase;
 }
 
-/* Основные стили приложения (как ранее) */
 #app-content {
     width: 100%;
     max-width: 400px;
     display: none;
 }
 
+/* Остальные стили (как ранее) */
 #top-bar {
     display: flex;
     justify-content: space-between;
@@ -1362,7 +1370,6 @@ body.theme-hard {
     background: rgba(255,215,0,0.1);
 }
 
-/* Модальные окна */
 #bets-modal ul li {
     padding: 8px 0;
     border-bottom: 1px solid var(--border-color);
@@ -1383,14 +1390,16 @@ let currentMode = 'light';
 let isSpinning = false;
 let currentRotation = 0;
 
-// === Экран входа ===
-const loginScreen = document.getElementById('login-screen');
-const appContent = document.getElementById('app-content');
-const loginBtn = document.getElementById('login-btn');
-const codeSection = document.getElementById('code-section');
-const codeInput = document.getElementById('code-input');
-const verifyBtn = document.getElementById('verify-btn');
-const loginMsg = document.getElementById('login-message');
+// Получаем Telegram user_id для входа
+let tgUserId = null;
+if (window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.ready();
+    const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
+    if (tgUser && tgUser.id) {
+        tgUserId = tgUser.id;
+        console.log('Telegram user ID:', tgUserId);
+    }
+}
 
 // Проверяем, есть ли сохранённый user_id в localStorage
 const savedUserId = localStorage.getItem('starDrop_userId');
@@ -1402,10 +1411,27 @@ if (savedUserId) {
     });
 }
 
+// === Экран входа ===
+const loginScreen = document.getElementById('login-screen');
+const appContent = document.getElementById('app-content');
+const loginBtn = document.getElementById('login-btn');
+const codeSection = document.getElementById('code-section');
+const codeInput = document.getElementById('code-input');
+const verifyBtn = document.getElementById('verify-btn');
+const loginMsg = document.getElementById('login-message');
+
 loginBtn.addEventListener('click', async () => {
+    if (!tgUserId) {
+        loginMsg.textContent = 'Не удалось определить аккаунт Telegram';
+        return;
+    }
     // Отправляем запрос на получение кода
     try {
-        const resp = await fetch('/api/send_code', { method: 'POST' });
+        const resp = await fetch('/api/send_code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: tgUserId })
+        });
         const data = await resp.json();
         if (resp.ok) {
             loginMsg.textContent = 'Код отправлен в Telegram!';
@@ -1421,9 +1447,9 @@ loginBtn.addEventListener('click', async () => {
 });
 
 verifyBtn.addEventListener('click', async () => {
-    const code = codeInput.value.trim();
+    const code = codeInput.value.trim().toLowerCase();
     if (!code || code.length < 4) {
-        loginMsg.textContent = 'Введите корректный код';
+        loginMsg.textContent = 'Введите 4-символьный код';
         return;
     }
     try {
@@ -1617,13 +1643,6 @@ function initGames() {
     // РАКЕТКА
     drawRocket(0, 'idle');
     document.getElementById('rocket-countdown').textContent = '0';
-
-    // Остальные ивенты уже добавлены глобально, но их нужно перепривязать, если они были объявлены до этого.
-    // Для простоты переопределим их здесь или объявим глобально.
-
-    // Переопределим обработчики (они уже есть, но из-за того, что скрипт загружается один раз, можно оставить как есть)
-    // Но некоторые функции должны быть доступны только после входа.
-    // Мы уже определили их выше, и они используют user_id, который теперь установлен.
 }
 
 // === РУЛЕТКА ===
@@ -1951,7 +1970,6 @@ document.getElementById('rocket-start-btn').addEventListener('click', async () =
             rocketTrail = [{x: rocketX, y: rocketY}];
             if (rocketInterval) clearInterval(rocketInterval);
             rocketInterval = setInterval(updateRocketStatus, 150);
-            // Анимация движения ракеты
             if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
             animateRocket();
         } else {
@@ -1965,17 +1983,12 @@ document.getElementById('rocket-start-btn').addEventListener('click', async () =
 
 function animateRocket() {
     if (!rocketActive) return;
-    // Движение слева направо с небольшим подъемом
     rocketX += rocketSpeed;
-    // Рывки по Y (синусоида + случайные)
     rocketY += Math.sin(rocketX * 0.1) * 0.5 + (Math.random() - 0.5) * 1.0;
-    // Ограничиваем Y
     if (rocketY < 20) rocketY = 20;
     if (rocketY > 180) rocketY = 180;
-    // Добавляем в трек
     rocketTrail.push({x: rocketX, y: rocketY});
     if (rocketTrail.length > 100) rocketTrail.shift();
-    // Отрисовка с текущим множителем (будет обновляться отдельно)
     rocketAnimationFrame = requestAnimationFrame(animateRocket);
 }
 
@@ -1987,7 +2000,6 @@ async function updateRocketStatus() {
         if (resp.ok) {
             const display = data.display_multiplier;
             document.getElementById('rocket-multiplier').textContent = display.toFixed(2);
-            // Рисуем ракету с текущим множителем
             if (data.crashed) {
                 document.getElementById('rocket-status').textContent = '💥 Упала!';
                 document.getElementById('rocket-cashout-btn').disabled = true;
@@ -2001,7 +2013,6 @@ async function updateRocketStatus() {
                     cancelAnimationFrame(rocketAnimationFrame);
                     rocketAnimationFrame = null;
                 }
-                // Отображаем взрыв
                 drawRocket(display, 'crashed', true);
                 document.getElementById('rocket-result').textContent = '😞 Ракета упала. Ставка проиграна.';
                 document.getElementById('rocket-result').style.color = '#f44336';
@@ -2023,7 +2034,6 @@ async function updateRocketStatus() {
                 fetchUserData();
                 startCountdown();
             } else {
-                // Активный полёт
                 drawRocket(display, 'active', false);
             }
         } else {
@@ -2081,7 +2091,6 @@ function startCountdown() {
             clearInterval(countdownInterval);
             countdownInterval = null;
             document.getElementById('rocket-countdown').textContent = '0';
-            // Автоматический старт
             document.getElementById('rocket-start-btn').click();
         }
     }, 1000);
@@ -2176,12 +2185,6 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
         }
     });
 });
-
-// Для инициализации после входа
-document.addEventListener('DOMContentLoaded', function() {
-    // Если уже есть сохранённый user_id, то вход уже произошёл.
-    // В противном случае показывается экран входа.
-});
 """
 }
 
@@ -2232,6 +2235,9 @@ class RocketCashoutRequest(BaseModel):
     round_id: int
     user_id: int
 
+class SendCodeRequest(BaseModel):
+    user_id: int
+
 class VerifyCodeRequest(BaseModel):
     code: str
 
@@ -2251,45 +2257,16 @@ async def api_user_bets(user_id: int):
     return bets
 
 @app.post("/api/send_code")
-async def send_code():
-    # Получаем user_id из сессии? Но у нас нет сессии, мы отправляем код текущему пользователю.
-    # Для этого нужно знать chat_id. Так как мы не знаем, кто запросил, используем fallback:
-    # Отправим код в канал админа? Или можно сохранить код в памяти и потом проверить.
-    # В реальном приложении нужно сначала авторизовать пользователя через Telegram OAuth.
-    # Однако, чтобы упростить, мы будем использовать первый запрос от пользователя: 
-    # при нажатии "Войти" мы отправляем код на тот Telegram аккаунт, который запустил мини-приложение.
-    # В Telegram WebApp мы можем получить user.id через initDataUnsafe.
-    # Но у нас нет этого на сервере, только на клиенте.
-    # Поэтому изменим логику: сначала пользователь нажимает "Войти", мы запрашиваем у клиента его user_id,
-    # но клиент его не знает, так как мы убрали автологин.
-    # Правильнее: при загрузке приложения клиент получает Telegram user через WebApp,
-    # но мы не хотим автологина. Вместо этого сделаем так: при нажатии "Войти" клиент отправляет запрос на /api/send_code,
-    # и мы генерируем код и сохраняем его в памяти, привязав к user_id, который передаётся из клиента.
-    # Но клиент ещё не знает user_id. Поэтому мы используем WebApp.initDataUnsafe.user.id,
-    # но мы не использовали его явно. Изменим: при первом запуске мы всё равно получаем user_id из WebApp,
-    # но не авторизуем пользователя, а только показываем кнопку входа.
-    # Когда пользователь нажимает "Войти", мы отправляем запрос с этим user_id.
-    # Таким образом, мы знаем, кому отправлять код.
-    # Это проще, и у нас уже есть user_id от Telegram, просто мы его скрываем до входа.
-    # Итак, клиент должен передать user_id при запросе кода.
-    # Добавим в тело запроса.
-    # Изменим эндпоинт на POST с body: { user_id }
-    pass
-
-# Переделаем эндпоинты для входа:
-class SendCodeRequest(BaseModel):
-    user_id: int
-
-@app.post("/api/send_code")
 async def send_code(data: SendCodeRequest):
     user_id = data.user_id
+    # Проверяем, существует ли пользователь
     user = get_user(user_id)
     if not user:
-        # Если пользователя нет, создаём (но мы уже создаём при старте бота)
-        # Но здесь мы можем создать, если нет.
-        create_user(user_id, "user_" + str(user_id))
-    code = str(random.randint(100000, 999999))
-    # Сохраняем код с временем жизни 5 минут
+        # Создаём пользователя с временным именем
+        create_user(user_id, f"user_{user_id}")
+    # Генерируем 4-символьный код
+    code = generate_verification_code()
+    # Сохраняем с временем жизни 5 минут
     verification_codes[user_id] = {
         "code": code,
         "expires_at": time.time() + 300
@@ -2303,11 +2280,10 @@ async def send_code(data: SendCodeRequest):
 
 @app.post("/api/verify_code")
 async def verify_code(data: VerifyCodeRequest):
-    code = data.code.strip()
+    code = data.code.strip().lower()
     # Ищем код в хранилище
     for uid, info in verification_codes.items():
         if info["code"] == code and time.time() < info["expires_at"]:
-            # Код верный
             user = get_user(uid)
             if not user:
                 raise HTTPException(status_code=404, detail="User not found")
@@ -2321,7 +2297,6 @@ async def verify_code(data: VerifyCodeRequest):
     raise HTTPException(status_code=400, detail="Неверный или просроченный код")
 
 # Остальные эндпоинты без изменений
-
 @app.post("/api/spin")
 async def api_spin(data: SpinRequest):
     user_id = data.user_id
