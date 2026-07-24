@@ -60,7 +60,7 @@ PRIZES = {
 
 WIN_CHANCE = 35
 DB_NAME = "star_drop.db"
-WEBAPP_URL = "https://star-drop.onrender.com"  # при необходимости замените на реальный домен
+WEBAPP_URL = "https://star-drop.onrender.com"  # ваш домен на Render
 
 # ==================== БАЗА ДАННЫХ ====================
 def init_db():
@@ -814,7 +814,9 @@ async def api_get_prizes(mode: str):
 # ==================== ЗАПУСК ОБОИХ СЕРВИСОВ ====================
 async def run_uvicorn():
     """Запуск FastAPI через uvicorn в асинхронном режиме"""
-    config = uvicorn.Config(app, host="0.0.0.0", port=10000, log_level="info")
+    # Используем порт из переменной окружения PORT, или 10000 по умолчанию
+    port = int(os.environ.get("PORT", 10000))
+    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
     server = uvicorn.Server(config)
     await server.serve()
 
