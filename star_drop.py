@@ -184,6 +184,9 @@ def create_user(user_id: int, username: str = None, referrer_code: str = None):
                         "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
                         (referrer_id, "deposit", REFERRAL_BONUS, f"Бонус за приглашение пользователя {user_id}")
                     )
+    # Обновляем username, если он изменился
+    if username:
+        cur.execute("UPDATE users SET username = ? WHERE user_id = ?", (username, user_id))
     conn.commit()
     conn.close()
 
@@ -399,7 +402,6 @@ async def cmd_start(message: types.Message):
 # ==================== АДМИН-КОМАНДА /give ====================
 @dp.message(Command("give"))
 async def give_tokens(message: types.Message):
-    # Проверка прав
     if message.from_user.id != ADMIN_ID:
         await message.answer("⛔ У вас нет прав для этой команды.")
         return
@@ -417,7 +419,6 @@ async def give_tokens(message: types.Message):
         if not user:
             await message.answer(f"Пользователь с ID {target_id} не найден.")
             return
-        # Начисляем токены
         update_balance(target_id, amount, f"Администратор выдал {amount} токенов")
         new_balance = get_user(target_id)['balance']
         await message.answer(
@@ -464,6 +465,10 @@ STATIC_FILES = {
         <span>🎁</span><span>🧸</span><span>💎</span><span>🧢</span>
         <span>🚀</span><span>💍</span><span>🧁</span><span>🎈</span>
         <span>👑</span><span>🛸</span><span>💎</span><span>🎁</span>
+        <span>🎰</span><span>💵</span><span>⌚</span><span>👟</span>
+        <span>📱</span><span>💻</span><span>🖥️</span><span>⌨️</span>
+        <span>🕹️</span><span>🎮</span><span>🏆</span><span>🎖️</span>
+        <span>💎</span><span>👑</span><span>🚀</span><span>🛸</span>
     </div>
 
     <div id="app-content" style="width:100%; max-width:400px;">
@@ -473,7 +478,7 @@ STATIC_FILES = {
                 <span id="username">@user</span>
             </div>
             <div id="balance">
-                <span id="balance-amount">0</span> 🌟
+                <span id="balance-amount">0</span> 🎫
                 <button id="deposit-btn">+</button>
                 <button id="bets-btn">Мои ставки</button>
             </div>
@@ -654,6 +659,7 @@ body.theme-hard {
     --accent-glow: #f4433666;
 }
 
+/* Анимированный фон с элементами, летящими в разные стороны */
 .stars-background {
     position: fixed;
     top: 0;
@@ -668,37 +674,67 @@ body.theme-hard {
 .stars-background span {
     position: absolute;
     display: block;
-    animation: fall linear infinite;
-    opacity: 0.4;
+    opacity: 0.5;
     color: var(--accent-color);
-    text-shadow: 0 0 8px var(--accent-glow);
+    text-shadow: 0 0 10px var(--accent-glow);
     font-size: 18px;
+    animation: float var(--duration) ease-in-out infinite alternate;
+    animation-delay: var(--delay);
 }
 
-.stars-background span:nth-child(1) { left: 5%; animation-duration: 8s; font-size: 16px; }
-.stars-background span:nth-child(2) { left: 15%; animation-duration: 12s; font-size: 22px; animation-delay: 1s; }
-.stars-background span:nth-child(3) { left: 25%; animation-duration: 7s; font-size: 14px; animation-delay: 2s; }
-.stars-background span:nth-child(4) { left: 35%; animation-duration: 10s; font-size: 20px; animation-delay: 0.5s; }
-.stars-background span:nth-child(5) { left: 45%; animation-duration: 9s; font-size: 24px; animation-delay: 3s; }
-.stars-background span:nth-child(6) { left: 55%; animation-duration: 6s; font-size: 18px; animation-delay: 1.5s; }
-.stars-background span:nth-child(7) { left: 65%; animation-duration: 11s; font-size: 28px; animation-delay: 2.5s; }
-.stars-background span:nth-child(8) { left: 75%; animation-duration: 8s; font-size: 16px; animation-delay: 4s; }
-.stars-background span:nth-child(9) { left: 85%; animation-duration: 10s; font-size: 20px; animation-delay: 0.8s; }
-.stars-background span:nth-child(10) { left: 92%; animation-duration: 7s; font-size: 14px; animation-delay: 3.5s; }
-.stars-background span:nth-child(11) { left: 10%; animation-duration: 13s; font-size: 26px; animation-delay: 5s; }
-.stars-background span:nth-child(12) { left: 40%; animation-duration: 9s; font-size: 30px; animation-delay: 1.2s; }
-.stars-background span:nth-child(13) { left: 70%; animation-duration: 11s; font-size: 22px; animation-delay: 2.8s; }
-.stars-background span:nth-child(14) { left: 20%; animation-duration: 8s; font-size: 18px; animation-delay: 4.5s; }
-.stars-background span:nth-child(15) { left: 60%; animation-duration: 12s; font-size: 28px; animation-delay: 0.2s; }
-.stars-background span:nth-child(16) { left: 80%; animation-duration: 7s; font-size: 20px; animation-delay: 3.8s; }
+/* Разные направления и скорости */
+.stars-background span:nth-child(1) { left: 5%; top: 10%; --duration: 12s; --delay: 0s; animation: float1 12s ease-in-out infinite alternate; }
+.stars-background span:nth-child(2) { left: 15%; top: 20%; --duration: 15s; --delay: 2s; animation: float2 15s ease-in-out infinite alternate; }
+.stars-background span:nth-child(3) { left: 25%; top: 5%; --duration: 10s; --delay: 1s; animation: float3 10s ease-in-out infinite alternate; }
+.stars-background span:nth-child(4) { left: 35%; top: 40%; --duration: 18s; --delay: 3s; animation: float4 18s ease-in-out infinite alternate; }
+.stars-background span:nth-child(5) { left: 45%; top: 15%; --duration: 13s; --delay: 0.5s; animation: float5 13s ease-in-out infinite alternate; }
+.stars-background span:nth-child(6) { left: 55%; top: 30%; --duration: 11s; --delay: 4s; animation: float6 11s ease-in-out infinite alternate; }
+.stars-background span:nth-child(7) { left: 65%; top: 50%; --duration: 16s; --delay: 1.5s; animation: float7 16s ease-in-out infinite alternate; }
+.stars-background span:nth-child(8) { left: 75%; top: 8%; --duration: 14s; --delay: 2.5s; animation: float8 14s ease-in-out infinite alternate; }
+.stars-background span:nth-child(9) { left: 85%; top: 25%; --duration: 9s; --delay: 0.8s; animation: float9 9s ease-in-out infinite alternate; }
+.stars-background span:nth-child(10) { left: 92%; top: 60%; --duration: 17s; --delay: 3.5s; animation: float10 17s ease-in-out infinite alternate; }
+.stars-background span:nth-child(11) { left: 10%; top: 70%; --duration: 19s; --delay: 5s; animation: float11 19s ease-in-out infinite alternate; }
+.stars-background span:nth-child(12) { left: 40%; top: 80%; --duration: 12s; --delay: 1.2s; animation: float12 12s ease-in-out infinite alternate; }
+.stars-background span:nth-child(13) { left: 70%; top: 75%; --duration: 14s; --delay: 2.8s; animation: float13 14s ease-in-out infinite alternate; }
+.stars-background span:nth-child(14) { left: 20%; top: 90%; --duration: 11s; --delay: 4.5s; animation: float14 11s ease-in-out infinite alternate; }
+.stars-background span:nth-child(15) { left: 60%; top: 85%; --duration: 13s; --delay: 0.2s; animation: float15 13s ease-in-out infinite alternate; }
+.stars-background span:nth-child(16) { left: 80%; top: 95%; --duration: 16s; --delay: 3.8s; animation: float16 16s ease-in-out infinite alternate; }
+.stars-background span:nth-child(17) { left: 5%; top: 45%; --duration: 10s; --delay: 1.8s; animation: float17 10s ease-in-out infinite alternate; }
+.stars-background span:nth-child(18) { left: 50%; top: 10%; --duration: 15s; --delay: 4.2s; animation: float18 15s ease-in-out infinite alternate; }
+.stars-background span:nth-child(19) { left: 30%; top: 55%; --duration: 12s; --delay: 0.3s; animation: float19 12s ease-in-out infinite alternate; }
+.stars-background span:nth-child(20) { left: 90%; top: 35%; --duration: 14s; --delay: 2.2s; animation: float20 14s ease-in-out infinite alternate; }
+.stars-background span:nth-child(21) { left: 15%; top: 60%; --duration: 11s; --delay: 3.1s; animation: float21 11s ease-in-out infinite alternate; }
+.stars-background span:nth-child(22) { left: 75%; top: 70%; --duration: 13s; --delay: 0.7s; animation: float22 13s ease-in-out infinite alternate; }
+.stars-background span:nth-child(23) { left: 45%; top: 20%; --duration: 16s; --delay: 4.8s; animation: float23 16s ease-in-out infinite alternate; }
+.stars-background span:nth-child(24) { left: 60%; top: 45%; --duration: 10s; --delay: 1.3s; animation: float24 10s ease-in-out infinite alternate; }
 
-@keyframes fall {
-    0% { transform: translateY(-30px) rotate(0deg); opacity: 0; }
-    20% { opacity: 0.7; }
-    80% { opacity: 0.7; }
-    100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
-}
+/* Анимации для каждого элемента с разными направлениями */
+@keyframes float1 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(30px, -20px) rotate(30deg); } }
+@keyframes float2 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-20px, 40px) rotate(-20deg); } }
+@keyframes float3 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(40px, -10px) rotate(45deg); } }
+@keyframes float4 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-30px, -30px) rotate(-35deg); } }
+@keyframes float5 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(20px, 20px) rotate(25deg); } }
+@keyframes float6 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-40px, 10px) rotate(-40deg); } }
+@keyframes float7 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(25px, -35px) rotate(35deg); } }
+@keyframes float8 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-15px, 30px) rotate(-15deg); } }
+@keyframes float9 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(45px, -5px) rotate(50deg); } }
+@keyframes float10 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-25px, -25px) rotate(-25deg); } }
+@keyframes float11 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(10px, 50px) rotate(15deg); } }
+@keyframes float12 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-35px, -15px) rotate(-30deg); } }
+@keyframes float13 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(35px, 15px) rotate(40deg); } }
+@keyframes float14 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-10px, -40px) rotate(-10deg); } }
+@keyframes float15 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(50px, 5px) rotate(55deg); } }
+@keyframes float16 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-45px, -20px) rotate(-45deg); } }
+@keyframes float17 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(15px, -45px) rotate(20deg); } }
+@keyframes float18 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-20px, 35px) rotate(-20deg); } }
+@keyframes float19 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(30px, -30px) rotate(30deg); } }
+@keyframes float20 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-30px, 45px) rotate(-30deg); } }
+@keyframes float21 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(20px, -15px) rotate(25deg); } }
+@keyframes float22 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-40px, 25px) rotate(-40deg); } }
+@keyframes float23 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(25px, 10px) rotate(35deg); } }
+@keyframes float24 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-15px, -10px) rotate(-15deg); } }
 
+/* Остальные стили (как ранее) */
 #top-bar {
     display: flex;
     justify-content: space-between;
@@ -1326,6 +1362,7 @@ let balance = 0;
 let currentMode = 'light';
 let isSpinning = false;
 let currentRotation = 0;
+let slowRotation = 0;
 
 // === Автоматическая авторизация через Telegram ===
 if (window.Telegram && window.Telegram.WebApp) {
@@ -1334,6 +1371,7 @@ if (window.Telegram && window.Telegram.WebApp) {
     if (tgUser && tgUser.id) {
         user_id = tgUser.id;
         localStorage.setItem('starDrop_userId', user_id);
+        // Сразу показываем username из Telegram
         document.getElementById('username').textContent = '@' + (tgUser.username || tgUser.first_name);
         const avatar = document.getElementById('avatar');
         const name = tgUser.first_name || 'U';
@@ -1365,6 +1403,7 @@ async function fetchUserData() {
         const data = await resp.json();
         balance = data.balance;
         document.getElementById('balance-amount').textContent = balance;
+        // Если в БД есть username, используем его (он должен быть актуальным)
         if (data.username && data.username !== '') {
             document.getElementById('username').textContent = '@' + data.username;
         }
@@ -1473,10 +1512,29 @@ function initGames() {
     applyTheme('light');
     drawWheel();
     updateSpinCost();
+    // Запускаем медленное вращение рулетки
+    startSlowSpin();
     const initialBet = parseInt(document.getElementById('bet-range').value);
     document.getElementById('bet-display').textContent = initialBet;
     drawRocket(0, 'idle');
     document.getElementById('rocket-countdown').textContent = '0';
+}
+
+// === Медленное вращение рулетки ===
+function startSlowSpin() {
+    if (isSpinning) return;
+    // Плавное вращение с помощью requestAnimationFrame
+    let lastTime = 0;
+    function spinStep(time) {
+        if (isSpinning) return; // если идёт резкое вращение, останавливаем
+        if (!lastTime) lastTime = time;
+        const delta = (time - lastTime) / 1000;
+        lastTime = time;
+        slowRotation += delta * 10; // скорость 10 градусов в секунду
+        canvas.style.transform = `rotate(${slowRotation}deg)`;
+        requestAnimationFrame(spinStep);
+    }
+    requestAnimationFrame(spinStep);
 }
 
 // === РУЛЕТКА ===
@@ -1585,28 +1643,41 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         const data = await resp.json();
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
+            // Резкое вращение с последующей остановкой
             const extraSpins = 5 + Math.floor(Math.random()*3);
             const randomAngle = Math.random()*360;
             currentRotation += (extraSpins*360) + randomAngle;
+            canvas.style.transition = 'transform 2s cubic-bezier(0.2, 0.8, 0.2, 1)';
             canvas.style.transform = `rotate(${currentRotation}deg)`;
+            // Через 2 секунды показываем результат и возвращаем медленное вращение
             setTimeout(() => {
                 document.getElementById('result-message').textContent = data.message;
                 document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
                 if (data.win) fetchFeed();
-            }, 3000);
+                isSpinning = false;
+                document.getElementById('spin-btn').disabled = false;
+                const cost = { light:25, normal:50, hard:100 }[currentMode];
+                document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
+                // Возвращаем медленное вращение
+                canvas.style.transition = 'none';
+                slowRotation = currentRotation;
+                startSlowSpin();
+            }, 2200);
         } else {
             document.getElementById('result-message').textContent = '❌ ' + data.detail;
+            isSpinning = false;
+            document.getElementById('spin-btn').disabled = false;
+            const cost = { light:25, normal:50, hard:100 }[currentMode];
+            document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
         }
     } catch (e) {
         document.getElementById('result-message').textContent = 'Ошибка соединения';
         console.error(e);
-    }
-    setTimeout(() => {
         isSpinning = false;
         document.getElementById('spin-btn').disabled = false;
         const cost = { light:25, normal:50, hard:100 }[currentMode];
         document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
-    }, 3200);
+    }
 });
 
 // === СЛОТ ===
@@ -1875,8 +1946,11 @@ document.getElementById('withdraw-btn').addEventListener('click', async () => {
             body: JSON.stringify({ user_id, amount: parseInt(amount) })
         });
         const data = await resp.json();
-        if (resp.ok) alert('✅ Заявка на вывод отправлена!');
-        else alert('❌ ' + data.detail);
+        if (resp.ok) {
+            alert('✅ Заявка на вывод отправлена!');
+            // Обновляем баланс
+            fetchUserData();
+        } else alert('❌ ' + data.detail);
     } catch (e) { alert('Ошибка соединения'); console.error(e); }
 });
 
@@ -1900,6 +1974,11 @@ for filename, content in STATIC_FILES.items():
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(content)
         print(f"✅ Создан {filepath}")
+    else:
+        # Обновляем существующие файлы (перезаписываем)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"✅ Обновлён {filepath}")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
