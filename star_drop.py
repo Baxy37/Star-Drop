@@ -61,7 +61,7 @@ PRIZES = {
 
 WIN_CHANCE = 35
 DB_NAME = "star_drop.db"
-WEBAPP_URL = "https://star-drop.onrender.com"
+WEBAPP_URL = "https://star-drop.onrender.com"  # ваш домен
 
 # ==================== БАЗА ДАННЫХ ====================
 def init_db():
@@ -216,10 +216,7 @@ def get_spin_result(mode: str):
         if available_prizes:
             prize = random.choice(available_prizes)
             return True, prize["name"], prize["value"]
-        else:
-            return False, "Проигрыш", 0
-    else:
-        return False, "Проигрыш", 0
+    return False, "Проигрыш", 0
 
 def get_prizes_for_mode(mode: str):
     return PRIZES[mode]
@@ -253,19 +250,28 @@ async def cmd_start(message: types.Message):
     )
 
 async def start_bot():
-    # Сбрасываем вебхук, чтобы избежать конфликтов с polling
+    # Принудительно удаляем вебхук и сбрасываем ожидающие обновления
     await bot.delete_webhook(drop_pending_updates=True)
-    # Запускаем polling с автоматическими повторными попытками при конфликте
-    try:
-        await dp.start_polling(bot)
-    except Exception as e:
-        logging.error(f"Ошибка при запуске polling: {e}")
-        raise
+    # Запускаем polling с обработкой конфликтов
+    retries = 0
+    while True:
+        try:
+            await dp.start_polling(bot)
+            break
+        except Exception as e:
+            if "Conflict" in str(e) and retries < 5:
+                retries += 1
+                wait = 2 ** retries  # экспоненциальная задержка: 2, 4, 8, 16, 32 сек
+                logging.warning(f"Конфликт, повтор через {wait} сек...")
+                await asyncio.sleep(wait)
+            else:
+                raise
 
 # ==================== ВЕБ-СЕРВЕР (FASTAPI) ====================
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 import uvicorn
 
@@ -279,7 +285,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Создаём папку static и файлы, если их нет (только один раз при первом запуске)
+# Создаём папку static и файлы, если их нет (только один раз)
 STATIC_DIR = "static"
 os.makedirs(STATIC_DIR, exist_ok=True)
 
@@ -350,7 +356,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    transition: background 0.3s, color 0.3s;
+    transition: background 0.3s;
 }
 body.theme-light {
     --accent-color: #ffd700;
@@ -535,13 +541,14 @@ let isSpinning = false;
 
 window.Telegram.WebApp.ready();
 const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
-if (tgUser) {
+if (tgUser && tgUser.id) {
     user_id = tgUser.id;
-    document.getElementById('username').textContent = `@${tgUser.username || tgUser.first_name}`;
+    document.getElementById('username').textContent = '@' + (tgUser.username || tgUser.first_name);
     fetchUserData();
 } else {
+    // fallback для тестирования
     user_id = prompt('Введите ваш Telegram ID (для теста)') || 123456789;
-    document.getElementById('username').textContent = `@user_${user_id}`;
+    document.getElementById('username').textContent = '@user_' + user_id;
     fetchUserData();
 }
 
@@ -690,7 +697,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
 function animateWheel() {
     const angle = Math.random() * 2 * Math.PI * 5 + 2 * Math.PI;
     canvas.style.transition = 'transform 2s cubic-bezier(0.17, 0.67, 0.12, 0.99)';
-    canvas.style.transform = `rotate(${angle}rad)`;
+    canvas.style.transform = 'rotate(' + angle + 'rad)';
     setTimeout(() => {
         canvas.style.transition = 'none';
         canvas.style.transform = 'rotate(0rad)';
@@ -728,7 +735,7 @@ async function fetchFeed() {
         list.innerHTML = '';
         wins.forEach(w => {
             const li = document.createElement('li');
-            li.textContent = `@${w.username} выиграл ${w.prize_name} (+${w.prize_value} токенов)`;
+            li.textContent = '@' + w.username + ' выиграл ' + w.prize_name + ' (+' + w.prize_value + ' токенов)';
             list.appendChild(li);
         });
     } catch (e) {
@@ -764,7 +771,7 @@ document.getElementById('withdraw-btn').addEventListener('click', async () => {
 """
 }
 
-# Создаём файлы только если они отсутствуют (чтобы не перезаписывать при каждом рестарте)
+# Создаём файлы только при отсутствии
 for filename, content in STATIC_FILES.items():
     filepath = os.path.join(STATIC_DIR, filename)
     if not os.path.exists(filepath):
@@ -773,6 +780,11 @@ for filename, content in STATIC_FILES.items():
         print(f"✅ Создан {filepath}")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+# Корневой путь – редирект на index.html
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/static/index.html")
 
 # API модели
 class SpinRequest(BaseModel):
@@ -859,7 +871,6 @@ async def run_uvicorn():
     await server.serve()
 
 async def shutdown(sig, loop):
-    """Graceful shutdown при получении сигнала"""
     logging.info(f"Received signal {sig}, shutting down...")
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     for task in tasks:
