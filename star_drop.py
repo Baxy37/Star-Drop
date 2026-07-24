@@ -814,7 +814,7 @@ async def api_get_prizes(mode: str):
 # ==================== ЗАПУСК ОБОИХ СЕРВИСОВ ====================
 async def run_uvicorn():
     """Запуск FastAPI через uvicorn в асинхронном режиме"""
-    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
+    config = uvicorn.Config(app, host="0.0.0.0", port=10000, log_level="info")
     server = uvicorn.Server(config)
     await server.serve()
 
