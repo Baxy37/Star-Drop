@@ -5,9 +5,11 @@ import logging
 import sqlite3
 import random
 import signal
+import time
 from datetime import datetime
 from typing import Optional, List, Dict
 import json
+import hashlib
 
 # ==================== НАСТРОЙКИ ====================
 BOT_TOKEN = "8988678866:AAHIWxUB8zKBCoF21g7OVYEEWnwEF_MpLmI"
@@ -73,6 +75,10 @@ SLOT_WIN_MULTIPLIER = 2  # выигрыш = ставка * 2
 PROMOCODES = {
     "rifleman": 50,
 }
+
+# Глобальный словарь для активных раундов ракетки
+rocket_rounds = {}
+round_counter = 0
 
 # ==================== БАЗА ДАННЫХ ====================
 def init_db():
@@ -157,7 +163,6 @@ def get_user(user_id: int) -> Optional[Dict]:
 def create_user(user_id: int, username: str = None, referrer_code: str = None):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    import hashlib
     code = hashlib.md5(str(user_id).encode()).hexdigest()[:8]
     cur.execute(
         "INSERT OR IGNORE INTO users (user_id, username, referral_code) VALUES (?, ?, ?)",
@@ -499,12 +504,34 @@ STATIC_FILES = {
                 <div class="bet-control">
                     <label>Ставка: <span id="bet-display">20</span> токенов</label>
                     <input type="range" id="bet-range" min="20" max="100" step="10" value="20">
-                    <!-- Убираем шанс, добавляем информацию о множителе -->
                     <div id="slot-multiplier">При выигрыше: <b>x2</b> от ставки</div>
                 </div>
                 <button id="spin-slot-btn">Дёрнуть рычаг 🎰</button>
             </div>
             <div id="slot-result"></div>
+        </div>
+    </div>
+
+    <!-- РАКЕТКА (Aviator) -->
+    <div id="rocket-page" style="display:none;">
+        <div id="main-title">
+            <h1>🚀 РАКЕТКА</h1>
+            <p>Лови момент и умножай ставку до x100!</p>
+        </div>
+        <div id="rocket-game">
+            <div id="rocket-display">
+                <div id="rocket-multiplier">1.00</div>
+                <div id="rocket-status">Ожидание</div>
+            </div>
+            <div id="rocket-bet-control">
+                <label>Ставка: <span id="rocket-bet-display">500</span> токенов</label>
+                <input type="range" id="rocket-bet-range" min="500" max="5000" step="100" value="500">
+            </div>
+            <div id="rocket-buttons">
+                <button id="rocket-start-btn">🚀 Старт</button>
+                <button id="rocket-cashout-btn" disabled>💰 Стоп</button>
+            </div>
+            <div id="rocket-result"></div>
         </div>
     </div>
 
@@ -527,7 +554,7 @@ STATIC_FILES = {
     <div id="bottom-nav">
         <button class="nav-btn active" data-tab="roulette">Рулетка</button>
         <button class="nav-btn" data-tab="slot">Барабан</button>
-        <button class="nav-btn" data-tab="top">Топ</button>
+        <button class="nav-btn" data-tab="rocket">Ракетка</button>
     </div>
 
     <script src="/static/script.js"></script>
@@ -971,6 +998,96 @@ body.theme-hard {
     min-height: 30px;
 }
 
+/* Стили для ракетки */
+#rocket-game {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 20px;
+    margin: 10px 0;
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 0 30px var(--accent-glow);
+    width: 100%;
+    max-width: 400px;
+}
+
+#rocket-display {
+    text-align: center;
+    padding: 15px 0;
+}
+
+#rocket-multiplier {
+    font-size: 48px;
+    font-weight: 900;
+    color: var(--accent-color);
+    text-shadow: 0 0 20px var(--accent-glow);
+    transition: color 0.3s;
+}
+
+#rocket-status {
+    font-size: 16px;
+    color: #aaa;
+    margin-top: 5px;
+}
+
+#rocket-bet-control {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 10px 0;
+}
+
+#rocket-bet-control label {
+    font-size: 14px;
+    color: #ccc;
+}
+
+#rocket-bet-range {
+    width: 80%;
+    max-width: 250px;
+    margin-top: 5px;
+    accent-color: var(--accent-color);
+}
+
+#rocket-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 15px 0;
+}
+
+#rocket-start-btn, #rocket-cashout-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 0 20px var(--accent-glow);
+    transition: transform 0.1s, box-shadow 0.3s, background 0.3s;
+    flex: 1;
+    max-width: 150px;
+}
+
+#rocket-start-btn:disabled, #rocket-cashout-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#rocket-start-btn:active, #rocket-cashout-btn:active {
+    transform: scale(0.95);
+}
+
+#rocket-result {
+    margin-top: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--accent-color);
+    min-height: 30px;
+}
+
 /* Общие элементы */
 #notification-feed {
     width: 100%;
@@ -1396,15 +1513,11 @@ const reels = [
     document.getElementById('reel3')
 ];
 
-// Убираем отображение шанса, оставляем только множитель
-// В HTML уже заменили на #slot-multiplier, ничего не делаем
-
 document.getElementById('bet-range').addEventListener('input', function() {
     const bet = parseInt(this.value);
     document.getElementById('bet-display').textContent = bet;
 });
 
-// Инициализация отображения ставки при загрузке
 document.addEventListener('DOMContentLoaded', function() {
     const initialBet = parseInt(document.getElementById('bet-range').value);
     document.getElementById('bet-display').textContent = initialBet;
@@ -1427,7 +1540,6 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.disabled = true;
     btn.textContent = '🎰 Крутим...';
 
-    // Анимация прокрутки
     let interval = setInterval(() => {
         reels.forEach(reel => {
             reel.textContent = slotSymbols[Math.floor(Math.random() * slotSymbols.length)];
@@ -1444,7 +1556,6 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
         clearInterval(interval);
 
         if (resp.ok) {
-            // Устанавливаем финальные символы
             reels[0].textContent = data.symbols[0];
             reels[1].textContent = data.symbols[1];
             reels[2].textContent = data.symbols[2];
@@ -1458,7 +1569,6 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
                 resultDiv.textContent = '😞 Проигрыш. -' + bet + ' токенов';
                 resultDiv.style.color = '#f44336';
             }
-            // Обновляем ленту, если выигрыш
             if (data.win) fetchFeed();
         } else {
             document.getElementById('slot-result').textContent = '❌ ' + data.detail;
@@ -1472,6 +1582,132 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     slotSpinning = false;
     btn.disabled = false;
     btn.textContent = 'Дёрнуть рычаг 🎰';
+});
+
+// === Ракетка (Aviator) ===
+let rocketInterval = null;
+let rocketRoundId = null;
+let rocketActive = false;
+
+document.getElementById('rocket-bet-range').addEventListener('input', function() {
+    document.getElementById('rocket-bet-display').textContent = this.value;
+});
+
+document.getElementById('rocket-start-btn').addEventListener('click', async () => {
+    if (rocketActive) return;
+    const bet = parseInt(document.getElementById('rocket-bet-range').value);
+    if (isNaN(bet) || bet < 500 || bet > 5000) {
+        alert('Ставка должна быть от 500 до 5000 токенов');
+        return;
+    }
+    if (balance < bet) {
+        alert('Недостаточно токенов!');
+        return;
+    }
+
+    try {
+        const resp = await fetch('/api/rocket/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id, bet })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            rocketRoundId = data.round_id;
+            rocketActive = true;
+            document.getElementById('rocket-start-btn').disabled = true;
+            document.getElementById('rocket-cashout-btn').disabled = false;
+            document.getElementById('rocket-result').textContent = '';
+            document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
+
+            // Запускаем опрос статуса
+            if (rocketInterval) clearInterval(rocketInterval);
+            rocketInterval = setInterval(updateRocketStatus, 500);
+            // Сразу обновить
+            updateRocketStatus();
+        } else {
+            alert('❌ ' + data.detail);
+        }
+    } catch (e) {
+        alert('Ошибка соединения');
+        console.error(e);
+    }
+});
+
+async function updateRocketStatus() {
+    if (!rocketRoundId) return;
+    try {
+        const resp = await fetch(`/api/rocket/status/${rocketRoundId}`);
+        const data = await resp.json();
+        if (resp.ok) {
+            document.getElementById('rocket-multiplier').textContent = data.current_multiplier.toFixed(2);
+            if (data.crashed) {
+                // Ракета упала
+                document.getElementById('rocket-status').textContent = '💥 Упала!';
+                document.getElementById('rocket-cashout-btn').disabled = true;
+                document.getElementById('rocket-start-btn').disabled = false;
+                rocketActive = false;
+                if (rocketInterval) {
+                    clearInterval(rocketInterval);
+                    rocketInterval = null;
+                }
+                // Показываем результат проигрыша (уже списано)
+                document.getElementById('rocket-result').textContent = '😞 Ракета упала. Ставка проиграна.';
+                document.getElementById('rocket-result').style.color = '#f44336';
+                // Обновляем баланс
+                fetchUserData();
+            } else if (data.cashed_out) {
+                // Игрок уже вывел
+                document.getElementById('rocket-status').textContent = '💰 Выведено!';
+                document.getElementById('rocket-cashout-btn').disabled = true;
+                document.getElementById('rocket-start-btn').disabled = false;
+                rocketActive = false;
+                if (rocketInterval) {
+                    clearInterval(rocketInterval);
+                    rocketInterval = null;
+                }
+                // Баланс обновим при каш-ауте, но на всякий случай
+                fetchUserData();
+            }
+        } else {
+            console.error('Status error:', data);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+document.getElementById('rocket-cashout-btn').addEventListener('click', async () => {
+    if (!rocketRoundId || !rocketActive) return;
+    try {
+        const resp = await fetch('/api/rocket/cashout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ round_id: rocketRoundId, user_id })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            // Успешный вывод
+            document.getElementById('rocket-result').textContent = '🎉 Вы выиграли ' + data.win_amount + ' токенов!';
+            document.getElementById('rocket-result').style.color = '#4CAF50';
+            document.getElementById('rocket-status').textContent = '💰 Выведено!';
+            document.getElementById('rocket-cashout-btn').disabled = true;
+            document.getElementById('rocket-start-btn').disabled = false;
+            rocketActive = false;
+            if (rocketInterval) {
+                clearInterval(rocketInterval);
+                rocketInterval = null;
+            }
+            updateBalanceUI(data.new_balance);
+            // Показать в ленте? Можно добавить, но не обязательно
+            fetchFeed();
+        } else {
+            alert('❌ ' + data.detail);
+        }
+    } catch (e) {
+        alert('Ошибка соединения');
+        console.error(e);
+    }
 });
 
 // === Пополнение ===
@@ -1553,14 +1789,17 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
         if (tab === 'roulette') {
             document.getElementById('roulette-page').style.display = 'block';
             document.getElementById('slot-page').style.display = 'none';
+            document.getElementById('rocket-page').style.display = 'none';
         } else if (tab === 'slot') {
             document.getElementById('roulette-page').style.display = 'none';
             document.getElementById('slot-page').style.display = 'block';
-        } else if (tab === 'top') {
-            alert('Таблица лидеров в разработке');
-            document.querySelector('.nav-btn[data-tab="roulette"]').classList.add('active');
-            document.getElementById('roulette-page').style.display = 'block';
+            document.getElementById('rocket-page').style.display = 'none';
+        } else if (tab === 'rocket') {
+            document.getElementById('roulette-page').style.display = 'none';
             document.getElementById('slot-page').style.display = 'none';
+            document.getElementById('rocket-page').style.display = 'block';
+            // При переключении обновить баланс
+            fetchUserData();
         }
     });
 });
@@ -1609,6 +1848,14 @@ class SlotSpinRequest(BaseModel):
     user_id: int
     bet: int
 
+class RocketStartRequest(BaseModel):
+    user_id: int
+    bet: int
+
+class RocketCashoutRequest(BaseModel):
+    round_id: int
+    user_id: int
+
 @app.get("/api/user/{user_id}")
 async def api_get_user(user_id: int):
     user = get_user(user_id)
@@ -1655,7 +1902,6 @@ async def api_slot_spin(data: SlotSpinRequest):
     if user["balance"] < bet:
         raise HTTPException(status_code=400, detail="Недостаточно токенов")
     
-    # Списываем ставку
     update_balance(user_id, -bet, f"Ставка в игровом автомате {bet} токенов")
     win, symbols, win_amount = get_slot_result(bet)
     if win:
@@ -1667,6 +1913,117 @@ async def api_slot_spin(data: SlotSpinRequest):
         "symbols": symbols,
         "win_amount": win_amount if win else 0,
         "new_balance": new_balance
+    }
+
+@app.post("/api/rocket/start")
+async def rocket_start(data: RocketStartRequest):
+    user_id = data.user_id
+    bet = data.bet
+    if bet < 500 or bet > 5000:
+        raise HTTPException(status_code=400, detail="Ставка должна быть от 500 до 5000 токенов")
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < bet:
+        raise HTTPException(status_code=400, detail="Недостаточно токенов")
+    
+    # Списываем ставку
+    update_balance(user_id, -bet, f"Ставка в ракетке {bet} токенов")
+    
+    # Генерируем crash point
+    # 95%: от 1.0 до 1.7, 5%: от 1.7 до 100.0
+    if random.random() < 0.05:
+        crash_point = 1.7 + random.random() * 98.3
+    else:
+        crash_point = 1.0 + random.random() * 0.7
+    
+    # Создаём раунд
+    global round_counter
+    round_counter += 1
+    round_id = round_counter
+    rocket_rounds[round_id] = {
+        "user_id": user_id,
+        "bet": bet,
+        "crash_point": crash_point,
+        "start_time": time.time(),
+        "status": "active",  # active, crashed, cashed_out
+        "current_multiplier": 1.0
+    }
+    
+    return {"round_id": round_id, "crash_point": crash_point}
+
+@app.get("/api/rocket/status/{round_id}")
+async def rocket_status(round_id: int):
+    if round_id not in rocket_rounds:
+        raise HTTPException(status_code=404, detail="Round not found")
+    round_data = rocket_rounds[round_id]
+    
+    if round_data["status"] == "crashed":
+        return {
+            "current_multiplier": round_data["crash_point"],
+            "crashed": True,
+            "cashed_out": False
+        }
+    if round_data["status"] == "cashed_out":
+        return {
+            "current_multiplier": round_data["current_multiplier"],
+            "crashed": False,
+            "cashed_out": True
+        }
+    
+    # Активный раунд: вычисляем текущий множитель (линейно растёт)
+    elapsed = time.time() - round_data["start_time"]
+    # Множитель растёт со скоростью 0.5 за секунду
+    current_multiplier = 1.0 + elapsed * 0.5
+    if current_multiplier >= round_data["crash_point"]:
+        # Ракета упала
+        round_data["status"] = "crashed"
+        current_multiplier = round_data["crash_point"]
+        return {
+            "current_multiplier": current_multiplier,
+            "crashed": True,
+            "cashed_out": False
+        }
+    else:
+        round_data["current_multiplier"] = current_multiplier
+        return {
+            "current_multiplier": current_multiplier,
+            "crashed": False,
+            "cashed_out": False
+        }
+
+@app.post("/api/rocket/cashout")
+async def rocket_cashout(data: RocketCashoutRequest):
+    round_id = data.round_id
+    user_id = data.user_id
+    if round_id not in rocket_rounds:
+        raise HTTPException(status_code=404, detail="Round not found")
+    round_data = rocket_rounds[round_id]
+    if round_data["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Not your round")
+    if round_data["status"] != "active":
+        raise HTTPException(status_code=400, detail="Round already finished")
+    
+    # Получаем текущий множитель
+    elapsed = time.time() - round_data["start_time"]
+    current_multiplier = 1.0 + elapsed * 0.5
+    if current_multiplier >= round_data["crash_point"]:
+        # Ракета уже упала (должна была, но на всякий случай)
+        round_data["status"] = "crashed"
+        raise HTTPException(status_code=400, detail="Ракета уже упала")
+    
+    # Начисляем выигрыш
+    win_amount = int(round_data["bet"] * current_multiplier)
+    update_balance(user_id, win_amount, f"Выигрыш в ракетке {win_amount} токенов")
+    # Добавляем в ленту выигрышей
+    add_win(user_id, f"🚀 x{current_multiplier:.2f}", win_amount, "rocket")
+    round_data["status"] = "cashed_out"
+    round_data["current_multiplier"] = current_multiplier
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "win_amount": win_amount,
+        "new_balance": new_balance,
+        "multiplier": current_multiplier
     }
 
 @app.post("/api/withdraw")
