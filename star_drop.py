@@ -25,36 +25,37 @@ SPIN_COSTS = {
     "hard": 100
 }
 
+# Обновлённые списки призов с пустыми секциями
 PRIZES = {
     "light": [
         {"name": "🎈 Воздушный шар", "value": 15},
         {"name": "🍬 Конфета", "value": 20},
         {"name": "⭐ Звезда", "value": 25},
         {"name": "🌸 Цветок", "value": 40},
-        {"name": "🎵 Нотка", "value": 50},
-        {"name": "📦 Подарок", "value": 70},
-        {"name": "🍀 Удача", "value": 90},
-        {"name": "🎉 Хлопушка", "value": 100},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "💨 Пусто", "value": 0},
     ],
     "normal": [
         {"name": "🎮 Игровая приставка", "value": 120},
         {"name": "📱 Смартфон", "value": 200},
         {"name": "🎧 Наушники", "value": 150},
         {"name": "⌚ Умные часы", "value": 250},
-        {"name": "💎 Алмаз", "value": 300},
-        {"name": "🚀 Ракета", "value": 400},
-        {"name": "🏆 Кубок", "value": 350},
-        {"name": "🎁 Большой подарок", "value": 500},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "💨 Пусто", "value": 0},
     ],
     "hard": [
         {"name": "👑 Корона", "value": 600},
         {"name": "💎 Бриллиант", "value": 800},
         {"name": "🚁 Вертолёт", "value": 700},
-        {"name": "🏰 Замок", "value": 900},
         {"name": "🛸 НЛО", "value": 1000},
-        {"name": "⭐ Золотая звезда", "value": 1200},
-        {"name": "🔥 Огненный шар", "value": 1500},
-        {"name": "💎 Изумруд", "value": 2000},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "💨 Пусто", "value": 0},
+        {"name": "💨 Пусто", "value": 0},
     ]
 }
 
@@ -154,6 +155,7 @@ def get_recent_wins(limit: int = 10) -> List[Dict]:
         SELECT u.username, w.prize_name, w.prize_value, w.created_at
         FROM wins w
         JOIN users u ON w.user_id = u.user_id
+        WHERE w.prize_value > 0
         ORDER BY w.created_at DESC
         LIMIT ?
     ''', (limit,))
@@ -210,8 +212,13 @@ init_db()
 def get_spin_result(mode: str):
     win = random.randint(1, 100) <= WIN_CHANCE
     if win:
-        prize = random.choice(PRIZES[mode])
-        return True, prize["name"], prize["value"]
+        # Выбираем только призы с value > 0
+        available_prizes = [p for p in PRIZES[mode] if p["value"] > 0]
+        if available_prizes:
+            prize = random.choice(available_prizes)
+            return True, prize["name"], prize["value"]
+        else:
+            return False, "Проигрыш", 0
     else:
         return False, "Проигрыш", 0
 
@@ -322,39 +329,68 @@ STATIC_FILES = {
     box-sizing: border-box;
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
+
+:root {
+    --accent-color: #ffd700;
+    --accent-glow: #ffd70066;
+    --bg-dark: #0a0a0a;
+    --text-light: #fff;
+    --card-bg: #111;
+    --border-color: #333;
+}
+
 body {
-    background: #0a0a0a;
-    color: #fff;
+    background: var(--bg-dark);
+    color: var(--text-light);
     padding: 16px;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
+    transition: background 0.3s, color 0.3s;
 }
+
+body.theme-light {
+    --accent-color: #ffd700;
+    --accent-glow: #ffd70066;
+}
+body.theme-normal {
+    --accent-color: #2196F3;
+    --accent-glow: #2196F366;
+}
+body.theme-hard {
+    --accent-color: #f44336;
+    --accent-glow: #f4433666;
+}
+
 #top-bar {
     display: flex;
     justify-content: space-between;
     width: 100%;
     padding: 10px 0;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--border-color);
 }
+
 #username {
     font-size: 18px;
     font-weight: 600;
-    color: #ffd700;
+    color: var(--accent-color);
 }
+
 #balance {
     font-size: 18px;
     display: flex;
     align-items: center;
     gap: 8px;
-    color: #ffd700;
+    color: var(--accent-color);
 }
+
 #balance-amount {
     font-weight: 700;
 }
+
 #deposit-btn {
-    background: #ffd700;
+    background: var(--accent-color);
     border: none;
     border-radius: 50%;
     width: 28px;
@@ -364,9 +400,10 @@ body {
     color: #0a0a0a;
     cursor: pointer;
 }
+
 #deposit-menu {
-    background: #1a1a1a;
-    border: 1px solid #ffd700;
+    background: var(--card-bg);
+    border: 1px solid var(--accent-color);
     border-radius: 12px;
     padding: 16px;
     margin: 10px 0;
@@ -375,8 +412,9 @@ body {
     gap: 10px;
     justify-content: center;
 }
+
 .deposit-option {
-    background: #ffd700;
+    background: var(--accent-color);
     color: #0a0a0a;
     border: none;
     padding: 10px 20px;
@@ -384,18 +422,21 @@ body {
     font-weight: 600;
     cursor: pointer;
 }
+
 #close-deposit {
     background: transparent;
-    color: #ffd700;
+    color: var(--accent-color);
     border: none;
     font-size: 20px;
     cursor: pointer;
 }
+
 #mode-selector {
     display: flex;
     gap: 12px;
     margin: 20px 0;
 }
+
 .mode-btn {
     background: #222;
     color: #aaa;
@@ -406,29 +447,33 @@ body {
     cursor: pointer;
     transition: all 0.2s;
 }
+
 .mode-btn.active {
-    background: #ffd700;
+    background: var(--accent-color);
     color: #0a0a0a;
-    box-shadow: 0 0 15px #ffd70066;
+    box-shadow: 0 0 15px var(--accent-glow);
 }
+
 #wheel-container {
     position: relative;
     width: 300px;
     height: 300px;
     margin: 20px auto;
 }
+
 #wheelCanvas {
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    box-shadow: 0 0 30px #ffd70033;
+    box-shadow: 0 0 30px var(--accent-glow);
 }
+
 #spin-btn {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: #ffd700;
+    background: var(--accent-color);
     border: none;
     border-radius: 50%;
     width: 60px;
@@ -437,17 +482,20 @@ body {
     font-size: 16px;
     color: #0a0a0a;
     cursor: pointer;
-    box-shadow: 0 0 20px #ffd70088;
+    box-shadow: 0 0 20px var(--accent-glow);
     transition: 0.1s;
 }
+
 #spin-btn:active {
     transform: translate(-50%, -50%) scale(0.9);
 }
+
 #mode-info {
     margin: 10px 0;
     color: #ccc;
     font-size: 14px;
 }
+
 #result-message {
     margin: 10px 0;
     font-size: 18px;
@@ -455,35 +503,41 @@ body {
     min-height: 40px;
     text-align: center;
 }
+
 #notification-feed {
     width: 100%;
     max-width: 400px;
-    background: #111;
+    background: var(--card-bg);
     border-radius: 12px;
     padding: 12px;
     margin: 20px 0;
 }
+
 #notification-feed h3 {
-    color: #ffd700;
+    color: var(--accent-color);
     margin-bottom: 8px;
     font-size: 16px;
 }
+
 #feed-list {
     list-style: none;
     max-height: 150px;
     overflow-y: auto;
 }
+
 #feed-list li {
     padding: 6px 0;
-    border-bottom: 1px solid #222;
+    border-bottom: 1px solid var(--border-color);
     font-size: 13px;
     color: #ddd;
 }
+
 #feed-list li:last-child {
     border-bottom: none;
 }
+
 #withdraw-btn {
-    background: #ffd700;
+    background: var(--accent-color);
     color: #0a0a0a;
     border: none;
     padding: 12px 30px;
@@ -500,6 +554,7 @@ let balance = 0;
 let currentMode = 'light';
 let isSpinning = false;
 
+// Инициализация Telegram Web App
 window.Telegram.WebApp.ready();
 const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
 if (tgUser) {
@@ -529,12 +584,23 @@ function updateBalanceUI(newBalance) {
     document.getElementById('balance-amount').textContent = newBalance;
 }
 
+// === Тема (цветовая схема) ===
+function applyTheme(mode) {
+    // Удаляем все классы темы
+    document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
+    if (mode === 'light') document.body.classList.add('theme-light');
+    else if (mode === 'normal') document.body.classList.add('theme-normal');
+    else if (mode === 'hard') document.body.classList.add('theme-hard');
+}
+
+// === Переключение режимов ===
 document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentMode = btn.dataset.mode;
         updateSpinCost();
+        applyTheme(currentMode);
         drawWheel();
     });
 });
@@ -544,6 +610,7 @@ function updateSpinCost() {
     document.getElementById('spin-cost').textContent = costs[currentMode];
 }
 
+// === Колесо (Canvas) ===
 const canvas = document.getElementById('wheelCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -564,6 +631,7 @@ function drawWheel() {
         ctx.moveTo(centerX, centerY);
         ctx.arc(centerX, centerY, radius, startAngle, endAngle);
         ctx.closePath();
+        // Чередуем цвета
         ctx.fillStyle = i % 2 === 0 ? '#ffd700' : '#b8860b';
         ctx.fill();
         ctx.strokeStyle = '#0a0a0a';
@@ -575,49 +643,55 @@ function drawWheel() {
         ctx.textAlign = 'right';
         ctx.fillStyle = '#0a0a0a';
         ctx.font = 'bold 12px sans-serif';
-        ctx.fillText(modePrizes[i].name, radius * 0.7, 5);
+        const label = modePrizes[i].name;
+        ctx.fillText(label, radius * 0.7, 5);
         ctx.restore();
     }
 }
 
 function getPrizesForMode(mode) {
+    // Используем списки из серверной части (синхронизированы)
+    // В реальности можно запросить с сервера, но для простоты продублируем
     const allPrizes = {
         light: [
             {name: '🎈 Воздушный шар', value: 15},
             {name: '🍬 Конфета', value: 20},
             {name: '⭐ Звезда', value: 25},
             {name: '🌸 Цветок', value: 40},
-            {name: '🎵 Нотка', value: 50},
-            {name: '📦 Подарок', value: 70},
-            {name: '🍀 Удача', value: 90},
-            {name: '🎉 Хлопушка', value: 100}
+            {name: '💨 Пусто', value: 0},
+            {name: '💨 Пусто', value: 0},
+            {name: '💨 Пусто', value: 0},
+            {name: '💨 Пусто', value: 0}
         ],
         normal: [
             {name: '🎮 Игровая приставка', value: 120},
             {name: '📱 Смартфон', value: 200},
             {name: '🎧 Наушники', value: 150},
             {name: '⌚ Умные часы', value: 250},
-            {name: '💎 Алмаз', value: 300},
-            {name: '🚀 Ракета', value: 400},
-            {name: '🏆 Кубок', value: 350},
-            {name: '🎁 Большой подарок', value: 500}
+            {name: '💨 Пусто', value: 0},
+            {name: '💨 Пусто', value: 0},
+            {name: '💨 Пусто', value: 0},
+            {name: '💨 Пусто', value: 0}
         ],
         hard: [
             {name: '👑 Корона', value: 600},
             {name: '💎 Бриллиант', value: 800},
             {name: '🚁 Вертолёт', value: 700},
-            {name: '🏰 Замок', value: 900},
             {name: '🛸 НЛО', value: 1000},
-            {name: '⭐ Золотая звезда', value: 1200},
-            {name: '🔥 Огненный шар', value: 1500},
-            {name: '💎 Изумруд', value: 2000}
+            {name: '💨 Пусто', value: 0},
+            {name: '💨 Пусто', value: 0},
+            {name: '💨 Пусто', value: 0},
+            {name: '💨 Пусто', value: 0}
         ]
     };
     return allPrizes[mode] || allPrizes.light;
 }
 
+// Инициализация
+applyTheme('light');
 drawWheel();
 
+// === Вращение ===
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (isSpinning) return;
     isSpinning = true;
@@ -655,6 +729,7 @@ function animateWheel() {
     }, 2100);
 }
 
+// === Пополнение (кнопка +) ===
 document.getElementById('deposit-btn').addEventListener('click', () => {
     const menu = document.getElementById('deposit-menu');
     menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
@@ -678,6 +753,7 @@ document.getElementById('close-deposit').addEventListener('click', () => {
     document.getElementById('deposit-menu').style.display = 'none';
 });
 
+// === Лента уведомлений ===
 async function fetchFeed() {
     try {
         const resp = await fetch('/api/recent_wins');
@@ -697,6 +773,7 @@ async function fetchFeed() {
 fetchFeed();
 setInterval(fetchFeed, 5000);
 
+// === Вывод токенов ===
 document.getElementById('withdraw-btn').addEventListener('click', async () => {
     const amount = prompt('Введите сумму вывода (минимум 100 токенов):');
     if (!amount || isNaN(amount) || amount < 100) {
@@ -814,7 +891,6 @@ async def api_get_prizes(mode: str):
 # ==================== ЗАПУСК ОБОИХ СЕРВИСОВ ====================
 async def run_uvicorn():
     """Запуск FastAPI через uvicorn в асинхронном режиме"""
-    # Используем порт из переменной окружения PORT, или 10000 по умолчанию
     port = int(os.environ.get("PORT", 10000))
     config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
     server = uvicorn.Server(config)
