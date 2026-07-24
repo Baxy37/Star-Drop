@@ -66,6 +66,12 @@ DB_NAME = "star_drop.db"
 WEBAPP_URL = "https://star-drop.onrender.com"  # ваш домен
 REFERRAL_BONUS = 50
 
+# Список доступных промокодов с наградами
+PROMOCODES = {
+    "rifleman": 50,
+    # можно добавить другие
+}
+
 # ==================== БАЗА ДАННЫХ ====================
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -122,6 +128,17 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (referrer_id) REFERENCES users(user_id),
             FOREIGN KEY (referred_id) REFERENCES users(user_id)
+        )
+    ''')
+    # Таблица для использованных промокодов
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS used_promocodes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            code TEXT,
+            used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id),
+            UNIQUE(user_id, code)
         )
     ''')
     conn.commit()
@@ -261,6 +278,21 @@ def get_referral_link(user_id: int) -> str:
         return f"https://t.me/StarDrop11_bot?start=ref_{info['code']}"
     return None
 
+def is_promo_used(user_id: int, code: str) -> bool:
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM used_promocodes WHERE user_id = ? AND code = ?", (user_id, code))
+    row = cur.fetchone()
+    conn.close()
+    return row is not None
+
+def use_promo(user_id: int, code: str):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("INSERT INTO used_promocodes (user_id, code) VALUES (?, ?)", (user_id, code))
+    conn.commit()
+    conn.close()
+
 init_db()
 
 # ==================== УТИЛИТЫ ====================
@@ -330,7 +362,7 @@ app.add_middleware(
 STATIC_DIR = "static"
 os.makedirs(STATIC_DIR, exist_ok=True)
 
-# ==================== НОВЫЕ СТАТИЧЕСКИЕ ФАЙЛЫ ====================
+# ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
 STATIC_FILES = {
     "index.html": """<!DOCTYPE html>
 <html lang="ru">
@@ -419,6 +451,13 @@ STATIC_FILES = {
 
     <button id="withdraw-btn">Вывести токены</button>
 
+    <!-- Промокоды -->
+    <div id="promo-area">
+        <input type="text" id="promo-input" placeholder="Введите промокод" maxlength="20">
+        <button id="promo-btn">Активировать</button>
+        <div id="promo-message" style="color: var(--accent-color); font-size: 14px; margin-top: 5px; text-align:center;"></div>
+    </div>
+
     <div id="bottom-nav">
         <button class="nav-btn active" data-tab="roulette">Рулетка</button>
         <button class="nav-btn" data-tab="tasks">Задания</button>
@@ -486,7 +525,9 @@ body.theme-hard {
     position: absolute;
     display: block;
     animation: fall linear infinite;
-    opacity: 0.3;
+    opacity: 0.5;
+    color: var(--accent-color);
+    text-shadow: 0 0 10px var(--accent-glow);
 }
 
 .stars-background span:nth-child(1) { left: 10%; animation-duration: 7s; font-size: 14px; }
@@ -500,8 +541,8 @@ body.theme-hard {
 
 @keyframes fall {
     0% { transform: translateY(-20px) rotate(0deg); opacity: 0; }
-    20% { opacity: 0.6; }
-    80% { opacity: 0.6; }
+    20% { opacity: 0.7; }
+    80% { opacity: 0.7; }
     100% { transform: translateY(105vh) rotate(360deg); opacity: 0; }
 }
 
@@ -519,6 +560,7 @@ body.theme-hard {
     font-weight: 600;
     color: var(--accent-color);
     cursor: pointer;
+    transition: color 0.3s;
 }
 
 #balance {
@@ -527,6 +569,7 @@ body.theme-hard {
     align-items: center;
     gap: 8px;
     color: var(--accent-color);
+    transition: color 0.3s;
 }
 
 #balance-amount {
@@ -543,7 +586,7 @@ body.theme-hard {
     font-weight: bold;
     color: #0a0a0a;
     cursor: pointer;
-    transition: transform 0.2s;
+    transition: background 0.3s, transform 0.2s;
 }
 #deposit-btn:hover { transform: scale(1.1); }
 
@@ -556,6 +599,7 @@ body.theme-hard {
     color: #0a0a0a;
     cursor: pointer;
     font-size: 12px;
+    transition: background 0.3s;
 }
 
 #deposit-menu {
@@ -570,6 +614,7 @@ body.theme-hard {
     justify-content: center;
     z-index: 10;
     box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    transition: border-color 0.3s;
 }
 
 .deposit-option {
@@ -580,7 +625,7 @@ body.theme-hard {
     border-radius: 8px;
     font-weight: 600;
     cursor: pointer;
-    transition: filter 0.2s;
+    transition: background 0.3s, filter 0.2s;
 }
 .deposit-option:hover { filter: brightness(1.1); }
 
@@ -590,6 +635,7 @@ body.theme-hard {
     border: none;
     font-size: 20px;
     cursor: pointer;
+    transition: color 0.3s;
 }
 
 #main-title {
@@ -604,6 +650,7 @@ body.theme-hard {
     color: var(--accent-color);
     letter-spacing: 2px;
     text-shadow: 0 0 10px var(--accent-glow);
+    transition: color 0.3s, text-shadow 0.3s;
 }
 
 #main-title p {
@@ -673,6 +720,7 @@ body.theme-hard {
     color: var(--accent-color);
     z-index: 5;
     text-shadow: 0 0 8px var(--accent-glow);
+    transition: color 0.3s, text-shadow 0.3s;
 }
 
 #wheelCanvas {
@@ -681,7 +729,9 @@ body.theme-hard {
     border-radius: 50%;
     box-shadow: 0 0 30px var(--accent-glow);
     border: 4px solid var(--accent-color);
-    transition: transform 3s cubic-bezier(0.15, 0.7, 0.1, 1);
+    transition: transform 3s cubic-bezier(0.15, 0.7, 0.1, 1),
+                box-shadow 0.3s,
+                border-color 0.3s;
 }
 
 #spin-area {
@@ -708,7 +758,7 @@ body.theme-hard {
     font-size: 18px;
     cursor: pointer;
     box-shadow: 0 0 20px var(--accent-glow);
-    transition: transform 0.1s, box-shadow 0.2s;
+    transition: transform 0.1s, box-shadow 0.3s, background 0.3s;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -733,6 +783,7 @@ body.theme-hard {
     z-index: 2;
     color: var(--accent-color);
     text-shadow: 0 0 10px var(--accent-glow);
+    transition: color 0.3s, text-shadow 0.3s;
 }
 
 #notification-feed {
@@ -750,6 +801,7 @@ body.theme-hard {
     color: var(--accent-color);
     margin-bottom: 8px;
     font-size: 16px;
+    transition: color 0.3s;
 }
 
 #feed-list {
@@ -777,6 +829,62 @@ body.theme-hard {
     cursor: pointer;
     box-shadow: 0 0 15px var(--accent-glow);
     z-index: 2;
+    transition: background 0.3s, box-shadow 0.3s;
+}
+
+#promo-area {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0;
+    z-index: 2;
+    width: 100%;
+    max-width: 400px;
+}
+
+#promo-input {
+    flex: 1;
+    min-width: 140px;
+    padding: 8px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--accent-color);
+    background: #222;
+    color: #fff;
+    outline: none;
+    font-size: 14px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    text-align: center;
+}
+#promo-input:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 10px var(--accent-glow);
+}
+
+#promo-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.3s, box-shadow 0.3s;
+    box-shadow: 0 0 10px var(--accent-glow);
+}
+#promo-btn:active {
+    transform: scale(0.95);
+}
+
+#promo-message {
+    width: 100%;
+    font-size: 14px;
+    text-align: center;
+    min-height: 20px;
+    color: var(--accent-color);
+    transition: color 0.3s;
 }
 
 #bottom-nav {
@@ -847,6 +955,7 @@ function updateBalanceUI(newBalance) {
     document.getElementById('balance-amount').textContent = newBalance;
 }
 
+// === Реферальное окно ===
 document.getElementById('username').addEventListener('click', async () => {
     try {
         const resp = await fetch(`/api/referral/${user_id}`);
@@ -876,6 +985,38 @@ document.getElementById('gifts-btn').addEventListener('click', () => {
     alert('Здесь будут ваши выигранные Telegram-подарки!');
 });
 
+// === Промокоды ===
+document.getElementById('promo-btn').addEventListener('click', async () => {
+    const input = document.getElementById('promo-input');
+    const code = input.value.trim();
+    const msg = document.getElementById('promo-message');
+    if (!code) {
+        msg.textContent = 'Введите промокод';
+        return;
+    }
+    try {
+        const resp = await fetch('/api/activate_promo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id, code })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            msg.textContent = '✅ ' + data.message;
+            input.value = '';
+            // Обновляем баланс
+            balance = data.new_balance;
+            document.getElementById('balance-amount').textContent = balance;
+        } else {
+            msg.textContent = '❌ ' + data.detail;
+        }
+    } catch (e) {
+        msg.textContent = 'Ошибка соединения';
+        console.error(e);
+    }
+});
+
+// === Тема и колесо ===
 function applyTheme(mode) {
     document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
     if (mode === 'light') document.body.classList.add('theme-light');
@@ -905,7 +1046,6 @@ function updateSpinCost() {
 const canvas = document.getElementById('wheelCanvas');
 const ctx = canvas.getContext('2d');
 
-// Заполняем колесо реальными Telegram подарками для каждого режима
 function getPrizesForMode(mode) {
     const allPrizes = {
         light: [
@@ -1001,7 +1141,7 @@ applyTheme('light');
 drawWheel();
 updateSpinCost();
 
-// Логика вращения колеса и запроса на сервер
+// === Вращение ===
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (isSpinning) return;
     isSpinning = true;
@@ -1020,7 +1160,6 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
             
-            // Анимация вращения (обороты + случайный доворот)
             const extraSpins = 5;
             const randomAngle = Math.random() * 360;
             currentRotation += (extraSpins * 360) + randomAngle;
@@ -1046,7 +1185,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     }, 3200);
 });
 
-// Работа кнопки пополнения (Payment Links)
+// === Пополнение ===
 document.getElementById('deposit-btn').addEventListener('click', () => {
     const menu = document.getElementById('deposit-menu');
     menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
@@ -1071,6 +1210,7 @@ document.getElementById('close-deposit').addEventListener('click', () => {
     document.getElementById('deposit-menu').style.display = 'none';
 });
 
+// === Лента выигрышей ===
 async function fetchFeed() {
     try {
         const resp = await fetch('/api/recent_wins');
@@ -1090,6 +1230,7 @@ async function fetchFeed() {
 fetchFeed();
 setInterval(fetchFeed, 5000);
 
+// === Вывод ===
 document.getElementById('withdraw-btn').addEventListener('click', async () => {
     const amount = prompt('Введите сумму вывода (минимум 100 токенов):');
     if (!amount || isNaN(amount) || amount < 100) {
@@ -1114,6 +1255,7 @@ document.getElementById('withdraw-btn').addEventListener('click', async () => {
     }
 });
 
+// === Нижняя навигация ===
 document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -1127,7 +1269,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 """
 }
 
-# Записываем файлы только если их нет (или перезаписываем всегда, чтобы обновить)
+# Записываем файлы (перезаписываем для обновления)
 for filename, content in STATIC_FILES.items():
     filepath = os.path.join(STATIC_DIR, filename)
     with open(filepath, "w", encoding="utf-8") as f:
@@ -1160,6 +1302,10 @@ class SpinRequest(BaseModel):
 class WithdrawRequest(BaseModel):
     user_id: int
     amount: int
+
+class PromoRequest(BaseModel):
+    user_id: int
+    code: str
 
 @app.get("/api/user/{user_id}")
 async def api_get_user(user_id: int):
@@ -1237,6 +1383,35 @@ async def api_get_referral(user_id: int):
     info = get_referral_info(user_id)
     link = get_referral_link(user_id)
     return {"code": info["code"], "count": info["count"], "link": link}
+
+@app.post("/api/activate_promo")
+async def activate_promo(data: PromoRequest):
+    user_id = data.user_id
+    code = data.code.lower().strip()
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Проверяем, существует ли промокод
+    if code not in PROMOCODES:
+        raise HTTPException(status_code=400, detail="Неверный промокод")
+    
+    # Проверяем, не использовал ли уже пользователь этот код
+    if is_promo_used(user_id, code):
+        raise HTTPException(status_code=400, detail="Вы уже использовали этот промокод")
+    
+    reward = PROMOCODES[code]
+    # Начисляем бонус
+    update_balance(user_id, reward, f"Промокод {code}")
+    # Запоминаем использование
+    use_promo(user_id, code)
+    
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "status": "success",
+        "message": f"Промокод активирован! Вы получили +{reward} токенов",
+        "new_balance": new_balance
+    }
 
 # ==================== ЗАПУСК ====================
 async def set_webhook():
