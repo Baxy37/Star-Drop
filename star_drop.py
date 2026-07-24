@@ -27,37 +27,37 @@ SPIN_COSTS = {
     "hard": 100
 }
 
-# Обновлённые призы с крипто-тематикой
+# Короткие названия с эмодзи для отображения на колесе
 PRIZES = {
     "light": [
-        {"name": "🎈 Шар", "value": 15},
-        {"name": "🍬 Конфета", "value": 20},
-        {"name": "⭐ Звезда", "value": 25},
-        {"name": "🌸 Цветок", "value": 40},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "💨 Пусто", "value": 0},
+        {"name": "🎈", "value": 15},
+        {"name": "🍬", "value": 20},
+        {"name": "⭐", "value": 25},
+        {"name": "🌸", "value": 40},
+        {"name": "💨", "value": 0},
+        {"name": "💨", "value": 0},
+        {"name": "💨", "value": 0},
+        {"name": "💨", "value": 0},
     ],
     "normal": [
-        {"name": "🎮 Приставка", "value": 120},
-        {"name": "📱 Смартфон", "value": 200},
-        {"name": "🎧 Наушники", "value": 150},
-        {"name": "⌚ Умные часы", "value": 250},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "💨 Пусто", "value": 0},
+        {"name": "🎮", "value": 120},
+        {"name": "📱", "value": 200},
+        {"name": "🎧", "value": 150},
+        {"name": "⌚", "value": 250},
+        {"name": "💨", "value": 0},
+        {"name": "💨", "value": 0},
+        {"name": "💨", "value": 0},
+        {"name": "💨", "value": 0},
     ],
     "hard": [
-        {"name": "👑 Корона", "value": 600},
-        {"name": "💎 Бриллиант", "value": 800},
-        {"name": "🚁 Вертолёт", "value": 700},
-        {"name": "🛸 НЛО", "value": 1000},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "💨 Пусто", "value": 0},
+        {"name": "👑", "value": 600},
+        {"name": "💎", "value": 800},
+        {"name": "🚁", "value": 700},
+        {"name": "🛸", "value": 1000},
+        {"name": "💨", "value": 0},
+        {"name": "💨", "value": 0},
+        {"name": "💨", "value": 0},
+        {"name": "💨", "value": 0},
     ]
 }
 
@@ -271,7 +271,7 @@ def get_spin_result(mode: str):
         if available_prizes:
             prize = random.choice(available_prizes)
             return True, prize["name"], prize["value"]
-    return False, "Проигрыш", 0
+    return False, "❌ Проигрыш", 0
 
 def get_prizes_for_mode(mode: str):
     return PRIZES[mode]
@@ -340,17 +340,14 @@ STATIC_FILES = {
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <!-- Верхняя панель -->
     <div id="top-bar">
         <div id="username" style="cursor:pointer;">@user</div>
         <div id="balance">
             <span id="balance-amount">0</span> 🌟
             <button id="deposit-btn">+</button>
-            <button id="gifts-btn" style="background:var(--accent-color); border:none; border-radius:8px; padding:4px 10px; font-weight:bold; color:#0a0a0a; cursor:pointer; margin-left:5px;">Мои подарки</button>
+            <button id="gifts-btn">Мои подарки</button>
         </div>
     </div>
-
-    <!-- Меню пополнения -->
     <div id="deposit-menu" style="display: none;">
         <div style="width:100%; text-align:center; margin-bottom:10px; font-weight:bold; color:var(--accent-color);">Пополнить баланс</div>
         <button class="deposit-option" data-amount="100">100₽</button>
@@ -359,8 +356,6 @@ STATIC_FILES = {
         <button class="deposit-option" data-amount="1000">1000₽</button>
         <button id="close-deposit">✖</button>
     </div>
-
-    <!-- Реферальное окно -->
     <div id="referral-modal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
         <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:300px; width:90%; text-align:center; border:1px solid var(--accent-color);">
             <h3 style="color:var(--accent-color); margin-bottom:10px;">Реферальная система</h3>
@@ -373,14 +368,10 @@ STATIC_FILES = {
             <button id="close-ref-modal" style="background:#333; border:none; color:#fff; padding:8px 20px; border-radius:6px; cursor:pointer;">Закрыть</button>
         </div>
     </div>
-
-    <!-- Заголовок -->
     <div id="main-title">
         <h1>РУЛЕТКА STAR DROP</h1>
         <p>Испытай удачу и выиграй крипто-подарки!</p>
     </div>
-
-    <!-- Список призов -->
     <div id="prizes-list">
         <div class="prize-item">Telegram Username x1</div>
         <div class="prize-item">Rolex x1</div>
@@ -389,44 +380,29 @@ STATIC_FILES = {
         <div class="prize-item">Ring x1</div>
         <div class="prize-item">Gold Bar x1</div>
     </div>
-
-    <!-- Режимы (скрытые, но функциональные) -->
-    <div id="mode-selector" style="display: flex; gap: 12px; margin: 10px 0;">
+    <div id="mode-selector">
         <button class="mode-btn active" data-mode="light">Light</button>
         <button class="mode-btn" data-mode="normal">Normal</button>
         <button class="mode-btn" data-mode="hard">Hard</button>
     </div>
-
-    <!-- Колесо -->
     <div id="wheel-container">
         <canvas id="wheelCanvas" width="300" height="300"></canvas>
     </div>
-
-    <!-- Информация и кнопка вращения -->
     <div id="spin-area">
         <div id="spin-info">1 спин = <span id="spin-cost">25</span> монет</div>
-        <button id="spin-btn">КРУТИТЬ <span id="spin-cost-label">50 Токенов</span></button>
+        <button id="spin-btn">КРУТИТЬ <span id="spin-cost-label">25 Токенов</span></button>
     </div>
-
-    <!-- Результат -->
     <div id="result-message"></div>
-
-    <!-- Лента уведомлений -->
     <div id="notification-feed">
         <h3>Последние выигрыши</h3>
         <ul id="feed-list"></ul>
     </div>
-
-    <!-- Кнопка вывода -->
     <button id="withdraw-btn">Вывести токены</button>
-
-    <!-- Нижняя навигация -->
     <div id="bottom-nav">
         <button class="nav-btn active" data-tab="roulette">Рулетка</button>
         <button class="nav-btn" data-tab="tasks">Задания</button>
         <button class="nav-btn" data-tab="top">Топ</button>
     </div>
-
     <script src="/static/script.js"></script>
 </body>
 </html>""",
@@ -745,7 +721,6 @@ function updateBalanceUI(newBalance) {
     document.getElementById('balance-amount').textContent = newBalance;
 }
 
-// === Реферальное окно ===
 document.getElementById('username').addEventListener('click', async () => {
     try {
         const resp = await fetch(`/api/referral/${user_id}`);
@@ -777,7 +752,6 @@ document.getElementById('referral-modal').addEventListener('click', (e) => {
     }
 });
 
-// === Кнопка "Мои подарки" (заглушка) ===
 document.getElementById('gifts-btn').addEventListener('click', () => {
     alert('Здесь будут ваши выигранные подарки. Пока пусто.');
 });
@@ -827,6 +801,7 @@ function drawWheel() {
         ctx.moveTo(centerX, centerY);
         ctx.arc(centerX, centerY, radius, startAngle, endAngle);
         ctx.closePath();
+        // Яркие цвета для сегментов
         ctx.fillStyle = i % 2 === 0 ? '#ffd700' : '#b8860b';
         ctx.fill();
         ctx.strokeStyle = '#0a0a0a';
@@ -837,45 +812,53 @@ function drawWheel() {
         ctx.rotate(startAngle + angleStep / 2);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#0a0a0a';
-        ctx.font = 'bold 14px sans-serif';
+        ctx.fillStyle = '#000';
+        ctx.font = 'bold 28px sans-serif';
         const label = modePrizes[i].name;
-        ctx.fillText(label, radius * 0.65, 0);
+        ctx.fillText(label, radius * 0.6, 0);
         ctx.restore();
     }
+    // Добавляем центральный круг
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 20, 0, 2 * Math.PI);
+    ctx.fillStyle = '#ffd700';
+    ctx.fill();
+    ctx.strokeStyle = '#0a0a0a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
 }
 
 function getPrizesForMode(mode) {
     const allPrizes = {
         light: [
-            {name: '🎈 Шар', value: 15},
-            {name: '🍬 Конфета', value: 20},
-            {name: '⭐ Звезда', value: 25},
-            {name: '🌸 Цветок', value: 40},
-            {name: '💨 Пусто', value: 0},
-            {name: '💨 Пусто', value: 0},
-            {name: '💨 Пусто', value: 0},
-            {name: '💨 Пусто', value: 0}
+            {name: '🎈', value: 15},
+            {name: '🍬', value: 20},
+            {name: '⭐', value: 25},
+            {name: '🌸', value: 40},
+            {name: '💨', value: 0},
+            {name: '💨', value: 0},
+            {name: '💨', value: 0},
+            {name: '💨', value: 0}
         ],
         normal: [
-            {name: '🎮 Приставка', value: 120},
-            {name: '📱 Смартфон', value: 200},
-            {name: '🎧 Наушники', value: 150},
-            {name: '⌚ Умные часы', value: 250},
-            {name: '💨 Пусто', value: 0},
-            {name: '💨 Пусто', value: 0},
-            {name: '💨 Пусто', value: 0},
-            {name: '💨 Пусто', value: 0}
+            {name: '🎮', value: 120},
+            {name: '📱', value: 200},
+            {name: '🎧', value: 150},
+            {name: '⌚', value: 250},
+            {name: '💨', value: 0},
+            {name: '💨', value: 0},
+            {name: '💨', value: 0},
+            {name: '💨', value: 0}
         ],
         hard: [
-            {name: '👑 Корона', value: 600},
-            {name: '💎 Бриллиант', value: 800},
-            {name: '🚁 Вертолёт', value: 700},
-            {name: '🛸 НЛО', value: 1000},
-            {name: '💨 Пусто', value: 0},
-            {name: '💨 Пусто', value: 0},
-            {name: '💨 Пусто', value: 0},
-            {name: '💨 Пусто', value: 0}
+            {name: '👑', value: 600},
+            {name: '💎', value: 800},
+            {name: '🚁', value: 700},
+            {name: '🛸', value: 1000},
+            {name: '💨', value: 0},
+            {name: '💨', value: 0},
+            {name: '💨', value: 0},
+            {name: '💨', value: 0}
         ]
     };
     return allPrizes[mode] || allPrizes.light;
@@ -992,14 +975,12 @@ document.getElementById('withdraw-btn').addEventListener('click', async () => {
     }
 });
 
-// === Навигация вкладок (заглушка) ===
 document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         if (btn.dataset.tab !== 'roulette') {
             alert('Раздел в разработке');
-            // Возвращаем активность на рулетку
             document.querySelector('.nav-btn[data-tab="roulette"]').classList.add('active');
         }
     });
