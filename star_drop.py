@@ -4,6 +4,7 @@ import asyncio
 import logging
 import sqlite3
 import random
+import signal
 from datetime import datetime
 from typing import Optional, List, Dict
 
@@ -25,7 +26,6 @@ SPIN_COSTS = {
     "hard": 100
 }
 
-# Обновлённые списки призов с пустыми секциями
 PRIZES = {
     "light": [
         {"name": "🎈 Воздушный шар", "value": 15},
@@ -61,7 +61,7 @@ PRIZES = {
 
 WIN_CHANCE = 35
 DB_NAME = "star_drop.db"
-WEBAPP_URL = "https://star-drop.onrender.com"  # ваш домен на Render
+WEBAPP_URL = "https://star-drop.onrender.com"
 
 # ==================== БАЗА ДАННЫХ ====================
 def init_db():
@@ -212,7 +212,6 @@ init_db()
 def get_spin_result(mode: str):
     win = random.randint(1, 100) <= WIN_CHANCE
     if win:
-        # Выбираем только призы с value > 0
         available_prizes = [p for p in PRIZES[mode] if p["value"] > 0]
         if available_prizes:
             prize = random.choice(available_prizes)
@@ -254,7 +253,14 @@ async def cmd_start(message: types.Message):
     )
 
 async def start_bot():
-    await dp.start_polling(bot)
+    # Сбрасываем вебхук, чтобы избежать конфликтов с polling
+    await bot.delete_webhook(drop_pending_updates=True)
+    # Запускаем polling с автоматическими повторными попытками при конфликте
+    try:
+        await dp.start_polling(bot)
+    except Exception as e:
+        logging.error(f"Ошибка при запуске polling: {e}")
+        raise
 
 # ==================== ВЕБ-СЕРВЕР (FASTAPI) ====================
 from fastapi import FastAPI, HTTPException
@@ -273,11 +279,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Создаём папку static и файлы, если их нет
+# Создаём папку static и файлы, если их нет (только один раз при первом запуске)
 STATIC_DIR = "static"
 os.makedirs(STATIC_DIR, exist_ok=True)
 
-# Содержимое статических файлов (встроено для самодостаточности)
 STATIC_FILES = {
     "index.html": """<!DOCTYPE html>
 <html lang="ru">
@@ -329,7 +334,6 @@ STATIC_FILES = {
     box-sizing: border-box;
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
-
 :root {
     --accent-color: #ffd700;
     --accent-glow: #ffd70066;
@@ -338,7 +342,6 @@ STATIC_FILES = {
     --card-bg: #111;
     --border-color: #333;
 }
-
 body {
     background: var(--bg-dark);
     color: var(--text-light);
@@ -349,7 +352,6 @@ body {
     align-items: center;
     transition: background 0.3s, color 0.3s;
 }
-
 body.theme-light {
     --accent-color: #ffd700;
     --accent-glow: #ffd70066;
@@ -362,7 +364,6 @@ body.theme-hard {
     --accent-color: #f44336;
     --accent-glow: #f4433666;
 }
-
 #top-bar {
     display: flex;
     justify-content: space-between;
@@ -370,13 +371,11 @@ body.theme-hard {
     padding: 10px 0;
     border-bottom: 1px solid var(--border-color);
 }
-
 #username {
     font-size: 18px;
     font-weight: 600;
     color: var(--accent-color);
 }
-
 #balance {
     font-size: 18px;
     display: flex;
@@ -384,11 +383,9 @@ body.theme-hard {
     gap: 8px;
     color: var(--accent-color);
 }
-
 #balance-amount {
     font-weight: 700;
 }
-
 #deposit-btn {
     background: var(--accent-color);
     border: none;
@@ -400,7 +397,6 @@ body.theme-hard {
     color: #0a0a0a;
     cursor: pointer;
 }
-
 #deposit-menu {
     background: var(--card-bg);
     border: 1px solid var(--accent-color);
@@ -412,7 +408,6 @@ body.theme-hard {
     gap: 10px;
     justify-content: center;
 }
-
 .deposit-option {
     background: var(--accent-color);
     color: #0a0a0a;
@@ -422,7 +417,6 @@ body.theme-hard {
     font-weight: 600;
     cursor: pointer;
 }
-
 #close-deposit {
     background: transparent;
     color: var(--accent-color);
@@ -430,13 +424,11 @@ body.theme-hard {
     font-size: 20px;
     cursor: pointer;
 }
-
 #mode-selector {
     display: flex;
     gap: 12px;
     margin: 20px 0;
 }
-
 .mode-btn {
     background: #222;
     color: #aaa;
@@ -447,27 +439,23 @@ body.theme-hard {
     cursor: pointer;
     transition: all 0.2s;
 }
-
 .mode-btn.active {
     background: var(--accent-color);
     color: #0a0a0a;
     box-shadow: 0 0 15px var(--accent-glow);
 }
-
 #wheel-container {
     position: relative;
     width: 300px;
     height: 300px;
     margin: 20px auto;
 }
-
 #wheelCanvas {
     width: 100%;
     height: 100%;
     border-radius: 50%;
     box-shadow: 0 0 30px var(--accent-glow);
 }
-
 #spin-btn {
     position: absolute;
     top: 50%;
@@ -485,17 +473,14 @@ body.theme-hard {
     box-shadow: 0 0 20px var(--accent-glow);
     transition: 0.1s;
 }
-
 #spin-btn:active {
     transform: translate(-50%, -50%) scale(0.9);
 }
-
 #mode-info {
     margin: 10px 0;
     color: #ccc;
     font-size: 14px;
 }
-
 #result-message {
     margin: 10px 0;
     font-size: 18px;
@@ -503,7 +488,6 @@ body.theme-hard {
     min-height: 40px;
     text-align: center;
 }
-
 #notification-feed {
     width: 100%;
     max-width: 400px;
@@ -512,30 +496,25 @@ body.theme-hard {
     padding: 12px;
     margin: 20px 0;
 }
-
 #notification-feed h3 {
     color: var(--accent-color);
     margin-bottom: 8px;
     font-size: 16px;
 }
-
 #feed-list {
     list-style: none;
     max-height: 150px;
     overflow-y: auto;
 }
-
 #feed-list li {
     padding: 6px 0;
     border-bottom: 1px solid var(--border-color);
     font-size: 13px;
     color: #ddd;
 }
-
 #feed-list li:last-child {
     border-bottom: none;
 }
-
 #withdraw-btn {
     background: var(--accent-color);
     color: #0a0a0a;
@@ -554,7 +533,6 @@ let balance = 0;
 let currentMode = 'light';
 let isSpinning = false;
 
-// Инициализация Telegram Web App
 window.Telegram.WebApp.ready();
 const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
 if (tgUser) {
@@ -584,16 +562,13 @@ function updateBalanceUI(newBalance) {
     document.getElementById('balance-amount').textContent = newBalance;
 }
 
-// === Тема (цветовая схема) ===
 function applyTheme(mode) {
-    // Удаляем все классы темы
     document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
     if (mode === 'light') document.body.classList.add('theme-light');
     else if (mode === 'normal') document.body.classList.add('theme-normal');
     else if (mode === 'hard') document.body.classList.add('theme-hard');
 }
 
-// === Переключение режимов ===
 document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
@@ -610,7 +585,6 @@ function updateSpinCost() {
     document.getElementById('spin-cost').textContent = costs[currentMode];
 }
 
-// === Колесо (Canvas) ===
 const canvas = document.getElementById('wheelCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -631,7 +605,6 @@ function drawWheel() {
         ctx.moveTo(centerX, centerY);
         ctx.arc(centerX, centerY, radius, startAngle, endAngle);
         ctx.closePath();
-        // Чередуем цвета
         ctx.fillStyle = i % 2 === 0 ? '#ffd700' : '#b8860b';
         ctx.fill();
         ctx.strokeStyle = '#0a0a0a';
@@ -643,15 +616,12 @@ function drawWheel() {
         ctx.textAlign = 'right';
         ctx.fillStyle = '#0a0a0a';
         ctx.font = 'bold 12px sans-serif';
-        const label = modePrizes[i].name;
-        ctx.fillText(label, radius * 0.7, 5);
+        ctx.fillText(modePrizes[i].name, radius * 0.7, 5);
         ctx.restore();
     }
 }
 
 function getPrizesForMode(mode) {
-    // Используем списки из серверной части (синхронизированы)
-    // В реальности можно запросить с сервера, но для простоты продублируем
     const allPrizes = {
         light: [
             {name: '🎈 Воздушный шар', value: 15},
@@ -687,11 +657,9 @@ function getPrizesForMode(mode) {
     return allPrizes[mode] || allPrizes.light;
 }
 
-// Инициализация
 applyTheme('light');
 drawWheel();
 
-// === Вращение ===
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (isSpinning) return;
     isSpinning = true;
@@ -729,7 +697,6 @@ function animateWheel() {
     }, 2100);
 }
 
-// === Пополнение (кнопка +) ===
 document.getElementById('deposit-btn').addEventListener('click', () => {
     const menu = document.getElementById('deposit-menu');
     menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
@@ -753,7 +720,6 @@ document.getElementById('close-deposit').addEventListener('click', () => {
     document.getElementById('deposit-menu').style.display = 'none';
 });
 
-// === Лента уведомлений ===
 async function fetchFeed() {
     try {
         const resp = await fetch('/api/recent_wins');
@@ -773,7 +739,6 @@ async function fetchFeed() {
 fetchFeed();
 setInterval(fetchFeed, 5000);
 
-// === Вывод токенов ===
 document.getElementById('withdraw-btn').addEventListener('click', async () => {
     const amount = prompt('Введите сумму вывода (минимум 100 токенов):');
     if (!amount || isNaN(amount) || amount < 100) {
@@ -799,7 +764,7 @@ document.getElementById('withdraw-btn').addEventListener('click', async () => {
 """
 }
 
-# Записываем статические файлы, если их нет
+# Создаём файлы только если они отсутствуют (чтобы не перезаписывать при каждом рестарте)
 for filename, content in STATIC_FILES.items():
     filepath = os.path.join(STATIC_DIR, filename)
     if not os.path.exists(filepath):
@@ -807,7 +772,6 @@ for filename, content in STATIC_FILES.items():
             f.write(content)
         print(f"✅ Создан {filepath}")
 
-# Монтируем статику
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # API модели
@@ -819,7 +783,6 @@ class WithdrawRequest(BaseModel):
     user_id: int
     amount: int
 
-# API эндпоинты
 @app.get("/api/user/{user_id}")
 async def api_get_user(user_id: int):
     user = get_user(user_id)
@@ -890,14 +853,25 @@ async def api_get_prizes(mode: str):
 
 # ==================== ЗАПУСК ОБОИХ СЕРВИСОВ ====================
 async def run_uvicorn():
-    """Запуск FastAPI через uvicorn в асинхронном режиме"""
     port = int(os.environ.get("PORT", 10000))
     config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
     server = uvicorn.Server(config)
     await server.serve()
 
+async def shutdown(sig, loop):
+    """Graceful shutdown при получении сигнала"""
+    logging.info(f"Received signal {sig}, shutting down...")
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+    loop.stop()
+
 async def main():
-    # Запускаем бота и веб-сервер параллельно
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown(sig, loop)))
+
     await asyncio.gather(
         start_bot(),
         run_uvicorn()
