@@ -61,15 +61,17 @@ PRIZES = {
     ]
 }
 
-WIN_CHANCE = 35
 DB_NAME = "star_drop.db"
 WEBAPP_URL = "https://star-drop.onrender.com"  # ваш домен
 REFERRAL_BONUS = 50
 
+# Символы для игрового автомата
+SLOT_SYMBOLS = ['🍒', '🍋', '🍊', '🍇', '🍉', '🍓', '🍑', '🎰']
+SLOT_WIN_MULTIPLIER = 2  # выигрыш = ставка * 2
+
 # Список доступных промокодов с наградами
 PROMOCODES = {
     "rifleman": 50,
-    # можно добавить другие
 }
 
 # ==================== БАЗА ДАННЫХ ====================
@@ -130,7 +132,6 @@ def init_db():
             FOREIGN KEY (referred_id) REFERENCES users(user_id)
         )
     ''')
-    # Таблица для использованных промокодов
     cur.execute('''
         CREATE TABLE IF NOT EXISTS used_promocodes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -297,7 +298,17 @@ init_db()
 
 # ==================== УТИЛИТЫ ====================
 def get_spin_result(mode: str):
-    win = random.randint(1, 100) <= WIN_CHANCE
+    # Определяем шанс выигрыша в зависимости от режима
+    if mode == "light":
+        win_chance = 30  # фиксированный 30%
+    elif mode == "normal":
+        win_chance = random.randint(20, 50)  # от 20% до 50%
+    elif mode == "hard":
+        win_chance = random.randint(30, 45)  # от 30% до 45%
+    else:
+        win_chance = 35  # по умолчанию
+
+    win = random.randint(1, 100) <= win_chance
     if win:
         available_prizes = [p for p in PRIZES[mode] if p["value"] > 0]
         if available_prizes:
@@ -307,6 +318,35 @@ def get_spin_result(mode: str):
 
 def get_prizes_for_mode(mode: str):
     return PRIZES[mode]
+
+def get_slot_result(bet: int):
+    """Возвращает (выигрыш_да, символы, выигрыш_сумма)"""
+    # Определяем шанс выигрыша в зависимости от ставки
+    if bet == 20:
+        chance = 10
+    elif 40 <= bet <= 70:
+        chance = 30
+    elif 71 <= bet <= 100:
+        chance = 15
+    else:
+        chance = 10
+
+    if random.randint(1, 100) <= chance:
+        symbol = random.choice(SLOT_SYMBOLS)
+        symbols = [symbol, symbol, symbol]
+        win_amount = bet * SLOT_WIN_MULTIPLIER
+        return True, symbols, win_amount
+    else:
+        symbols = random.choices(SLOT_SYMBOLS, k=3)
+        if len(set(symbols)) == 1:
+            other_symbols = [s for s in SLOT_SYMBOLS if s != symbols[0]]
+            if other_symbols:
+                symbols[0] = random.choice(other_symbols)
+            else:
+                symbols = random.choices(SLOT_SYMBOLS, k=3)
+                while len(set(symbols)) == 1:
+                    symbols = random.choices(SLOT_SYMBOLS, k=3)
+        return False, symbols, 0
 
 # ==================== ТЕЛЕГРАМ БОТ (только webhook) ====================
 from aiogram import Bot, Dispatcher, types
@@ -373,7 +413,7 @@ STATIC_FILES = {
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="theme-light">
-    <!-- Фоновые летящие элементы: звёзды и подарки -->
+    <!-- Фоновые летящие элементы -->
     <div class="stars-background">
         <span>⭐</span><span>✨</span><span>🌟</span><span>💫</span>
         <span>🎁</span><span>🧸</span><span>💎</span><span>🧢</span>
@@ -390,7 +430,7 @@ STATIC_FILES = {
         </div>
     </div>
 
-    <!-- Меню пополнения (Payment Links) -->
+    <!-- Меню пополнения -->
     <div id="deposit-menu" style="display: none;">
         <div style="width:100%; text-align:center; margin-bottom:10px; font-weight:bold; color:var(--accent-color);">Пополнить баланс</div>
         <button class="deposit-option" data-amount="100">100₽</button>
@@ -413,40 +453,61 @@ STATIC_FILES = {
         </div>
     </div>
 
-    <div id="main-title">
-        <h1>РУЛЕТКА STAR DROP</h1>
-        <p>Испытай удачу и выиграй Telegram-подарки!</p>
+    <!-- РУЛЕТКА -->
+    <div id="roulette-page">
+        <div id="main-title">
+            <h1>РУЛЕТКА STAR DROP</h1>
+            <p>Испытай удачу и выиграй Telegram-подарки!</p>
+        </div>
+        <div id="prizes-list">
+            <div class="prize-item">🧸 Мишка</div>
+            <div class="prize-item">💎 Бриллиант</div>
+            <div class="prize-item">💍 Кольцо</div>
+            <div class="prize-item">🧁 Торт</div>
+            <div class="prize-item">🧢 Кепка Дурова</div>
+            <div class="prize-item">🚀 Ракета</div>
+        </div>
+        <div id="mode-selector">
+            <button class="mode-btn active" data-mode="light">Low</button>
+            <button class="mode-btn" data-mode="normal">Normal</button>
+            <button class="mode-btn" data-mode="hard">Hard</button>
+        </div>
+        <div id="wheel-container">
+            <div id="wheel-pointer">▼</div>
+            <canvas id="wheelCanvas" width="300" height="300"></canvas>
+        </div>
+        <div id="spin-area">
+            <div id="spin-info">1 спин = <span id="spin-cost">25</span> монет</div>
+            <button id="spin-btn">КРУТИТЬ <span id="spin-cost-label">25 Токенов</span></button>
+        </div>
+        <div id="result-message"></div>
     </div>
 
-    <div id="prizes-list">
-        <div class="prize-item">🧸 Мишка</div>
-        <div class="prize-item">💎 Бриллиант</div>
-        <div class="prize-item">💍 Кольцо</div>
-        <div class="prize-item">🧁 Торт</div>
-        <div class="prize-item">🧢 Кепка Дурова</div>
-        <div class="prize-item">🚀 Ракета</div>
+    <!-- ИГРОВОЙ АВТОМАТ (СЛОТ) -->
+    <div id="slot-page" style="display:none;">
+        <div id="main-title">
+            <h1>ИГРОВОЙ АВТОМАТ 🎰</h1>
+            <p>Дёрни рычаг и удвой ставку!</p>
+        </div>
+        <div id="slot-machine">
+            <div id="reels">
+                <div class="reel" id="reel1">🍒</div>
+                <div class="reel" id="reel2">🍋</div>
+                <div class="reel" id="reel3">🍊</div>
+            </div>
+            <div id="slot-controls">
+                <div class="bet-control">
+                    <label>Ставка: <span id="bet-display">20</span> токенов</label>
+                    <input type="range" id="bet-range" min="20" max="100" step="10" value="20">
+                    <div id="slot-chance">Шанс выигрыша: <span id="chance-display">10%</span></div>
+                </div>
+                <button id="spin-slot-btn">Дёрнуть рычаг 🎰</button>
+            </div>
+            <div id="slot-result"></div>
+        </div>
     </div>
 
-    <!-- Режимы: Low (жёлтый), Normal (синий), Hard (красный) -->
-    <div id="mode-selector">
-        <button class="mode-btn active" data-mode="light">Low</button>
-        <button class="mode-btn" data-mode="normal">Normal</button>
-        <button class="mode-btn" data-mode="hard">Hard</button>
-    </div>
-
-    <div id="wheel-container">
-        <!-- Указатель рулетки сверху -->
-        <div id="wheel-pointer">▼</div>
-        <canvas id="wheelCanvas" width="300" height="300"></canvas>
-    </div>
-
-    <div id="spin-area">
-        <div id="spin-info">1 спин = <span id="spin-cost">25</span> монет</div>
-        <button id="spin-btn">КРУТИТЬ <span id="spin-cost-label">25 Токенов</span></button>
-    </div>
-
-    <div id="result-message"></div>
-
+    <!-- Общие элементы -->
     <div id="notification-feed">
         <h3>Последние выигрыши</h3>
         <ul id="feed-list"></ul>
@@ -461,9 +522,10 @@ STATIC_FILES = {
         <div id="promo-message" style="color: var(--accent-color); font-size: 14px; margin-top: 5px; text-align:center;"></div>
     </div>
 
+    <!-- Нижняя навигация -->
     <div id="bottom-nav">
         <button class="nav-btn active" data-tab="roulette">Рулетка</button>
-        <button class="nav-btn" data-tab="tasks">Задания</button>
+        <button class="nav-btn" data-tab="slot">Барабан</button>
         <button class="nav-btn" data-tab="top">Топ</button>
     </div>
 
@@ -512,7 +574,7 @@ body.theme-hard {
     --accent-glow: #f4433666;
 }
 
-/* Анимированный фон с подарками и звёздами */
+/* Анимированный фон */
 .stars-background {
     position: fixed;
     top: 0;
@@ -534,7 +596,6 @@ body.theme-hard {
     font-size: 18px;
 }
 
-/* 16 элементов с разными позициями, задержками и скоростями */
 .stars-background span:nth-child(1) { left: 5%; animation-duration: 8s; font-size: 16px; }
 .stars-background span:nth-child(2) { left: 15%; animation-duration: 12s; font-size: 22px; animation-delay: 1s; }
 .stars-background span:nth-child(3) { left: 25%; animation-duration: 7s; font-size: 14px; animation-delay: 2s; }
@@ -799,6 +860,118 @@ body.theme-hard {
     transition: color 0.3s, text-shadow 0.3s;
 }
 
+/* Стили для игрового автомата */
+#slot-machine {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 20px;
+    margin: 10px 0;
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 0 30px var(--accent-glow);
+    width: 100%;
+    max-width: 400px;
+}
+
+#reels {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    padding: 15px 0;
+}
+
+.reel {
+    width: 70px;
+    height: 80px;
+    background: #222;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    border: 2px solid var(--border-color);
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+    transition: transform 0.1s;
+}
+
+.reel.spinning {
+    animation: spin 0.2s steps(1) infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    25% { transform: rotate(90deg); }
+    50% { transform: rotate(180deg); }
+    75% { transform: rotate(270deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#slot-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.bet-control {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.bet-control label {
+    font-size: 14px;
+    color: #ccc;
+}
+
+#bet-range {
+    width: 80%;
+    max-width: 250px;
+    margin-top: 5px;
+    accent-color: var(--accent-color);
+}
+
+#slot-chance {
+    font-size: 14px;
+    color: #aaa;
+    margin-top: 4px;
+}
+
+#slot-chance span {
+    color: var(--accent-color);
+    font-weight: bold;
+}
+
+#spin-slot-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 14px 30px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 0 20px var(--accent-glow);
+    transition: transform 0.1s, box-shadow 0.3s, background 0.3s;
+    width: 100%;
+    max-width: 280px;
+}
+
+#spin-slot-btn:active {
+    transform: scale(0.95);
+}
+
+#slot-result {
+    margin-top: 15px;
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--accent-color);
+    min-height: 30px;
+}
+
+/* Общие элементы */
 #notification-feed {
     width: 100%;
     max-width: 400px;
@@ -985,7 +1158,6 @@ document.getElementById('close-ref-modal').addEventListener('click', () => {
     document.getElementById('referral-modal').style.display = 'none';
 });
 
-// Исправленное копирование ссылки с fallback
 document.getElementById('copy-ref-link').addEventListener('click', () => {
     const link = document.getElementById('ref-link').textContent;
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1038,7 +1210,6 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
         if (resp.ok) {
             msg.textContent = '✅ ' + data.message;
             input.value = '';
-            // Обновляем баланс
             balance = data.new_balance;
             document.getElementById('balance-amount').textContent = balance;
         } else {
@@ -1137,7 +1308,6 @@ function drawWheel() {
         ctx.arc(centerX, centerY, radius, startAngle, endAngle);
         ctx.closePath();
         
-        // Цвета секторов в зависимости от темы
         if (currentMode === 'light') {
             ctx.fillStyle = i % 2 === 0 ? '#ffea75' : '#e6c229';
         } else if (currentMode === 'normal') {
@@ -1161,7 +1331,6 @@ function drawWheel() {
         ctx.restore();
     }
 
-    // Центральный кружок колеса
     ctx.beginPath();
     ctx.arc(centerX, centerY, 22, 0, 2 * Math.PI);
     ctx.fillStyle = '#111';
@@ -1175,7 +1344,7 @@ applyTheme('light');
 drawWheel();
 updateSpinCost();
 
-// === Вращение ===
+// === Вращение рулетки ===
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (isSpinning) return;
     isSpinning = true;
@@ -1193,7 +1362,6 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
-            
             const extraSpins = 5;
             const randomAngle = Math.random() * 360;
             currentRotation += (extraSpins * 360) + randomAngle;
@@ -1217,6 +1385,102 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         const cost = { light: 25, normal: 50, hard: 100 }[currentMode];
         document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
     }, 3200);
+});
+
+// === Игровой автомат (слот) ===
+let slotSpinning = false;
+const slotSymbols = ['🍒', '🍋', '🍊', '🍇', '🍉', '🍓', '🍑', '🎰'];
+const reels = [
+    document.getElementById('reel1'),
+    document.getElementById('reel2'),
+    document.getElementById('reel3')
+];
+
+// Функция для вычисления шанса выигрыша на клиенте (для отображения)
+function getSlotChance(bet) {
+    if (bet == 20) return 10;
+    else if (bet >= 40 && bet <= 70) return 30;
+    else if (bet >= 71 && bet <= 100) return 15;
+    else return 10;
+}
+
+document.getElementById('bet-range').addEventListener('input', function() {
+    const bet = parseInt(this.value);
+    document.getElementById('bet-display').textContent = bet;
+    const chance = getSlotChance(bet);
+    document.getElementById('chance-display').textContent = chance + '%';
+});
+
+// Инициализация отображения шанса при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+    const initialBet = parseInt(document.getElementById('bet-range').value);
+    document.getElementById('bet-display').textContent = initialBet;
+    const chance = getSlotChance(initialBet);
+    document.getElementById('chance-display').textContent = chance + '%';
+});
+
+document.getElementById('spin-slot-btn').addEventListener('click', async () => {
+    if (slotSpinning) return;
+    const bet = parseInt(document.getElementById('bet-range').value);
+    if (isNaN(bet) || bet < 20 || bet > 100) {
+        alert('Ставка должна быть от 20 до 100 токенов');
+        return;
+    }
+    if (balance < bet) {
+        alert('Недостаточно токенов!');
+        return;
+    }
+
+    slotSpinning = true;
+    const btn = document.getElementById('spin-slot-btn');
+    btn.disabled = true;
+    btn.textContent = '🎰 Крутим...';
+
+    // Анимация прокрутки
+    let interval = setInterval(() => {
+        reels.forEach(reel => {
+            reel.textContent = slotSymbols[Math.floor(Math.random() * slotSymbols.length)];
+        });
+    }, 100);
+
+    try {
+        const resp = await fetch('/api/slot_spin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id, bet })
+        });
+        const data = await resp.json();
+        clearInterval(interval);
+
+        if (resp.ok) {
+            // Устанавливаем финальные символы
+            reels[0].textContent = data.symbols[0];
+            reels[1].textContent = data.symbols[1];
+            reels[2].textContent = data.symbols[2];
+
+            updateBalanceUI(data.new_balance);
+            const resultDiv = document.getElementById('slot-result');
+            if (data.win) {
+                resultDiv.textContent = '🎉 ВЫИГРЫШ! +' + data.win_amount + ' токенов!';
+                resultDiv.style.color = '#4CAF50';
+            } else {
+                resultDiv.textContent = '😞 Проигрыш. -' + bet + ' токенов';
+                resultDiv.style.color = '#f44336';
+            }
+            // Обновляем ленту, если выигрыш
+            if (data.win) fetchFeed();
+        } else {
+            document.getElementById('slot-result').textContent = '❌ ' + data.detail;
+        }
+    } catch (e) {
+        clearInterval(interval);
+        document.getElementById('slot-result').textContent = 'Ошибка соединения';
+        console.error(e);
+    }
+
+    slotSpinning = false;
+    btn.disabled = false;
+    btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
 // === Пополнение ===
@@ -1264,11 +1528,11 @@ async function fetchFeed() {
 fetchFeed();
 setInterval(fetchFeed, 5000);
 
-// === Вывод ===
+// === Вывод (минимальная сумма изменена на 500) ===
 document.getElementById('withdraw-btn').addEventListener('click', async () => {
-    const amount = prompt('Введите сумму вывода (минимум 100 токенов):');
-    if (!amount || isNaN(amount) || amount < 100) {
-        alert('Введите корректное число не менее 100');
+    const amount = prompt('Введите сумму вывода (минимум 500 токенов):');
+    if (!amount || isNaN(amount) || amount < 500) {
+        alert('Введите корректное число не менее 500');
         return;
     }
     try {
@@ -1289,21 +1553,30 @@ document.getElementById('withdraw-btn').addEventListener('click', async () => {
     }
 });
 
-// === Нижняя навигация ===
+// === Навигация по вкладкам ===
 document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        if (btn.dataset.tab !== 'roulette') {
-            alert('Раздел в разработке');
+        const tab = btn.dataset.tab;
+        if (tab === 'roulette') {
+            document.getElementById('roulette-page').style.display = 'block';
+            document.getElementById('slot-page').style.display = 'none';
+        } else if (tab === 'slot') {
+            document.getElementById('roulette-page').style.display = 'none';
+            document.getElementById('slot-page').style.display = 'block';
+        } else if (tab === 'top') {
+            alert('Таблица лидеров в разработке');
             document.querySelector('.nav-btn[data-tab="roulette"]').classList.add('active');
+            document.getElementById('roulette-page').style.display = 'block';
+            document.getElementById('slot-page').style.display = 'none';
         }
     });
 });
 """
 }
 
-# Записываем файлы (перезаписываем для обновления)
+# Записываем файлы (перезаписываем)
 for filename, content in STATIC_FILES.items():
     filepath = os.path.join(STATIC_DIR, filename)
     with open(filepath, "w", encoding="utf-8") as f:
@@ -1341,6 +1614,10 @@ class PromoRequest(BaseModel):
     user_id: int
     code: str
 
+class SlotSpinRequest(BaseModel):
+    user_id: int
+    bet: int
+
 @app.get("/api/user/{user_id}")
 async def api_get_user(user_id: int):
     user = get_user(user_id)
@@ -1375,6 +1652,33 @@ async def api_spin(data: SpinRequest):
         "message": message
     }
 
+@app.post("/api/slot_spin")
+async def api_slot_spin(data: SlotSpinRequest):
+    user_id = data.user_id
+    bet = data.bet
+    if bet < 20 or bet > 100:
+        raise HTTPException(status_code=400, detail="Ставка должна быть от 20 до 100 токенов")
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < bet:
+        raise HTTPException(status_code=400, detail="Недостаточно токенов")
+    
+    # Списываем ставку
+    update_balance(user_id, -bet, f"Ставка в игровом автомате {bet} токенов")
+    win, symbols, win_amount = get_slot_result(bet)
+    if win:
+        update_balance(user_id, win_amount, f"Выигрыш в игровом автомате {win_amount} токенов")
+        # Добавляем выигрыш в ленту (как win)
+        add_win(user_id, f"🎰 {symbols[0]}{symbols[1]}{symbols[2]}", win_amount, "slot")
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "win": win,
+        "symbols": symbols,
+        "win_amount": win_amount if win else 0,
+        "new_balance": new_balance
+    }
+
 @app.post("/api/withdraw")
 async def api_withdraw(data: WithdrawRequest):
     user_id = data.user_id
@@ -1384,8 +1688,8 @@ async def api_withdraw(data: WithdrawRequest):
         raise HTTPException(status_code=404, detail="User not found")
     if user["balance"] < amount:
         raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    if amount < 100:
-        raise HTTPException(status_code=400, detail="Минимальная сумма вывода – 100 токенов")
+    if amount < 500:  # Изменено с 100 на 500
+        raise HTTPException(status_code=400, detail="Минимальная сумма вывода – 500 токенов")
     create_withdraw_request(user_id, amount)
     return {"status": "success", "message": "Заявка на вывод отправлена администратору"}
 
@@ -1426,18 +1730,14 @@ async def activate_promo(data: PromoRequest):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Проверяем, существует ли промокод
     if code not in PROMOCODES:
         raise HTTPException(status_code=400, detail="Неверный промокод")
     
-    # Проверяем, не использовал ли уже пользователь этот код
     if is_promo_used(user_id, code):
         raise HTTPException(status_code=400, detail="Вы уже использовали этот промокод")
     
     reward = PROMOCODES[code]
-    # Начисляем бонус
     update_balance(user_id, reward, f"Промокод {code}")
-    # Запоминаем использование
     use_promo(user_id, code)
     
     new_balance = get_user(user_id)["balance"]
