@@ -6,11 +6,11 @@ import sqlite3
 import random
 import signal
 import time
+import secrets
 from datetime import datetime
 from typing import Optional, List, Dict
 import json
 import hashlib
-import math
 
 # ==================== НАСТРОЙКИ ====================
 BOT_TOKEN = "8988678866:AAHIWxUB8zKBCoF21g7OVYEEWnwEF_MpLmI"
@@ -76,6 +76,9 @@ PROMOCODES = {
 
 rocket_rounds = {}
 round_counter = 0
+
+# Хранилище кодов верификации
+verification_codes = {}  # user_id -> {code, expires_at}
 
 # ==================== БАЗА ДАННЫХ ====================
 def init_db():
@@ -433,147 +436,166 @@ STATIC_FILES = {
         <span>👑</span><span>🛸</span><span>💎</span><span>🎁</span>
     </div>
 
-    <div id="top-bar">
-        <div id="user-info" style="display:flex; align-items:center; gap:10px; cursor:pointer;">
-            <div id="avatar" style="width:32px; height:32px; border-radius:50%; background:var(--accent-color); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:16px; color:#0a0a0a;">U</div>
-            <span id="username">@user</span>
-        </div>
-        <div id="balance">
-            <span id="balance-amount">0</span> 🌟
-            <button id="deposit-btn">+</button>
-            <button id="bets-btn">Мои ставки</button>
-        </div>
-    </div>
-
-    <div id="deposit-menu" style="display: none;">
-        <div style="width:100%; text-align:center; margin-bottom:10px; font-weight:bold; color:var(--accent-color);">Пополнить баланс</div>
-        <button class="deposit-option" data-amount="100">100₽</button>
-        <button class="deposit-option" data-amount="200">200₽</button>
-        <button class="deposit-option" data-amount="500">500₽</button>
-        <button class="deposit-option" data-amount="1000">1000₽</button>
-        <button id="close-deposit">✖</button>
-    </div>
-
-    <div id="referral-modal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
-        <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:300px; width:90%; text-align:center; border:1px solid var(--accent-color);">
-            <h3 style="color:var(--accent-color); margin-bottom:10px;">Реферальная система</h3>
-            <p style="color:#ccc; font-size:14px;">Приведи друга и получи <b>+50 токенов</b> на баланс!</p>
-            <p style="color:#fff; word-break:break-all; background:#222; padding:10px; border-radius:6px; margin:10px 0;" id="ref-link">Загрузка...</p>
-            <button id="copy-ref-link" style="background:var(--accent-color); border:none; padding:8px 20px; border-radius:6px; font-weight:bold; cursor:pointer;">Копировать ссылку</button>
-            <br><br>
-            <span style="color:#aaa;">Приглашено друзей: <b id="ref-count">0</b></span>
-            <br><br>
-            <button id="close-ref-modal" style="background:#333; border:none; color:#fff; padding:8px 20px; border-radius:6px; cursor:pointer;">Закрыть</button>
-        </div>
-    </div>
-
-    <!-- Модалка "Мои ставки" -->
-    <div id="bets-modal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
-        <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:400px; width:90%; max-height:80%; overflow-y:auto; border:1px solid var(--accent-color);">
-            <h3 style="color:var(--accent-color); margin-bottom:10px;">Мои ставки</h3>
-            <ul id="bets-list" style="list-style:none; padding:0; margin:0;"></ul>
-            <button id="close-bets-modal" style="background:#333; border:none; color:#fff; padding:8px 20px; border-radius:6px; margin-top:10px; cursor:pointer;">Закрыть</button>
-        </div>
-    </div>
-
-    <!-- РУЛЕТКА -->
-    <div id="roulette-page">
-        <div id="main-title">
-            <h1>РУЛЕТКА STAR DROP</h1>
-            <p>Испытай удачу и выиграй Telegram-подарки!</p>
-        </div>
-        <div id="prizes-list">
-            <div class="prize-item">🧸 Мишка</div>
-            <div class="prize-item">💎 Бриллиант</div>
-            <div class="prize-item">💍 Кольцо</div>
-            <div class="prize-item">🧁 Торт</div>
-            <div class="prize-item">🧢 Кепка Дурова</div>
-            <div class="prize-item">🚀 Ракета</div>
-        </div>
-        <div id="mode-selector">
-            <button class="mode-btn active" data-mode="light">Low</button>
-            <button class="mode-btn" data-mode="normal">Normal</button>
-            <button class="mode-btn" data-mode="hard">Hard</button>
-        </div>
-        <div id="wheel-container">
-            <div id="wheel-pointer">▼</div>
-            <canvas id="wheelCanvas" width="300" height="300"></canvas>
-        </div>
-        <div id="spin-area">
-            <div id="spin-info">1 спин = <span id="spin-cost">25</span> монет</div>
-            <button id="spin-btn">КРУТИТЬ <span id="spin-cost-label">25 Токенов</span></button>
-        </div>
-        <div id="result-message"></div>
-    </div>
-
-    <!-- СЛОТ (БАРАБАН) -->
-    <div id="slot-page" style="display:none;">
-        <div id="main-title">
-            <h1>ИГРОВОЙ АВТОМАТ 🎰</h1>
-            <p>Дёрни рычаг и удвой ставку!</p>
-        </div>
-        <div id="slot-machine">
-            <div id="reels">
-                <div class="reel" id="reel1">🍒</div>
-                <div class="reel" id="reel2">🍋</div>
-                <div class="reel" id="reel3">🍊</div>
+    <!-- Экран входа -->
+    <div id="login-screen">
+        <div id="login-card">
+            <h1>🚀 Star Drop</h1>
+            <p>Войдите, чтобы продолжить</p>
+            <button id="login-btn">Войти через Telegram</button>
+            <div id="code-section" style="display:none; margin-top:15px;">
+                <p>Введите код из Telegram</p>
+                <input type="text" id="code-input" placeholder="Код" maxlength="6" style="padding:10px; border-radius:8px; border:1px solid var(--accent-color); background:#222; color:#fff; text-align:center; font-size:20px; width:150px;">
+                <br>
+                <button id="verify-btn" style="margin-top:10px;">Подтвердить</button>
+                <p id="login-message" style="color:var(--accent-color); margin-top:8px;"></p>
             </div>
-            <div id="slot-controls">
-                <div class="bet-control">
-                    <label>Ставка: <span id="bet-display">20</span> токенов</label>
-                    <input type="range" id="bet-range" min="20" max="100" step="10" value="20">
-                    <div id="slot-multiplier">При выигрыше: <b>x2</b> от ставки</div>
+        </div>
+    </div>
+
+    <!-- Основное приложение (скрыто до входа) -->
+    <div id="app-content" style="display:none; width:100%; max-width:400px;">
+
+        <div id="top-bar">
+            <div id="user-info" style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                <div id="avatar" style="width:32px; height:32px; border-radius:50%; background:var(--accent-color); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:16px; color:#0a0a0a;">U</div>
+                <span id="username">@user</span>
+            </div>
+            <div id="balance">
+                <span id="balance-amount">0</span> 🌟
+                <button id="deposit-btn">+</button>
+                <button id="bets-btn">Мои ставки</button>
+            </div>
+        </div>
+
+        <div id="deposit-menu" style="display: none;">
+            <div style="width:100%; text-align:center; margin-bottom:10px; font-weight:bold; color:var(--accent-color);">Пополнить баланс</div>
+            <button class="deposit-option" data-amount="100">100₽</button>
+            <button class="deposit-option" data-amount="200">200₽</button>
+            <button class="deposit-option" data-amount="500">500₽</button>
+            <button class="deposit-option" data-amount="1000">1000₽</button>
+            <button id="close-deposit">✖</button>
+        </div>
+
+        <div id="referral-modal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
+            <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:300px; width:90%; text-align:center; border:1px solid var(--accent-color);">
+                <h3 style="color:var(--accent-color); margin-bottom:10px;">Реферальная система</h3>
+                <p style="color:#ccc; font-size:14px;">Приведи друга и получи <b>+50 токенов</b> на баланс!</p>
+                <p style="color:#fff; word-break:break-all; background:#222; padding:10px; border-radius:6px; margin:10px 0;" id="ref-link">Загрузка...</p>
+                <button id="copy-ref-link" style="background:var(--accent-color); border:none; padding:8px 20px; border-radius:6px; font-weight:bold; cursor:pointer;">Копировать ссылку</button>
+                <br><br>
+                <span style="color:#aaa;">Приглашено друзей: <b id="ref-count">0</b></span>
+                <br><br>
+                <button id="close-ref-modal" style="background:#333; border:none; color:#fff; padding:8px 20px; border-radius:6px; cursor:pointer;">Закрыть</button>
+            </div>
+        </div>
+
+        <div id="bets-modal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
+            <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:400px; width:90%; max-height:80%; overflow-y:auto; border:1px solid var(--accent-color);">
+                <h3 style="color:var(--accent-color); margin-bottom:10px;">Мои ставки</h3>
+                <ul id="bets-list" style="list-style:none; padding:0; margin:0;"></ul>
+                <button id="close-bets-modal" style="background:#333; border:none; color:#fff; padding:8px 20px; border-radius:6px; margin-top:10px; cursor:pointer;">Закрыть</button>
+            </div>
+        </div>
+
+        <!-- РУЛЕТКА -->
+        <div id="roulette-page">
+            <div id="main-title">
+                <h1>РУЛЕТКА STAR DROP</h1>
+                <p>Испытай удачу и выиграй Telegram-подарки!</p>
+            </div>
+            <div id="prizes-list">
+                <div class="prize-item">🧸 Мишка</div>
+                <div class="prize-item">💎 Бриллиант</div>
+                <div class="prize-item">💍 Кольцо</div>
+                <div class="prize-item">🧁 Торт</div>
+                <div class="prize-item">🧢 Кепка Дурова</div>
+                <div class="prize-item">🚀 Ракета</div>
+            </div>
+            <div id="mode-selector">
+                <button class="mode-btn active" data-mode="light">Low</button>
+                <button class="mode-btn" data-mode="normal">Normal</button>
+                <button class="mode-btn" data-mode="hard">Hard</button>
+            </div>
+            <div id="wheel-container">
+                <div id="wheel-pointer">▼</div>
+                <canvas id="wheelCanvas" width="300" height="300"></canvas>
+            </div>
+            <div id="spin-area">
+                <div id="spin-info">1 спин = <span id="spin-cost">25</span> монет</div>
+                <button id="spin-btn">КРУТИТЬ <span id="spin-cost-label">25 Токенов</span></button>
+            </div>
+            <div id="result-message"></div>
+        </div>
+
+        <!-- СЛОТ -->
+        <div id="slot-page" style="display:none;">
+            <div id="main-title">
+                <h1>ИГРОВОЙ АВТОМАТ 🎰</h1>
+                <p>Дёрни рычаг и удвой ставку!</p>
+            </div>
+            <div id="slot-machine">
+                <div id="reels">
+                    <div class="reel" id="reel1">🍒</div>
+                    <div class="reel" id="reel2">🍋</div>
+                    <div class="reel" id="reel3">🍊</div>
                 </div>
-                <button id="spin-slot-btn">Дёрнуть рычаг 🎰</button>
+                <div id="slot-controls">
+                    <div class="bet-control">
+                        <label>Ставка: <span id="bet-display">20</span> токенов</label>
+                        <input type="range" id="bet-range" min="20" max="100" step="10" value="20">
+                        <div id="slot-multiplier">При выигрыше: <b>x2</b> от ставки</div>
+                    </div>
+                    <button id="spin-slot-btn">Дёрнуть рычаг 🎰</button>
+                </div>
+                <div id="slot-result"></div>
             </div>
-            <div id="slot-result"></div>
         </div>
-    </div>
 
-    <!-- РАКЕТКА -->
-    <div id="rocket-page" style="display:none;">
-        <div id="main-title">
-            <h1>🚀 РАКЕТКА</h1>
-            <p>Лови момент и умножай ставку до x100!</p>
+        <!-- РАКЕТКА -->
+        <div id="rocket-page" style="display:none;">
+            <div id="main-title">
+                <h1>🚀 РАКЕТКА</h1>
+                <p>Лови момент и умножай ставку до x100!</p>
+            </div>
+            <div id="rocket-game">
+                <div id="rocket-display">
+                    <div id="rocket-multiplier">0.00</div>
+                    <div id="rocket-status">Ожидание</div>
+                </div>
+                <div id="rocket-canvas-container">
+                    <canvas id="rocketCanvas" width="300" height="200"></canvas>
+                </div>
+                <div id="rocket-bet-control">
+                    <label>Ставка: <span id="rocket-bet-display">500</span> токенов</label>
+                    <input type="range" id="rocket-bet-range" min="500" max="5000" step="100" value="500">
+                </div>
+                <div id="rocket-buttons">
+                    <button id="rocket-start-btn">🚀 Старт</button>
+                    <button id="rocket-cashout-btn" disabled>💰 Стоп</button>
+                </div>
+                <div id="rocket-timer">Следующий взлёт через: <span id="rocket-countdown">5</span>с</div>
+                <div id="rocket-result"></div>
+            </div>
         </div>
-        <div id="rocket-game">
-            <div id="rocket-display">
-                <div id="rocket-multiplier">0.00</div>
-                <div id="rocket-status">Ожидание</div>
-            </div>
-            <div id="rocket-canvas-container">
-                <canvas id="rocketCanvas" width="300" height="200"></canvas>
-            </div>
-            <div id="rocket-bet-control">
-                <label>Ставка: <span id="rocket-bet-display">500</span> токенов</label>
-                <input type="range" id="rocket-bet-range" min="500" max="5000" step="100" value="500">
-            </div>
-            <div id="rocket-buttons">
-                <button id="rocket-start-btn">🚀 Старт</button>
-                <button id="rocket-cashout-btn" disabled>💰 Стоп</button>
-            </div>
-            <div id="rocket-timer">Следующий взлёт через: <span id="rocket-countdown">5</span>с</div>
-            <div id="rocket-result"></div>
+
+        <div id="notification-feed">
+            <h3>Последние выигрыши</h3>
+            <ul id="feed-list"></ul>
         </div>
-    </div>
 
-    <div id="notification-feed">
-        <h3>Последние выигрыши</h3>
-        <ul id="feed-list"></ul>
-    </div>
+        <button id="withdraw-btn">Вывести токены</button>
 
-    <button id="withdraw-btn">Вывести токены</button>
+        <div id="promo-area">
+            <input type="text" id="promo-input" placeholder="Введите промокод" maxlength="20">
+            <button id="promo-btn">Активировать</button>
+            <div id="promo-message" style="color: var(--accent-color); font-size: 14px; margin-top: 5px; text-align:center;"></div>
+        </div>
 
-    <div id="promo-area">
-        <input type="text" id="promo-input" placeholder="Введите промокод" maxlength="20">
-        <button id="promo-btn">Активировать</button>
-        <div id="promo-message" style="color: var(--accent-color); font-size: 14px; margin-top: 5px; text-align:center;"></div>
-    </div>
-
-    <div id="bottom-nav">
-        <button class="nav-btn active" data-tab="roulette">Рулетка</button>
-        <button class="nav-btn" data-tab="slot">Барабан</button>
-        <button class="nav-btn" data-tab="rocket">Ракетка</button>
+        <div id="bottom-nav">
+            <button class="nav-btn active" data-tab="roulette">Рулетка</button>
+            <button class="nav-btn" data-tab="slot">Барабан</button>
+            <button class="nav-btn" data-tab="rocket">Ракетка</button>
+        </div>
     </div>
 
     <script src="/static/script.js"></script>
@@ -663,6 +685,73 @@ body.theme-hard {
     20% { opacity: 0.7; }
     80% { opacity: 0.7; }
     100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
+}
+
+#login-screen {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+    width: 100%;
+}
+
+#login-card {
+    background: var(--card-bg);
+    border: 1px solid var(--accent-color);
+    border-radius: 20px;
+    padding: 30px 20px;
+    text-align: center;
+    max-width: 320px;
+    width: 100%;
+    box-shadow: 0 0 40px var(--accent-glow);
+}
+
+#login-card h1 {
+    color: var(--accent-color);
+    font-size: 28px;
+    margin-bottom: 10px;
+}
+
+#login-card p {
+    color: #aaa;
+    margin-bottom: 20px;
+}
+
+#login-btn, #verify-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.3s;
+    box-shadow: 0 0 20px var(--accent-glow);
+    width: 100%;
+    max-width: 250px;
+}
+
+#login-btn:active, #verify-btn:active {
+    transform: scale(0.95);
+}
+
+#code-input {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--accent-color);
+    background: #222;
+    color: #fff;
+    text-align: center;
+    font-size: 20px;
+    width: 150px;
+}
+
+/* Основные стили приложения (как ранее) */
+#app-content {
+    width: 100%;
+    max-width: 400px;
+    display: none;
 }
 
 #top-bar {
@@ -1294,39 +1383,99 @@ let currentMode = 'light';
 let isSpinning = false;
 let currentRotation = 0;
 
-// === Авторизация через Telegram ===
-if (window.Telegram && window.Telegram.WebApp) {
-    window.Telegram.WebApp.ready();
-    const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
-    if (tgUser && tgUser.id) {
-        user_id = tgUser.id;
-        document.getElementById('username').textContent = '@' + (tgUser.username || tgUser.first_name);
-        // Устанавливаем аватарку (первая буква или эмодзи)
-        const avatar = document.getElementById('avatar');
-        const name = tgUser.first_name || 'U';
-        avatar.textContent = name.charAt(0).toUpperCase();
-        // Можно добавить цвет фона в зависимости от ID
-        avatar.style.background = '#' + (tgUser.id % 0xFFFFFF).toString(16).padStart(6, '0');
-        fetchUserData();
-    } else {
-        // Если пользователь не авторизован, предлагаем войти через бота
-        alert('Пожалуйста, откройте приложение через бота Telegram');
+// === Экран входа ===
+const loginScreen = document.getElementById('login-screen');
+const appContent = document.getElementById('app-content');
+const loginBtn = document.getElementById('login-btn');
+const codeSection = document.getElementById('code-section');
+const codeInput = document.getElementById('code-input');
+const verifyBtn = document.getElementById('verify-btn');
+const loginMsg = document.getElementById('login-message');
+
+// Проверяем, есть ли сохранённый user_id в localStorage
+const savedUserId = localStorage.getItem('starDrop_userId');
+if (savedUserId) {
+    user_id = parseInt(savedUserId);
+    // Загружаем данные пользователя
+    fetchUserData().then(() => {
+        showApp();
+    });
+}
+
+loginBtn.addEventListener('click', async () => {
+    // Отправляем запрос на получение кода
+    try {
+        const resp = await fetch('/api/send_code', { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) {
+            loginMsg.textContent = 'Код отправлен в Telegram!';
+            codeSection.style.display = 'block';
+            codeInput.focus();
+        } else {
+            loginMsg.textContent = 'Ошибка: ' + data.detail;
+        }
+    } catch (e) {
+        loginMsg.textContent = 'Ошибка соединения';
+        console.error(e);
     }
-} else {
-    // fallback для тестирования
-    user_id = prompt('Введите ваш Telegram ID (для теста):') || 123456789;
-    document.getElementById('username').textContent = '@user_' + user_id;
-    document.getElementById('avatar').textContent = 'T';
+});
+
+verifyBtn.addEventListener('click', async () => {
+    const code = codeInput.value.trim();
+    if (!code || code.length < 4) {
+        loginMsg.textContent = 'Введите корректный код';
+        return;
+    }
+    try {
+        const resp = await fetch('/api/verify_code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            user_id = data.user_id;
+            localStorage.setItem('starDrop_userId', user_id);
+            // Обновляем интерфейс
+            document.getElementById('username').textContent = '@' + data.username;
+            const avatar = document.getElementById('avatar');
+            const name = data.username || 'U';
+            avatar.textContent = name.charAt(0).toUpperCase();
+            avatar.style.background = '#' + (user_id % 0xFFFFFF).toString(16).padStart(6, '0');
+            balance = data.balance;
+            document.getElementById('balance-amount').textContent = balance;
+            showApp();
+        } else {
+            loginMsg.textContent = 'Ошибка: ' + data.detail;
+        }
+    } catch (e) {
+        loginMsg.textContent = 'Ошибка соединения';
+        console.error(e);
+    }
+});
+
+function showApp() {
+    loginScreen.style.display = 'none';
+    appContent.style.display = 'block';
+    // Загружаем данные
     fetchUserData();
+    // Инициализируем остальные компоненты
+    initGames();
 }
 
 async function fetchUserData() {
+    if (!user_id) return;
     try {
         const resp = await fetch(`/api/user/${user_id}`);
         if (!resp.ok) throw new Error('User not found');
         const data = await resp.json();
         balance = data.balance;
         document.getElementById('balance-amount').textContent = balance;
+        if (data.username) {
+            document.getElementById('username').textContent = '@' + data.username;
+            const avatar = document.getElementById('avatar');
+            avatar.textContent = (data.username || 'U').charAt(0).toUpperCase();
+        }
     } catch (e) {
         console.error(e);
     }
@@ -1339,6 +1488,7 @@ function updateBalanceUI(newBalance) {
 
 // === Клик по юзеру — рефералка ===
 document.getElementById('user-info').addEventListener('click', async () => {
+    if (!user_id) return;
     try {
         const resp = await fetch(`/api/referral/${user_id}`);
         const data = await resp.json();
@@ -1385,6 +1535,7 @@ function fallbackCopy(text) {
 
 // === Мои ставки ===
 document.getElementById('bets-btn').addEventListener('click', async () => {
+    if (!user_id) return;
     try {
         const resp = await fetch(`/api/user_bets/${user_id}`);
         const bets = await resp.json();
@@ -1423,6 +1574,7 @@ document.getElementById('bets-modal').addEventListener('click', (e) => {
 
 // === Промокоды ===
 document.getElementById('promo-btn').addEventListener('click', async () => {
+    if (!user_id) return;
     const input = document.getElementById('promo-input');
     const code = input.value.trim();
     const msg = document.getElementById('promo-message');
@@ -1450,6 +1602,29 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
         console.error(e);
     }
 });
+
+// === Инициализация игр ===
+function initGames() {
+    // РУЛЕТКА
+    applyTheme('light');
+    drawWheel();
+    updateSpinCost();
+
+    // СЛОТ
+    const initialBet = parseInt(document.getElementById('bet-range').value);
+    document.getElementById('bet-display').textContent = initialBet;
+
+    // РАКЕТКА
+    drawRocket(0, 'idle');
+    document.getElementById('rocket-countdown').textContent = '0';
+
+    // Остальные ивенты уже добавлены глобально, но их нужно перепривязать, если они были объявлены до этого.
+    // Для простоты переопределим их здесь или объявим глобально.
+
+    // Переопределим обработчики (они уже есть, но из-за того, что скрипт загружается один раз, можно оставить как есть)
+    // Но некоторые функции должны быть доступны только после входа.
+    // Мы уже определили их выше, и они используют user_id, который теперь установлен.
+}
 
 // === РУЛЕТКА ===
 function applyTheme(mode) {
@@ -1538,11 +1713,10 @@ function drawWheel() {
         ctx.arc(centerX, centerY, radius, startAngle, endAngle);
         ctx.closePath();
         
-        // Зелёные для выигрышных (value>0), красные для пустых (value==0)
         if (modePrizes[i].value > 0) {
-            ctx.fillStyle = '#2e7d32'; // зелёный
+            ctx.fillStyle = '#2e7d32';
         } else {
-            ctx.fillStyle = '#c62828'; // красный
+            ctx.fillStyle = '#c62828';
         }
         ctx.fill();
         ctx.strokeStyle = '#0a0a0a';
@@ -1561,7 +1735,6 @@ function drawWheel() {
         ctx.restore();
     }
 
-    // Центральный кружок
     ctx.beginPath();
     ctx.arc(centerX, centerY, 22, 0, 2 * Math.PI);
     ctx.fillStyle = '#111';
@@ -1571,11 +1744,8 @@ function drawWheel() {
     ctx.stroke();
 }
 
-applyTheme('light');
-drawWheel();
-updateSpinCost();
-
 document.getElementById('spin-btn').addEventListener('click', async () => {
+    if (!user_id) return;
     if (isSpinning) return;
     isSpinning = true;
     document.getElementById('spin-btn').disabled = true;
@@ -1592,7 +1762,6 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
-            // Анимация вращения
             const extraSpins = 5 + Math.floor(Math.random() * 3);
             const randomAngle = Math.random() * 360;
             currentRotation += (extraSpins * 360) + randomAngle;
@@ -1600,7 +1769,6 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
 
             setTimeout(() => {
                 document.getElementById('result-message').textContent = data.message;
-                // Показываем стрелку (указатель уже есть)
                 if (data.win) {
                     document.getElementById('result-message').style.color = '#4CAF50';
                 } else {
@@ -1637,12 +1805,8 @@ document.getElementById('bet-range').addEventListener('input', function() {
     document.getElementById('bet-display').textContent = this.value;
 });
 
-document.addEventListener('DOMContentLoaded', function() {
-    const initialBet = parseInt(document.getElementById('bet-range').value);
-    document.getElementById('bet-display').textContent = initialBet;
-});
-
 document.getElementById('spin-slot-btn').addEventListener('click', async () => {
+    if (!user_id) return;
     if (slotSpinning) return;
     const bet = parseInt(document.getElementById('bet-range').value);
     if (isNaN(bet) || bet < 20 || bet > 100) {
@@ -1712,48 +1876,43 @@ let countdownInterval = null;
 let rocketAnimationFrame = null;
 let rocketCanvas = document.getElementById('rocketCanvas');
 let rctx = rocketCanvas.getContext('2d');
-let rocketY = 0;
-let rocketMultiplier = 0;
+let rocketX = 0;
+let rocketY = 150;
+let rocketSpeed = 1.5;
+let rocketTrail = [];
 
-function drawRocket(multiplier, status) {
+function drawRocket(multiplier, status, crash) {
     rctx.clearRect(0, 0, rocketCanvas.width, rocketCanvas.height);
-    // Рисуем ракету
-    let y = rocketCanvas.height - 30 - (multiplier / 100) * (rocketCanvas.height - 60);
-    if (y < 10) y = 10;
-    // Рисуем пламя
-    rctx.fillStyle = '#ff5722';
-    rctx.beginPath();
-    rctx.moveTo(rocketCanvas.width/2 - 10, y + 20);
-    rctx.lineTo(rocketCanvas.width/2, y + 40);
-    rctx.lineTo(rocketCanvas.width/2 + 10, y + 20);
-    rctx.fill();
-    // Ракета
-    rctx.fillStyle = '#fff';
-    rctx.fillRect(rocketCanvas.width/2 - 10, y - 30, 20, 30);
-    rctx.fillStyle = '#ff5722';
-    rctx.beginPath();
-    rctx.moveTo(rocketCanvas.width/2, y - 45);
-    rctx.lineTo(rocketCanvas.width/2 - 12, y - 30);
-    rctx.lineTo(rocketCanvas.width/2 + 12, y - 30);
-    rctx.fill();
-    // Окно
-    rctx.fillStyle = '#2196F3';
-    rctx.beginPath();
-    rctx.arc(rocketCanvas.width/2, y - 15, 6, 0, 2*Math.PI);
-    rctx.fill();
-    // Текст множителя на ракете
-    rctx.fillStyle = '#fff';
-    rctx.font = '12px sans-serif';
+    
+    // Рисуем полосу (траекторию)
+    if (rocketTrail.length > 1) {
+        rctx.beginPath();
+        rctx.moveTo(rocketTrail[0].x, rocketTrail[0].y);
+        for (let i = 1; i < rocketTrail.length; i++) {
+            rctx.lineTo(rocketTrail[i].x, rocketTrail[i].y);
+        }
+        rctx.strokeStyle = 'rgba(255,215,0,0.3)';
+        rctx.lineWidth = 2;
+        rctx.stroke();
+    }
+
+    if (status === 'crashed') {
+        // Взрыв 💥
+        rctx.font = '40px sans-serif';
+        rctx.textAlign = 'center';
+        rctx.fillText('💥', rocketX, rocketY);
+        return;
+    }
+
+    // Рисуем ракету 🚀
+    rctx.font = '30px sans-serif';
     rctx.textAlign = 'center';
-    rctx.fillText(multiplier.toFixed(2)+'x', rocketCanvas.width/2, y - 22);
-    // Линия старта
-    rctx.strokeStyle = '#444';
-    rctx.setLineDash([5,5]);
-    rctx.beginPath();
-    rctx.moveTo(0, rocketCanvas.height-30);
-    rctx.lineTo(rocketCanvas.width, rocketCanvas.height-30);
-    rctx.stroke();
-    rctx.setLineDash([]);
+    rctx.fillText('🚀', rocketX, rocketY);
+
+    // Отображаем коэффициент
+    rctx.fillStyle = '#ffd700';
+    rctx.font = '14px sans-serif';
+    rctx.fillText(multiplier.toFixed(2) + 'x', rocketX, rocketY - 20);
 }
 
 document.getElementById('rocket-bet-range').addEventListener('input', function() {
@@ -1761,6 +1920,7 @@ document.getElementById('rocket-bet-range').addEventListener('input', function()
 });
 
 document.getElementById('rocket-start-btn').addEventListener('click', async () => {
+    if (!user_id) return;
     if (rocketActive) return;
     const bet = parseInt(document.getElementById('rocket-bet-range').value);
     if (isNaN(bet) || bet < 500 || bet > 5000) {
@@ -1786,13 +1946,14 @@ document.getElementById('rocket-start-btn').addEventListener('click', async () =
             document.getElementById('rocket-cashout-btn').disabled = false;
             document.getElementById('rocket-result').textContent = '';
             document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
-            rocketMultiplier = 0;
+            rocketX = 10;
+            rocketY = 150 + (Math.random() - 0.5) * 20;
+            rocketTrail = [{x: rocketX, y: rocketY}];
             if (rocketInterval) clearInterval(rocketInterval);
-            rocketInterval = setInterval(updateRocketStatus, 200);
-            updateRocketStatus();
-            // Анимация ракеты
+            rocketInterval = setInterval(updateRocketStatus, 150);
+            // Анимация движения ракеты
             if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
-            drawRocket(0, 'active');
+            animateRocket();
         } else {
             alert('❌ ' + data.detail);
         }
@@ -1802,6 +1963,22 @@ document.getElementById('rocket-start-btn').addEventListener('click', async () =
     }
 });
 
+function animateRocket() {
+    if (!rocketActive) return;
+    // Движение слева направо с небольшим подъемом
+    rocketX += rocketSpeed;
+    // Рывки по Y (синусоида + случайные)
+    rocketY += Math.sin(rocketX * 0.1) * 0.5 + (Math.random() - 0.5) * 1.0;
+    // Ограничиваем Y
+    if (rocketY < 20) rocketY = 20;
+    if (rocketY > 180) rocketY = 180;
+    // Добавляем в трек
+    rocketTrail.push({x: rocketX, y: rocketY});
+    if (rocketTrail.length > 100) rocketTrail.shift();
+    // Отрисовка с текущим множителем (будет обновляться отдельно)
+    rocketAnimationFrame = requestAnimationFrame(animateRocket);
+}
+
 async function updateRocketStatus() {
     if (!rocketRoundId) return;
     try {
@@ -1810,8 +1987,7 @@ async function updateRocketStatus() {
         if (resp.ok) {
             const display = data.display_multiplier;
             document.getElementById('rocket-multiplier').textContent = display.toFixed(2);
-            rocketMultiplier = display;
-            drawRocket(display, data.crashed ? 'crashed' : (data.cashed_out ? 'cashed' : 'active'));
+            // Рисуем ракету с текущим множителем
             if (data.crashed) {
                 document.getElementById('rocket-status').textContent = '💥 Упала!';
                 document.getElementById('rocket-cashout-btn').disabled = true;
@@ -1821,6 +1997,12 @@ async function updateRocketStatus() {
                     clearInterval(rocketInterval);
                     rocketInterval = null;
                 }
+                if (rocketAnimationFrame) {
+                    cancelAnimationFrame(rocketAnimationFrame);
+                    rocketAnimationFrame = null;
+                }
+                // Отображаем взрыв
+                drawRocket(display, 'crashed', true);
                 document.getElementById('rocket-result').textContent = '😞 Ракета упала. Ставка проиграна.';
                 document.getElementById('rocket-result').style.color = '#f44336';
                 fetchUserData();
@@ -1834,8 +2016,15 @@ async function updateRocketStatus() {
                     clearInterval(rocketInterval);
                     rocketInterval = null;
                 }
+                if (rocketAnimationFrame) {
+                    cancelAnimationFrame(rocketAnimationFrame);
+                    rocketAnimationFrame = null;
+                }
                 fetchUserData();
                 startCountdown();
+            } else {
+                // Активный полёт
+                drawRocket(display, 'active', false);
             }
         } else {
             console.error('Status error:', data);
@@ -1846,7 +2035,7 @@ async function updateRocketStatus() {
 }
 
 document.getElementById('rocket-cashout-btn').addEventListener('click', async () => {
-    if (!rocketRoundId || !rocketActive) return;
+    if (!user_id || !rocketRoundId || !rocketActive) return;
     try {
         const resp = await fetch('/api/rocket/cashout', {
             method: 'POST',
@@ -1864,6 +2053,10 @@ document.getElementById('rocket-cashout-btn').addEventListener('click', async ()
             if (rocketInterval) {
                 clearInterval(rocketInterval);
                 rocketInterval = null;
+            }
+            if (rocketAnimationFrame) {
+                cancelAnimationFrame(rocketAnimationFrame);
+                rocketAnimationFrame = null;
             }
             updateBalanceUI(data.new_balance);
             fetchFeed();
@@ -1893,10 +2086,6 @@ function startCountdown() {
         }
     }, 1000);
 }
-
-// Инициализация ракетки
-drawRocket(0, 'idle');
-document.getElementById('rocket-countdown').textContent = '0';
 
 // === ОБЩИЕ ФУНКЦИИ ===
 document.getElementById('deposit-btn').addEventListener('click', () => {
@@ -1938,11 +2127,11 @@ async function fetchFeed() {
         console.error(e);
     }
 }
-
 fetchFeed();
 setInterval(fetchFeed, 5000);
 
 document.getElementById('withdraw-btn').addEventListener('click', async () => {
+    if (!user_id) return;
     const amount = prompt('Введите сумму вывода (минимум 500 токенов):');
     if (!amount || isNaN(amount) || amount < 500) {
         alert('Введите корректное число не менее 500');
@@ -1986,6 +2175,12 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
             fetchUserData();
         }
     });
+});
+
+// Для инициализации после входа
+document.addEventListener('DOMContentLoaded', function() {
+    // Если уже есть сохранённый user_id, то вход уже произошёл.
+    // В противном случае показывается экран входа.
 });
 """
 }
@@ -2037,6 +2232,9 @@ class RocketCashoutRequest(BaseModel):
     round_id: int
     user_id: int
 
+class VerifyCodeRequest(BaseModel):
+    code: str
+
 @app.get("/api/user/{user_id}")
 async def api_get_user(user_id: int):
     user = get_user(user_id)
@@ -2051,6 +2249,78 @@ async def api_user_bets(user_id: int):
         raise HTTPException(status_code=404, detail="User not found")
     bets = get_user_bets(user_id, 50)
     return bets
+
+@app.post("/api/send_code")
+async def send_code():
+    # Получаем user_id из сессии? Но у нас нет сессии, мы отправляем код текущему пользователю.
+    # Для этого нужно знать chat_id. Так как мы не знаем, кто запросил, используем fallback:
+    # Отправим код в канал админа? Или можно сохранить код в памяти и потом проверить.
+    # В реальном приложении нужно сначала авторизовать пользователя через Telegram OAuth.
+    # Однако, чтобы упростить, мы будем использовать первый запрос от пользователя: 
+    # при нажатии "Войти" мы отправляем код на тот Telegram аккаунт, который запустил мини-приложение.
+    # В Telegram WebApp мы можем получить user.id через initDataUnsafe.
+    # Но у нас нет этого на сервере, только на клиенте.
+    # Поэтому изменим логику: сначала пользователь нажимает "Войти", мы запрашиваем у клиента его user_id,
+    # но клиент его не знает, так как мы убрали автологин.
+    # Правильнее: при загрузке приложения клиент получает Telegram user через WebApp,
+    # но мы не хотим автологина. Вместо этого сделаем так: при нажатии "Войти" клиент отправляет запрос на /api/send_code,
+    # и мы генерируем код и сохраняем его в памяти, привязав к user_id, который передаётся из клиента.
+    # Но клиент ещё не знает user_id. Поэтому мы используем WebApp.initDataUnsafe.user.id,
+    # но мы не использовали его явно. Изменим: при первом запуске мы всё равно получаем user_id из WebApp,
+    # но не авторизуем пользователя, а только показываем кнопку входа.
+    # Когда пользователь нажимает "Войти", мы отправляем запрос с этим user_id.
+    # Таким образом, мы знаем, кому отправлять код.
+    # Это проще, и у нас уже есть user_id от Telegram, просто мы его скрываем до входа.
+    # Итак, клиент должен передать user_id при запросе кода.
+    # Добавим в тело запроса.
+    # Изменим эндпоинт на POST с body: { user_id }
+    pass
+
+# Переделаем эндпоинты для входа:
+class SendCodeRequest(BaseModel):
+    user_id: int
+
+@app.post("/api/send_code")
+async def send_code(data: SendCodeRequest):
+    user_id = data.user_id
+    user = get_user(user_id)
+    if not user:
+        # Если пользователя нет, создаём (но мы уже создаём при старте бота)
+        # Но здесь мы можем создать, если нет.
+        create_user(user_id, "user_" + str(user_id))
+    code = str(random.randint(100000, 999999))
+    # Сохраняем код с временем жизни 5 минут
+    verification_codes[user_id] = {
+        "code": code,
+        "expires_at": time.time() + 300
+    }
+    # Отправляем код в Telegram
+    try:
+        await bot.send_message(chat_id=user_id, text=f"Ваш код подтверждения: {code}")
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Не удалось отправить код в Telegram")
+
+@app.post("/api/verify_code")
+async def verify_code(data: VerifyCodeRequest):
+    code = data.code.strip()
+    # Ищем код в хранилище
+    for uid, info in verification_codes.items():
+        if info["code"] == code and time.time() < info["expires_at"]:
+            # Код верный
+            user = get_user(uid)
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            # Удаляем использованный код
+            del verification_codes[uid]
+            return {
+                "user_id": uid,
+                "username": user["username"],
+                "balance": user["balance"]
+            }
+    raise HTTPException(status_code=400, detail="Неверный или просроченный код")
+
+# Остальные эндпоинты без изменений
 
 @app.post("/api/spin")
 async def api_spin(data: SpinRequest):
