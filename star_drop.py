@@ -14,6 +14,7 @@ import hashlib
 
 # ==================== НАСТРОЙКИ ====================
 BOT_TOKEN = "8988678866:AAHIWxUB8zKBCoF21g7OVYEEWnwEF_MpLmI"
+ADMIN_ID = 8551946505  # Ваш ID
 
 PAYMENT_LINKS = {
     100: "https://yookassa.ru/my/i/amMy2QzHTXRI/l",
@@ -72,6 +73,7 @@ SLOT_WIN_MULTIPLIER = 2
 
 PROMOCODES = {
     "rifleman": 50,
+    "blant": 50
 }
 
 rocket_rounds = {}
@@ -393,6 +395,37 @@ async def cmd_start(message: types.Message):
         "Нажми кнопку ниже, чтобы открыть наше мини-приложение и испытать удачу! 🍀",
         reply_markup=get_start_keyboard()
     )
+
+# ==================== АДМИН-КОМАНДА /give ====================
+@dp.message(Command("give"))
+async def give_tokens(message: types.Message):
+    # Проверка прав
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("⛔ У вас нет прав для этой команды.")
+        return
+    args = message.text.split()
+    if len(args) != 3:
+        await message.answer("Использование: /give <user_id> <количество>")
+        return
+    try:
+        target_id = int(args[1])
+        amount = int(args[2])
+        if amount <= 0:
+            await message.answer("Сумма должна быть положительной.")
+            return
+        user = get_user(target_id)
+        if not user:
+            await message.answer(f"Пользователь с ID {target_id} не найден.")
+            return
+        # Начисляем токены
+        update_balance(target_id, amount, f"Администратор выдал {amount} токенов")
+        new_balance = get_user(target_id)['balance']
+        await message.answer(
+            f"✅ Пользователю @{user['username']} (ID: {target_id}) начислено {amount} токенов.\n"
+            f"Новый баланс: {new_balance}"
+        )
+    except ValueError:
+        await message.answer("ID и сумма должны быть числами.")
 
 # ==================== ВЕБ-СЕРВЕР (FASTAPI) ====================
 from fastapi import FastAPI, HTTPException, Request
@@ -1300,24 +1333,18 @@ if (window.Telegram && window.Telegram.WebApp) {
     const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
     if (tgUser && tgUser.id) {
         user_id = tgUser.id;
-        // Сохраняем в localStorage для быстрого доступа при следующих запусках
         localStorage.setItem('starDrop_userId', user_id);
         document.getElementById('username').textContent = '@' + (tgUser.username || tgUser.first_name);
         const avatar = document.getElementById('avatar');
         const name = tgUser.first_name || 'U';
         avatar.textContent = name.charAt(0).toUpperCase();
         avatar.style.background = '#' + (user_id % 0xFFFFFF).toString(16).padStart(6, '0');
-        // Загружаем данные пользователя
-        fetchUserData().then(() => {
-            initGames();
-        });
+        fetchUserData().then(() => initGames());
     } else {
-        // Если пользователь не авторизован (например, открыто вне Telegram)
         alert('Пожалуйста, откройте приложение через бота Telegram');
         document.getElementById('username').textContent = '@guest';
     }
 } else {
-    // fallback для тестирования (если открыто в браузере без Telegram)
     const savedId = localStorage.getItem('starDrop_userId');
     if (savedId) {
         user_id = parseInt(savedId);
@@ -1372,14 +1399,9 @@ document.getElementById('close-ref-modal').addEventListener('click', () => {
 document.getElementById('copy-ref-link').addEventListener('click', () => {
     const link = document.getElementById('ref-link').textContent;
     if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(link).then(() => {
-            alert('Ссылка скопирована!');
-        }).catch(() => {
-            fallbackCopy(link);
-        });
-    } else {
-        fallbackCopy(link);
-    }
+        navigator.clipboard.writeText(link).then(() => alert('Ссылка скопирована!'))
+            .catch(() => fallbackCopy(link));
+    } else fallbackCopy(link);
 });
 
 function fallbackCopy(text) {
@@ -1389,12 +1411,8 @@ function fallbackCopy(text) {
     input.value = text;
     document.body.appendChild(input);
     input.select();
-    try {
-        document.execCommand('copy');
-        alert('Ссылка скопирована!');
-    } catch (e) {
-        alert('Не удалось скопировать, скопируйте вручную: ' + text);
-    }
+    try { document.execCommand('copy'); alert('Ссылка скопирована!'); } 
+    catch (e) { alert('Не удалось скопировать, скопируйте вручную: ' + text); }
     document.body.removeChild(input);
 }
 
@@ -1406,35 +1424,25 @@ document.getElementById('bets-btn').addEventListener('click', async () => {
         const bets = await resp.json();
         const list = document.getElementById('bets-list');
         list.innerHTML = '';
-        if (bets.length === 0) {
-            list.innerHTML = '<li style="color:#aaa;">Ставок пока нет</li>';
-        } else {
-            bets.forEach(b => {
-                const li = document.createElement('li');
-                let sign = '';
-                let cls = '';
-                if (b.amount > 0) { sign = '+'; cls = 'positive'; }
-                else if (b.amount < 0) { sign = ''; cls = 'negative'; }
-                else { sign = '0'; cls = ''; }
-                li.innerHTML = `<span class="${cls}">${sign}${b.amount}</span> ${b.description} <span style="color:#888;font-size:12px;">${new Date(b.created_at).toLocaleString()}</span>`;
-                list.appendChild(li);
-            });
-        }
+        if (bets.length === 0) list.innerHTML = '<li style="color:#aaa;">Ставок пока нет</li>';
+        else bets.forEach(b => {
+            const li = document.createElement('li');
+            let sign = '', cls = '';
+            if (b.amount > 0) { sign = '+'; cls = 'positive'; }
+            else if (b.amount < 0) { sign = ''; cls = 'negative'; }
+            else { sign = '0'; cls = ''; }
+            li.innerHTML = `<span class="${cls}">${sign}${b.amount}</span> ${b.description} <span style="color:#888;font-size:12px;">${new Date(b.created_at).toLocaleString()}</span>`;
+            list.appendChild(li);
+        });
         document.getElementById('bets-modal').style.display = 'flex';
-    } catch (e) {
-        alert('Ошибка загрузки ставок');
-        console.error(e);
-    }
+    } catch (e) { alert('Ошибка загрузки ставок'); console.error(e); }
 });
 
 document.getElementById('close-bets-modal').addEventListener('click', () => {
     document.getElementById('bets-modal').style.display = 'none';
 });
-
 document.getElementById('bets-modal').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) {
-        document.getElementById('bets-modal').style.display = 'none';
-    }
+    if (e.target === e.currentTarget) document.getElementById('bets-modal').style.display = 'none';
 });
 
 // === Промокоды ===
@@ -1443,10 +1451,7 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
     const input = document.getElementById('promo-input');
     const code = input.value.trim();
     const msg = document.getElementById('promo-message');
-    if (!code) {
-        msg.textContent = 'Введите промокод';
-        return;
-    }
+    if (!code) { msg.textContent = 'Введите промокод'; return; }
     try {
         const resp = await fetch('/api/activate_promo', {
             method: 'POST',
@@ -1459,27 +1464,17 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
             input.value = '';
             balance = data.new_balance;
             document.getElementById('balance-amount').textContent = balance;
-        } else {
-            msg.textContent = '❌ ' + data.detail;
-        }
-    } catch (e) {
-        msg.textContent = 'Ошибка соединения';
-        console.error(e);
-    }
+        } else msg.textContent = '❌ ' + data.detail;
+    } catch (e) { msg.textContent = 'Ошибка соединения'; console.error(e); }
 });
 
 // === Инициализация игр ===
 function initGames() {
-    // РУЛЕТКА
     applyTheme('light');
     drawWheel();
     updateSpinCost();
-
-    // СЛОТ
     const initialBet = parseInt(document.getElementById('bet-range').value);
     document.getElementById('bet-display').textContent = initialBet;
-
-    // РАКЕТКА
     drawRocket(0, 'idle');
     document.getElementById('rocket-countdown').textContent = '0';
 }
@@ -1517,99 +1512,70 @@ const ctx = canvas.getContext('2d');
 function getPrizesForMode(mode) {
     const allPrizes = {
         light: [
-            { name: '🧸', value: 15 },
-            { name: '🍬', value: 20 },
-            { name: '⭐', value: 25 },
-            { name: '🌹', value: 40 },
-            { name: '💨', value: 0 },
-            { name: '🧸', value: 10 },
-            { name: '💨', value: 0 },
-            { name: '⭐', value: 20 }
+            { name: '🧸', value: 15 }, { name: '🍬', value: 20 },
+            { name: '⭐', value: 25 }, { name: '🌹', value: 40 },
+            { name: '💨', value: 0 }, { name: '🧸', value: 10 },
+            { name: '💨', value: 0 }, { name: '⭐', value: 20 }
         ],
         normal: [
-            { name: '💍', value: 120 },
-            { name: '💎', value: 200 },
-            { name: '🧁', value: 150 },
-            { name: '🏆', value: 250 },
-            { name: '💨', value: 0 },
-            { name: '💍', value: 100 },
-            { name: '💨', value: 0 },
-            { name: '💎', value: 180 }
+            { name: '💍', value: 120 }, { name: '💎', value: 200 },
+            { name: '🧁', value: 150 }, { name: '🏆', value: 250 },
+            { name: '💨', value: 0 }, { name: '💍', value: 100 },
+            { name: '💨', value: 0 }, { name: '💎', value: 180 }
         ],
         hard: [
-            { name: '👑', value: 600 },
-            { name: '🧢', value: 800 },
-            { name: '🚀', value: 700 },
-            { name: '🛸', value: 1000 },
-            { name: '💨', value: 0 },
-            { name: '👑', value: 500 },
-            { name: '💨', value: 0 },
-            { name: '🚀', value: 650 }
+            { name: '👑', value: 600 }, { name: '🧢', value: 800 },
+            { name: '🚀', value: 700 }, { name: '🛸', value: 1000 },
+            { name: '💨', value: 0 }, { name: '👑', value: 500 },
+            { name: '💨', value: 0 }, { name: '🚀', value: 650 }
         ]
     };
     return allPrizes[mode] || allPrizes.light;
 }
 
 function drawWheel() {
-    const width = canvas.width;
-    const height = canvas.height;
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const radius = Math.min(width, height) / 2 - 4;
-    
-    ctx.clearRect(0, 0, width, height);
+    const width = canvas.width, height = canvas.height;
+    const centerX = width/2, centerY = height/2;
+    const radius = Math.min(width,height)/2 - 4;
+    ctx.clearRect(0,0,width,height);
     const modePrizes = getPrizesForMode(currentMode);
-    const count = modePrizes.length;
-    const angleStep = (2 * Math.PI) / count;
-
-    for (let i = 0; i < count; i++) {
-        const startAngle = i * angleStep;
-        const endAngle = startAngle + angleStep;
-        
+    const count = modePrizes.length, angleStep = (2*Math.PI)/count;
+    for (let i=0; i<count; i++) {
+        const startAngle = i*angleStep, endAngle = startAngle + angleStep;
         ctx.beginPath();
-        ctx.moveTo(centerX, centerY);
-        ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+        ctx.moveTo(centerX,centerY);
+        ctx.arc(centerX,centerY,radius,startAngle,endAngle);
         ctx.closePath();
-        
-        if (modePrizes[i].value > 0) {
-            ctx.fillStyle = '#2e7d32';
-        } else {
-            ctx.fillStyle = '#c62828';
-        }
+        ctx.fillStyle = modePrizes[i].value > 0 ? '#2e7d32' : '#c62828';
         ctx.fill();
         ctx.strokeStyle = '#0a0a0a';
         ctx.lineWidth = 2;
         ctx.stroke();
-
         ctx.save();
-        ctx.translate(centerX, centerY);
-        ctx.rotate(startAngle + angleStep / 2);
+        ctx.translate(centerX,centerY);
+        ctx.rotate(startAngle + angleStep/2);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = 'bold 20px sans-serif';
         ctx.fillStyle = '#fff';
-        const label = modePrizes[i].name;
-        ctx.fillText(label, radius * 0.65, 0);
+        ctx.fillText(modePrizes[i].name, radius*0.65, 0);
         ctx.restore();
     }
-
     ctx.beginPath();
-    ctx.arc(centerX, centerY, 22, 0, 2 * Math.PI);
+    ctx.arc(centerX,centerY,22,0,2*Math.PI);
     ctx.fillStyle = '#111';
     ctx.fill();
-    ctx.strokeStyle = currentMode === 'light' ? '#ffd700' : (currentMode === 'normal' ? '#2196F3' : '#f44336');
+    ctx.strokeStyle = currentMode==='light' ? '#ffd700' : (currentMode==='normal' ? '#2196F3' : '#f44336');
     ctx.lineWidth = 3;
     ctx.stroke();
 }
 
 document.getElementById('spin-btn').addEventListener('click', async () => {
-    if (!user_id) return;
-    if (isSpinning) return;
+    if (!user_id || isSpinning) return;
     isSpinning = true;
     document.getElementById('spin-btn').disabled = true;
     document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>Загрузка...</span>';
     document.getElementById('result-message').textContent = '';
-
     try {
         const resp = await fetch('/api/spin', {
             method: 'POST',
@@ -1617,21 +1583,15 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
             body: JSON.stringify({ user_id, mode: currentMode })
         });
         const data = await resp.json();
-        
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
-            const extraSpins = 5 + Math.floor(Math.random() * 3);
-            const randomAngle = Math.random() * 360;
-            currentRotation += (extraSpins * 360) + randomAngle;
+            const extraSpins = 5 + Math.floor(Math.random()*3);
+            const randomAngle = Math.random()*360;
+            currentRotation += (extraSpins*360) + randomAngle;
             canvas.style.transform = `rotate(${currentRotation}deg)`;
-
             setTimeout(() => {
                 document.getElementById('result-message').textContent = data.message;
-                if (data.win) {
-                    document.getElementById('result-message').style.color = '#4CAF50';
-                } else {
-                    document.getElementById('result-message').style.color = '#f44336';
-                }
+                document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
                 if (data.win) fetchFeed();
             }, 3000);
         } else {
@@ -1641,52 +1601,39 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         document.getElementById('result-message').textContent = 'Ошибка соединения';
         console.error(e);
     }
-
     setTimeout(() => {
         isSpinning = false;
         document.getElementById('spin-btn').disabled = false;
-        const cost = { light: 25, normal: 50, hard: 100 }[currentMode];
+        const cost = { light:25, normal:50, hard:100 }[currentMode];
         document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
     }, 3200);
 });
 
 // === СЛОТ ===
 let slotSpinning = false;
-const slotSymbols = ['🍒', '🍋', '🍊', '🍇', '🍉', '🍓', '🍑', '🎰'];
+const slotSymbols = ['🍒','🍋','🍊','🍇','🍉','🍓','🍑','🎰'];
 const reels = [
     document.getElementById('reel1'),
     document.getElementById('reel2'),
     document.getElementById('reel3')
 ];
-
 document.getElementById('bet-range').addEventListener('input', function() {
     document.getElementById('bet-display').textContent = this.value;
 });
-
 document.getElementById('spin-slot-btn').addEventListener('click', async () => {
-    if (!user_id) return;
-    if (slotSpinning) return;
+    if (!user_id || slotSpinning) return;
     const bet = parseInt(document.getElementById('bet-range').value);
-    if (isNaN(bet) || bet < 20 || bet > 100) {
-        alert('Ставка должна быть от 20 до 100 токенов');
-        return;
-    }
-    if (balance < bet) {
-        alert('Недостаточно токенов!');
-        return;
-    }
-
+    if (isNaN(bet) || bet<20 || bet>100) { alert('Ставка от 20 до 100'); return; }
+    if (balance < bet) { alert('Недостаточно токенов!'); return; }
     slotSpinning = true;
     const btn = document.getElementById('spin-slot-btn');
     btn.disabled = true;
     btn.textContent = '🎰 Крутим...';
-
     let interval = setInterval(() => {
         reels.forEach(reel => {
-            reel.textContent = slotSymbols[Math.floor(Math.random() * slotSymbols.length)];
+            reel.textContent = slotSymbols[Math.floor(Math.random()*slotSymbols.length)];
         });
     }, 100);
-
     try {
         const resp = await fetch('/api/slot_spin', {
             method: 'POST',
@@ -1695,12 +1642,10 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
         });
         const data = await resp.json();
         clearInterval(interval);
-
         if (resp.ok) {
             reels[0].textContent = data.symbols[0];
             reels[1].textContent = data.symbols[1];
             reels[2].textContent = data.symbols[2];
-
             updateBalanceUI(data.new_balance);
             const resultDiv = document.getElementById('slot-result');
             if (data.win) {
@@ -1719,53 +1664,40 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
         document.getElementById('slot-result').textContent = 'Ошибка соединения';
         console.error(e);
     }
-
     slotSpinning = false;
     btn.disabled = false;
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
 // === РАКЕТКА ===
-let rocketInterval = null;
-let rocketRoundId = null;
-let rocketActive = false;
-let rocketCountdown = 5;
-let countdownInterval = null;
-let rocketAnimationFrame = null;
-let rocketCanvas = document.getElementById('rocketCanvas');
-let rctx = rocketCanvas.getContext('2d');
-let rocketX = 0;
-let rocketY = 150;
-let rocketSpeed = 1.5;
-let rocketTrail = [];
+let rocketInterval = null, rocketRoundId = null, rocketActive = false;
+let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
+const rocketCanvas = document.getElementById('rocketCanvas');
+const rctx = rocketCanvas.getContext('2d');
+let rocketX = 0, rocketY = 150, rocketSpeed = 1.5, rocketTrail = [];
 
-function drawRocket(multiplier, status, crash) {
-    rctx.clearRect(0, 0, rocketCanvas.width, rocketCanvas.height);
-    
+function drawRocket(multiplier, status) {
+    rctx.clearRect(0,0,rocketCanvas.width,rocketCanvas.height);
     if (rocketTrail.length > 1) {
         rctx.beginPath();
         rctx.moveTo(rocketTrail[0].x, rocketTrail[0].y);
-        for (let i = 1; i < rocketTrail.length; i++) {
-            rctx.lineTo(rocketTrail[i].x, rocketTrail[i].y);
-        }
+        for (let i=1; i<rocketTrail.length; i++) rctx.lineTo(rocketTrail[i].x, rocketTrail[i].y);
         rctx.strokeStyle = 'rgba(255,215,0,0.3)';
         rctx.lineWidth = 2;
         rctx.stroke();
     }
-
     if (status === 'crashed') {
         rctx.font = '40px sans-serif';
         rctx.textAlign = 'center';
         rctx.fillText('💥', rocketX, rocketY);
         return;
     }
-
     rctx.font = '30px sans-serif';
     rctx.textAlign = 'center';
     rctx.fillText('🚀', rocketX, rocketY);
     rctx.fillStyle = '#ffd700';
     rctx.font = '14px sans-serif';
-    rctx.fillText(multiplier.toFixed(2) + 'x', rocketX, rocketY - 20);
+    rctx.fillText(multiplier.toFixed(2)+'x', rocketX, rocketY-20);
 }
 
 document.getElementById('rocket-bet-range').addEventListener('input', function() {
@@ -1773,18 +1705,10 @@ document.getElementById('rocket-bet-range').addEventListener('input', function()
 });
 
 document.getElementById('rocket-start-btn').addEventListener('click', async () => {
-    if (!user_id) return;
-    if (rocketActive) return;
+    if (!user_id || rocketActive) return;
     const bet = parseInt(document.getElementById('rocket-bet-range').value);
-    if (isNaN(bet) || bet < 500 || bet > 5000) {
-        alert('Ставка должна быть от 500 до 5000 токенов');
-        return;
-    }
-    if (balance < bet) {
-        alert('Недостаточно токенов!');
-        return;
-    }
-
+    if (isNaN(bet) || bet<500 || bet>5000) { alert('Ставка от 500 до 5000'); return; }
+    if (balance < bet) { alert('Недостаточно токенов!'); return; }
     try {
         const resp = await fetch('/api/rocket/start', {
             method: 'POST',
@@ -1800,28 +1724,23 @@ document.getElementById('rocket-start-btn').addEventListener('click', async () =
             document.getElementById('rocket-result').textContent = '';
             document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
             rocketX = 10;
-            rocketY = 150 + (Math.random() - 0.5) * 20;
-            rocketTrail = [{x: rocketX, y: rocketY}];
+            rocketY = 150 + (Math.random()-0.5)*20;
+            rocketTrail = [{x:rocketX, y:rocketY}];
             if (rocketInterval) clearInterval(rocketInterval);
             rocketInterval = setInterval(updateRocketStatus, 150);
             if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
             animateRocket();
-        } else {
-            alert('❌ ' + data.detail);
-        }
-    } catch (e) {
-        alert('Ошибка соединения');
-        console.error(e);
-    }
+        } else alert('❌ ' + data.detail);
+    } catch (e) { alert('Ошибка соединения'); console.error(e); }
 });
 
 function animateRocket() {
     if (!rocketActive) return;
     rocketX += rocketSpeed;
-    rocketY += Math.sin(rocketX * 0.1) * 0.5 + (Math.random() - 0.5) * 1.0;
+    rocketY += Math.sin(rocketX*0.1)*0.5 + (Math.random()-0.5)*1.0;
     if (rocketY < 20) rocketY = 20;
     if (rocketY > 180) rocketY = 180;
-    rocketTrail.push({x: rocketX, y: rocketY});
+    rocketTrail.push({x:rocketX, y:rocketY});
     if (rocketTrail.length > 100) rocketTrail.shift();
     rocketAnimationFrame = requestAnimationFrame(animateRocket);
 }
@@ -1839,15 +1758,9 @@ async function updateRocketStatus() {
                 document.getElementById('rocket-cashout-btn').disabled = true;
                 document.getElementById('rocket-start-btn').disabled = false;
                 rocketActive = false;
-                if (rocketInterval) {
-                    clearInterval(rocketInterval);
-                    rocketInterval = null;
-                }
-                if (rocketAnimationFrame) {
-                    cancelAnimationFrame(rocketAnimationFrame);
-                    rocketAnimationFrame = null;
-                }
-                drawRocket(display, 'crashed', true);
+                if (rocketInterval) clearInterval(rocketInterval);
+                if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
+                drawRocket(display, 'crashed');
                 document.getElementById('rocket-result').textContent = '😞 Ракета упала. Ставка проиграна.';
                 document.getElementById('rocket-result').style.color = '#f44336';
                 fetchUserData();
@@ -1857,25 +1770,15 @@ async function updateRocketStatus() {
                 document.getElementById('rocket-cashout-btn').disabled = true;
                 document.getElementById('rocket-start-btn').disabled = false;
                 rocketActive = false;
-                if (rocketInterval) {
-                    clearInterval(rocketInterval);
-                    rocketInterval = null;
-                }
-                if (rocketAnimationFrame) {
-                    cancelAnimationFrame(rocketAnimationFrame);
-                    rocketAnimationFrame = null;
-                }
+                if (rocketInterval) clearInterval(rocketInterval);
+                if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
                 fetchUserData();
                 startCountdown();
             } else {
-                drawRocket(display, 'active', false);
+                drawRocket(display, 'active');
             }
-        } else {
-            console.error('Status error:', data);
-        }
-    } catch (e) {
-        console.error(e);
-    }
+        } else console.error('Status error:', data);
+    } catch (e) { console.error(e); }
 }
 
 document.getElementById('rocket-cashout-btn').addEventListener('click', async () => {
@@ -1894,24 +1797,13 @@ document.getElementById('rocket-cashout-btn').addEventListener('click', async ()
             document.getElementById('rocket-cashout-btn').disabled = true;
             document.getElementById('rocket-start-btn').disabled = false;
             rocketActive = false;
-            if (rocketInterval) {
-                clearInterval(rocketInterval);
-                rocketInterval = null;
-            }
-            if (rocketAnimationFrame) {
-                cancelAnimationFrame(rocketAnimationFrame);
-                rocketAnimationFrame = null;
-            }
+            if (rocketInterval) clearInterval(rocketInterval);
+            if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
             updateBalanceUI(data.new_balance);
             fetchFeed();
             startCountdown();
-        } else {
-            alert('❌ ' + data.detail);
-        }
-    } catch (e) {
-        alert('Ошибка соединения');
-        console.error(e);
-    }
+        } else alert('❌ ' + data.detail);
+    } catch (e) { alert('Ошибка соединения'); console.error(e); }
 });
 
 function startCountdown() {
@@ -1945,9 +1837,7 @@ document.querySelectorAll('.deposit-option').forEach(btn => {
             500: 'https://yookassa.ru/my/i/amMzSdZUSmIm/l',
             1000: 'https://yookassa.ru/my/i/amMzbZDBr9y2/l'
         };
-        if (links[amount]) {
-            window.open(links[amount], '_blank');
-        }
+        if (links[amount]) window.open(links[amount], '_blank');
     });
 });
 
@@ -1966,9 +1856,7 @@ async function fetchFeed() {
             li.textContent = '@' + w.username + ' выиграл ' + w.prize_name + ' (+' + w.prize_value + ' токенов)';
             list.appendChild(li);
         });
-    } catch (e) {
-        console.error(e);
-    }
+    } catch (e) { console.error(e); }
 }
 fetchFeed();
 setInterval(fetchFeed, 5000);
@@ -1987,15 +1875,9 @@ document.getElementById('withdraw-btn').addEventListener('click', async () => {
             body: JSON.stringify({ user_id, amount: parseInt(amount) })
         });
         const data = await resp.json();
-        if (resp.ok) {
-            alert('✅ Заявка на вывод отправлена!');
-        } else {
-            alert('❌ ' + data.detail);
-        }
-    } catch (e) {
-        alert('Ошибка соединения');
-        console.error(e);
-    }
+        if (resp.ok) alert('✅ Заявка на вывод отправлена!');
+        else alert('❌ ' + data.detail);
+    } catch (e) { alert('Ошибка соединения'); console.error(e); }
 });
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -2003,20 +1885,10 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         const tab = btn.dataset.tab;
-        if (tab === 'roulette') {
-            document.getElementById('roulette-page').style.display = 'block';
-            document.getElementById('slot-page').style.display = 'none';
-            document.getElementById('rocket-page').style.display = 'none';
-        } else if (tab === 'slot') {
-            document.getElementById('roulette-page').style.display = 'none';
-            document.getElementById('slot-page').style.display = 'block';
-            document.getElementById('rocket-page').style.display = 'none';
-        } else if (tab === 'rocket') {
-            document.getElementById('roulette-page').style.display = 'none';
-            document.getElementById('slot-page').style.display = 'none';
-            document.getElementById('rocket-page').style.display = 'block';
-            fetchUserData();
-        }
+        document.getElementById('roulette-page').style.display = tab==='roulette' ? 'block' : 'none';
+        document.getElementById('slot-page').style.display = tab==='slot' ? 'block' : 'none';
+        document.getElementById('rocket-page').style.display = tab==='rocket' ? 'block' : 'none';
+        if (tab==='rocket') fetchUserData();
     });
 });
 """
@@ -2024,9 +1896,10 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 
 for filename, content in STATIC_FILES.items():
     filepath = os.path.join(STATIC_DIR, filename)
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(content)
-    print(f"✅ Обновлён {filepath}")
+    if not os.path.exists(filepath):
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"✅ Создан {filepath}")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
