@@ -27,6 +27,7 @@ SPIN_COSTS = {
     "hard": 100
 }
 
+# Обновлённые призы с крипто-тематикой
 PRIZES = {
     "light": [
         {"name": "🎈 Шар", "value": 15},
@@ -339,13 +340,17 @@ STATIC_FILES = {
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+    <!-- Верхняя панель -->
     <div id="top-bar">
         <div id="username" style="cursor:pointer;">@user</div>
         <div id="balance">
-            <span id="balance-amount">0</span> $
+            <span id="balance-amount">0</span> 🌟
             <button id="deposit-btn">+</button>
+            <button id="gifts-btn" style="background:var(--accent-color); border:none; border-radius:8px; padding:4px 10px; font-weight:bold; color:#0a0a0a; cursor:pointer; margin-left:5px;">Мои подарки</button>
         </div>
     </div>
+
+    <!-- Меню пополнения -->
     <div id="deposit-menu" style="display: none;">
         <div style="width:100%; text-align:center; margin-bottom:10px; font-weight:bold; color:var(--accent-color);">Пополнить баланс</div>
         <button class="deposit-option" data-amount="100">100₽</button>
@@ -354,6 +359,8 @@ STATIC_FILES = {
         <button class="deposit-option" data-amount="1000">1000₽</button>
         <button id="close-deposit">✖</button>
     </div>
+
+    <!-- Реферальное окно -->
     <div id="referral-modal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
         <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:300px; width:90%; text-align:center; border:1px solid var(--accent-color);">
             <h3 style="color:var(--accent-color); margin-bottom:10px;">Реферальная система</h3>
@@ -366,24 +373,60 @@ STATIC_FILES = {
             <button id="close-ref-modal" style="background:#333; border:none; color:#fff; padding:8px 20px; border-radius:6px; cursor:pointer;">Закрыть</button>
         </div>
     </div>
-    <div id="mode-selector">
+
+    <!-- Заголовок -->
+    <div id="main-title">
+        <h1>РУЛЕТКА STAR DROP</h1>
+        <p>Испытай удачу и выиграй крипто-подарки!</p>
+    </div>
+
+    <!-- Список призов -->
+    <div id="prizes-list">
+        <div class="prize-item">Telegram Username x1</div>
+        <div class="prize-item">Rolex x1</div>
+        <div class="prize-item">Cash x1</div>
+        <div class="prize-item">Premium x1</div>
+        <div class="prize-item">Ring x1</div>
+        <div class="prize-item">Gold Bar x1</div>
+    </div>
+
+    <!-- Режимы (скрытые, но функциональные) -->
+    <div id="mode-selector" style="display: flex; gap: 12px; margin: 10px 0;">
         <button class="mode-btn active" data-mode="light">Light</button>
         <button class="mode-btn" data-mode="normal">Normal</button>
         <button class="mode-btn" data-mode="hard">Hard</button>
     </div>
+
+    <!-- Колесо -->
     <div id="wheel-container">
         <canvas id="wheelCanvas" width="300" height="300"></canvas>
     </div>
-    <div id="mode-info">
-        <span>Стоимость спина: <span id="spin-cost">25</span> токенов</span>
+
+    <!-- Информация и кнопка вращения -->
+    <div id="spin-area">
+        <div id="spin-info">1 спин = <span id="spin-cost">25</span> монет</div>
+        <button id="spin-btn">КРУТИТЬ <span id="spin-cost-label">50 Токенов</span></button>
     </div>
-    <button id="spin-btn">Крутить!</button>
+
+    <!-- Результат -->
     <div id="result-message"></div>
+
+    <!-- Лента уведомлений -->
     <div id="notification-feed">
         <h3>Последние выигрыши</h3>
         <ul id="feed-list"></ul>
     </div>
+
+    <!-- Кнопка вывода -->
     <button id="withdraw-btn">Вывести токены</button>
+
+    <!-- Нижняя навигация -->
+    <div id="bottom-nav">
+        <button class="nav-btn active" data-tab="roulette">Рулетка</button>
+        <button class="nav-btn" data-tab="tasks">Задания</button>
+        <button class="nav-btn" data-tab="top">Топ</button>
+    </div>
+
     <script src="/static/script.js"></script>
 </body>
 </html>""",
@@ -404,12 +447,11 @@ STATIC_FILES = {
 body {
     background: var(--bg-dark);
     color: var(--text-light);
-    padding: 16px;
+    padding: 16px 16px 70px 16px;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    transition: background 0.3s;
 }
 body.theme-light {
     --accent-color: #ffd700;
@@ -460,6 +502,16 @@ body.theme-hard {
     color: #0a0a0a;
     cursor: pointer;
 }
+#gifts-btn {
+    background: var(--accent-color);
+    border: none;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-weight: bold;
+    color: #0a0a0a;
+    cursor: pointer;
+    font-size: 12px;
+}
 #deposit-menu {
     background: var(--card-bg);
     border: 1px solid var(--accent-color);
@@ -487,20 +539,53 @@ body.theme-hard {
     font-size: 20px;
     cursor: pointer;
 }
+#main-title {
+    text-align: center;
+    margin: 20px 0 10px;
+}
+#main-title h1 {
+    font-size: 24px;
+    font-weight: 900;
+    color: var(--accent-color);
+    letter-spacing: 2px;
+}
+#main-title p {
+    color: #aaa;
+    font-size: 14px;
+    margin-top: 4px;
+}
+#prizes-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 15px 0;
+    width: 100%;
+    max-width: 400px;
+}
+.prize-item {
+    background: #1a1a1a;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: #ccc;
+}
 #mode-selector {
     display: flex;
     gap: 12px;
-    margin: 20px 0;
+    margin: 10px 0;
 }
 .mode-btn {
     background: #222;
     color: #aaa;
     border: none;
-    padding: 10px 24px;
+    padding: 6px 18px;
     border-radius: 20px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
+    font-size: 13px;
 }
 .mode-btn.active {
     background: var(--accent-color);
@@ -509,15 +594,26 @@ body.theme-hard {
 }
 #wheel-container {
     position: relative;
-    width: 300px;
-    height: 300px;
-    margin: 20px auto;
+    width: 280px;
+    height: 280px;
+    margin: 10px auto;
 }
 #wheelCanvas {
     width: 100%;
     height: 100%;
     border-radius: 50%;
     box-shadow: 0 0 30px var(--accent-glow);
+}
+#spin-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 15px 0;
+}
+#spin-info {
+    font-size: 14px;
+    color: #aaa;
+    margin-bottom: 8px;
 }
 #spin-btn {
     background: var(--accent-color);
@@ -530,15 +626,17 @@ body.theme-hard {
     cursor: pointer;
     box-shadow: 0 0 20px var(--accent-glow);
     transition: 0.1s;
-    margin: 10px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.2;
 }
 #spin-btn:active {
     transform: scale(0.95);
 }
-#mode-info {
-    margin: 10px 0;
-    color: #ccc;
+#spin-btn span {
     font-size: 14px;
+    font-weight: 400;
 }
 #result-message {
     margin: 10px 0;
@@ -584,6 +682,32 @@ body.theme-hard {
     font-size: 16px;
     margin-top: 10px;
     cursor: pointer;
+}
+#bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: #111;
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0;
+    border-top: 1px solid var(--border-color);
+}
+.nav-btn {
+    background: transparent;
+    color: #888;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 6px 20px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.nav-btn.active {
+    color: var(--accent-color);
+    background: rgba(255,215,0,0.1);
 }
 """,
     "script.js": """const BASE_URL = window.location.origin;
@@ -653,6 +777,11 @@ document.getElementById('referral-modal').addEventListener('click', (e) => {
     }
 });
 
+// === Кнопка "Мои подарки" (заглушка) ===
+document.getElementById('gifts-btn').addEventListener('click', () => {
+    alert('Здесь будут ваши выигранные подарки. Пока пусто.');
+});
+
 function applyTheme(mode) {
     document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
     if (mode === 'light') document.body.classList.add('theme-light');
@@ -673,7 +802,9 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
 
 function updateSpinCost() {
     const costs = { light: 25, normal: 50, hard: 100 };
-    document.getElementById('spin-cost').textContent = costs[currentMode];
+    const cost = costs[currentMode];
+    document.getElementById('spin-cost').textContent = cost;
+    document.getElementById('spin-cost-label').textContent = cost + ' Токенов';
 }
 
 const canvas = document.getElementById('wheelCanvas');
@@ -752,12 +883,13 @@ function getPrizesForMode(mode) {
 
 applyTheme('light');
 drawWheel();
+updateSpinCost();
 
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (isSpinning) return;
     isSpinning = true;
     document.getElementById('spin-btn').disabled = true;
-    document.getElementById('spin-btn').textContent = 'Крутим...';
+    document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>Загрузка...</span>';
     document.getElementById('result-message').textContent = '';
     try {
         const resp = await fetch('/api/spin', {
@@ -780,7 +912,8 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     }
     isSpinning = false;
     document.getElementById('spin-btn').disabled = false;
-    document.getElementById('spin-btn').textContent = 'Крутить!';
+    const cost = { light: 25, normal: 50, hard: 100 }[currentMode];
+    document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
 });
 
 function animateWheel() {
@@ -857,6 +990,19 @@ document.getElementById('withdraw-btn').addEventListener('click', async () => {
         alert('Ошибка соединения');
         console.error(e);
     }
+});
+
+// === Навигация вкладок (заглушка) ===
+document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (btn.dataset.tab !== 'roulette') {
+            alert('Раздел в разработке');
+            // Возвращаем активность на рулетку
+            document.querySelector('.nav-btn[data-tab="roulette"]').classList.add('active');
+        }
+    });
 });
 """
 }
