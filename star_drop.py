@@ -31,49 +31,49 @@ SPIN_COSTS = {
     "hard": 100
 }
 
-# ========= ОБНОВЛЁННЫЕ ПРИЗЫ (6 красных, 6 зелёных) =========
+# ========= ЧЕРЕДУЮЩИЕСЯ ПРИЗЫ (выигрыш, проигрыш, ...) =========
 PRIZES = {
     "light": [
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
         {"name": "🎁 10", "value": 10},
+        {"name": "❌", "value": 0},
         {"name": "🎁 15", "value": 15},
+        {"name": "❌", "value": 0},
         {"name": "🎁 20", "value": 20},
+        {"name": "❌", "value": 0},
         {"name": "🎁 25", "value": 25},
+        {"name": "❌", "value": 0},
         {"name": "🎁 30", "value": 30},
+        {"name": "❌", "value": 0},
         {"name": "🎁 40", "value": 40},
+        {"name": "❌", "value": 0},
     ],
     "normal": [
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
         {"name": "🎁 50", "value": 50},
+        {"name": "❌", "value": 0},
         {"name": "🎁 70", "value": 70},
+        {"name": "❌", "value": 0},
         {"name": "🎁 100", "value": 100},
+        {"name": "❌", "value": 0},
         {"name": "🎁 120", "value": 120},
+        {"name": "❌", "value": 0},
         {"name": "🎁 150", "value": 150},
+        {"name": "❌", "value": 0},
         {"name": "🎁 200", "value": 200},
+        {"name": "❌", "value": 0},
     ],
     "hard": [
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
-        {"name": "❌", "value": 0},
         {"name": "🎁 300", "value": 300},
+        {"name": "❌", "value": 0},
         {"name": "🎁 400", "value": 400},
+        {"name": "❌", "value": 0},
         {"name": "🎁 500", "value": 500},
+        {"name": "❌", "value": 0},
         {"name": "🎁 600", "value": 600},
+        {"name": "❌", "value": 0},
         {"name": "🎁 800", "value": 800},
+        {"name": "❌", "value": 0},
         {"name": "🎁 1000", "value": 1000},
+        {"name": "❌", "value": 0},
     ]
 }
 
@@ -443,9 +443,11 @@ async def give_tokens(message: types.Message):
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
 from pydantic import BaseModel
 import uvicorn
+import aiofiles
+import aiohttp
 
 app = FastAPI()
 
@@ -458,7 +460,42 @@ app.add_middleware(
 )
 
 STATIC_DIR = "static"
+AVATARS_DIR = os.path.join(STATIC_DIR, "avatars")
 os.makedirs(STATIC_DIR, exist_ok=True)
+os.makedirs(AVATARS_DIR, exist_ok=True)
+
+# ==================== ЭНДПОИНТ ДЛЯ АВАТАРКИ ====================
+@app.get("/api/avatar/{user_id}")
+async def get_avatar(user_id: int):
+    """Возвращает URL аватарки пользователя, сохраняя её на сервере."""
+    avatar_path = os.path.join(AVATARS_DIR, f"{user_id}.jpg")
+    if os.path.exists(avatar_path):
+        return {"url": f"/static/avatars/{user_id}.jpg"}
+    
+    try:
+        # Получаем фото профиля через бота
+        photos = await bot.get_user_profile_photos(user_id, limit=1)
+        if photos.total_count == 0:
+            # Нет фото – возвращаем заглушку
+            return {"url": "/static/default_avatar.png"}
+        
+        file_id = photos.photos[0][-1].file_id
+        file = await bot.get_file(file_id)
+        file_path = file.file_path
+        
+        # Скачиваем файл
+        async with aiohttp.ClientSession() as session:
+            url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    async with aiofiles.open(avatar_path, "wb") as f:
+                        await f.write(await resp.read())
+                    return {"url": f"/static/avatars/{user_id}.jpg"}
+                else:
+                    return {"url": "/static/default_avatar.png"}
+    except Exception as e:
+        logging.error(f"Avatar error: {e}")
+        return {"url": "/static/default_avatar.png"}
 
 # ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
 STATIC_FILES = {
@@ -485,7 +522,10 @@ STATIC_FILES = {
     <div id="app-content" style="width:100%; max-width:400px;">
         <div id="top-bar">
             <div id="user-info" style="display:flex; align-items:center; gap:10px; cursor:pointer;">
-                <div id="avatar" style="width:32px; height:32px; border-radius:50%; background:var(--accent-color); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:16px; color:#0a0a0a;">U</div>
+                <div id="avatar-container" style="width:32px; height:32px; border-radius:50%; overflow:hidden; background:var(--accent-color);">
+                    <img id="avatar-img" src="" alt="avatar" style="width:100%; height:100%; object-fit:cover; display:none;">
+                    <span id="avatar-placeholder" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; font-weight:bold; font-size:16px; color:#0a0a0a;">U</span>
+                </div>
                 <span id="username">@user</span>
             </div>
             <div id="balance">
@@ -760,18 +800,31 @@ body.theme-hard {
     cursor: pointer;
 }
 
-#avatar {
+#avatar-container {
     width: 32px;
     height: 32px;
     border-radius: 50%;
+    overflow: hidden;
     background: var(--accent-color);
+    flex-shrink: 0;
+}
+
+#avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+}
+
+#avatar-placeholder {
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 100%;
+    height: 100%;
     font-weight: bold;
     font-size: 16px;
     color: #0a0a0a;
-    transition: background 0.3s;
 }
 
 #username {
@@ -1373,7 +1426,7 @@ let isSpinning = false;
 let currentRotation = 0;
 let slowRotation = 0;
 
-// === Получение данных пользователя из Telegram (только реальный аккаунт) ===
+// === Получение данных пользователя из Telegram ===
 function showAuthError(message) {
     document.body.innerHTML = `
         <div style="display:flex; justify-content:center; align-items:center; height:100vh; flex-direction:column; background:#0a0a0a; color:#fff; text-align:center; padding:20px;">
@@ -1394,25 +1447,39 @@ if (window.Telegram && window.Telegram.WebApp) {
         localStorage.setItem('starDrop_userId', user_id);
         const username = tgUser.username || tgUser.first_name || 'User';
         document.getElementById('username').textContent = '@' + username;
-        const avatar = document.getElementById('avatar');
+        // Загружаем аватарку
+        loadAvatar(user_id);
+        // Устанавливаем инициалы как запасной вариант
+        const placeholder = document.getElementById('avatar-placeholder');
         const name = tgUser.first_name || 'U';
-        avatar.textContent = name.charAt(0).toUpperCase();
-        avatar.style.background = '#' + (user_id % 0xFFFFFF).toString(16).padStart(6, '0');
+        placeholder.textContent = name.charAt(0).toUpperCase();
     } else {
-        // Если Telegram WebApp есть, но пользователь не получен (редкий случай)
         showAuthError('Не удалось получить данные пользователя из Telegram.');
     }
 } else {
-    // Если приложение открыто не в Telegram (например, в браузере)
-    // Пытаемся использовать сохранённый ID, если он есть (гостевой режим)
     const savedId = localStorage.getItem('starDrop_userId');
     if (savedId) {
         user_id = parseInt(savedId);
         document.getElementById('username').textContent = '@user_' + user_id;
-        document.getElementById('avatar').textContent = 'U';
+        document.getElementById('avatar-placeholder').textContent = 'U';
         console.warn('Гостевой режим: используем сохранённый ID');
     } else {
         showAuthError('Это приложение работает только в Telegram. Пожалуйста, откройте его через бота.');
+    }
+}
+
+async function loadAvatar(userId) {
+    try {
+        const resp = await fetch(`/api/avatar/${userId}`);
+        const data = await resp.json();
+        if (data.url) {
+            const img = document.getElementById('avatar-img');
+            img.src = data.url;
+            img.style.display = 'block';
+            document.getElementById('avatar-placeholder').style.display = 'none';
+        }
+    } catch (e) {
+        console.error('Avatar load error:', e);
     }
 }
 
@@ -1650,50 +1717,50 @@ function updateSpinCost() {
 const canvas = document.getElementById('wheelCanvas');
 const ctx = canvas.getContext('2d');
 
-// ========= ОБНОВЛЁННАЯ ФУНКЦИЯ ПРИЗОВ (6 красных, 6 зелёных) =========
+// ========= ЧЕРЕДУЮЩИЕСЯ ПРИЗЫ =========
 function getPrizesForMode(mode) {
     const allPrizes = {
         light: [
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
             { name: '🎁 10', value: 10 },
+            { name: '❌', value: 0 },
             { name: '🎁 15', value: 15 },
+            { name: '❌', value: 0 },
             { name: '🎁 20', value: 20 },
+            { name: '❌', value: 0 },
             { name: '🎁 25', value: 25 },
+            { name: '❌', value: 0 },
             { name: '🎁 30', value: 30 },
-            { name: '🎁 40', value: 40 }
+            { name: '❌', value: 0 },
+            { name: '🎁 40', value: 40 },
+            { name: '❌', value: 0 }
         ],
         normal: [
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
             { name: '🎁 50', value: 50 },
+            { name: '❌', value: 0 },
             { name: '🎁 70', value: 70 },
+            { name: '❌', value: 0 },
             { name: '🎁 100', value: 100 },
+            { name: '❌', value: 0 },
             { name: '🎁 120', value: 120 },
+            { name: '❌', value: 0 },
             { name: '🎁 150', value: 150 },
-            { name: '🎁 200', value: 200 }
+            { name: '❌', value: 0 },
+            { name: '🎁 200', value: 200 },
+            { name: '❌', value: 0 }
         ],
         hard: [
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
-            { name: '❌', value: 0 },
             { name: '🎁 300', value: 300 },
+            { name: '❌', value: 0 },
             { name: '🎁 400', value: 400 },
+            { name: '❌', value: 0 },
             { name: '🎁 500', value: 500 },
+            { name: '❌', value: 0 },
             { name: '🎁 600', value: 600 },
+            { name: '❌', value: 0 },
             { name: '🎁 800', value: 800 },
-            { name: '🎁 1000', value: 1000 }
+            { name: '❌', value: 0 },
+            { name: '🎁 1000', value: 1000 },
+            { name: '❌', value: 0 }
         ]
     };
     return allPrizes[mode] || allPrizes.light;
@@ -1712,7 +1779,6 @@ function drawWheel() {
         ctx.moveTo(centerX,centerY);
         ctx.arc(centerX,centerY,radius,startAngle,endAngle);
         ctx.closePath();
-        // Красный для value==0 (❌), зелёный для выигрыша
         ctx.fillStyle = modePrizes[i].value > 0 ? '#2e7d32' : '#c62828';
         ctx.fill();
         ctx.strokeStyle = '#0a0a0a';
@@ -1846,35 +1912,63 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
-// === РАКЕТКА ===
+// === РАКЕТКА (ОБНОВЛЁННАЯ ТРАЕКТОРИЯ И АНИМАЦИЯ) ===
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
 const rctx = rocketCanvas.getContext('2d');
-let rocketX = 0, rocketY = 150, rocketSpeed = 1.5, rocketTrail = [];
+let rocketX = 30, rocketY = 160; // стартовая позиция (левый нижний)
+let rocketSpeed = 2.5;
+let rocketTrail = [];
+let isCrashed = false;
+let falling = false;
+let fallY = 0;
+let explosionX = 0, explosionY = 0;
 
 function drawRocket(multiplier, status) {
     rctx.clearRect(0,0,rocketCanvas.width,rocketCanvas.height);
-    if (rocketTrail.length > 1) {
+    
+    // Отрисовка следа
+    if (rocketTrail.length > 1 && status !== 'crashed' && status !== 'idle') {
         rctx.beginPath();
         rctx.moveTo(rocketTrail[0].x, rocketTrail[0].y);
-        for (let i=1; i<rocketTrail.length; i++) rctx.lineTo(rocketTrail[i].x, rocketTrail[i].y);
-        rctx.strokeStyle = 'rgba(255,215,0,0.3)';
+        for (let i=1; i<rocketTrail.length; i++) {
+            rctx.lineTo(rocketTrail[i].x, rocketTrail[i].y);
+        }
+        rctx.strokeStyle = 'rgba(255,215,0,0.4)';
         rctx.lineWidth = 2;
         rctx.stroke();
     }
+    
     if (status === 'crashed') {
-        rctx.font = '40px sans-serif';
+        // Взрыв
+        rctx.font = '50px sans-serif';
         rctx.textAlign = 'center';
-        rctx.fillText('💥', rocketX, rocketY);
+        rctx.fillText('💥', explosionX, explosionY);
+        // Ракета падает вниз
+        if (falling) {
+            rctx.font = '30px sans-serif';
+            rctx.fillText('🚀', rocketX, fallY);
+        }
         return;
     }
+    
+    if (status === 'idle') {
+        // Показываем ракету в начальной позиции
+        rctx.font = '30px sans-serif';
+        rctx.textAlign = 'center';
+        rctx.fillText('🚀', rocketX, rocketY);
+        return;
+    }
+    
+    // Активный полёт (диагонально вверх)
     rctx.font = '30px sans-serif';
     rctx.textAlign = 'center';
     rctx.fillText('🚀', rocketX, rocketY);
+    // Множитель
     rctx.fillStyle = '#ffd700';
     rctx.font = '14px sans-serif';
-    rctx.fillText(multiplier.toFixed(2)+'x', rocketX, rocketY-20);
+    rctx.fillText(multiplier.toFixed(2)+'x', rocketX, rocketY-30);
 }
 
 document.getElementById('rocket-bet-range').addEventListener('input', function() {
@@ -1896,12 +1990,15 @@ document.getElementById('rocket-start-btn').addEventListener('click', async () =
         if (resp.ok) {
             rocketRoundId = data.round_id;
             rocketActive = true;
+            isCrashed = false;
+            falling = false;
             document.getElementById('rocket-start-btn').disabled = true;
             document.getElementById('rocket-cashout-btn').disabled = false;
             document.getElementById('rocket-result').textContent = '';
             document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
-            rocketX = 10;
-            rocketY = 150 + (Math.random()-0.5)*20;
+            // Начальные координаты (левый нижний)
+            rocketX = 30;
+            rocketY = 160;
             rocketTrail = [{x:rocketX, y:rocketY}];
             if (rocketInterval) clearInterval(rocketInterval);
             rocketInterval = setInterval(updateRocketStatus, 150);
@@ -1912,13 +2009,38 @@ document.getElementById('rocket-start-btn').addEventListener('click', async () =
 });
 
 function animateRocket() {
+    if (!rocketActive && !falling) return;
+    if (isCrashed && !falling) {
+        // Запускаем падение после взрыва
+        falling = true;
+        fallY = rocketY;
+        explosionX = rocketX;
+        explosionY = rocketY - 20;
+    }
+    if (falling) {
+        // Падение вниз
+        fallY += 3;
+        if (fallY > rocketCanvas.height + 50) {
+            falling = false;
+            isCrashed = false;
+            drawRocket(0, 'idle');
+            return;
+        }
+        drawRocket(0, 'crashed');
+        rocketAnimationFrame = requestAnimationFrame(animateRocket);
+        return;
+    }
     if (!rocketActive) return;
-    rocketX += rocketSpeed;
-    rocketY += Math.sin(rocketX*0.1)*0.5 + (Math.random()-0.5)*1.0;
+    // Движение по диагонали вверх (x увеличивается, y уменьшается)
+    rocketX += rocketSpeed * 0.8;
+    rocketY -= rocketSpeed * 0.6;
+    // Ограничение, чтобы не вылететь за пределы
+    if (rocketX > rocketCanvas.width - 20) rocketX = rocketCanvas.width - 20;
     if (rocketY < 20) rocketY = 20;
-    if (rocketY > 180) rocketY = 180;
     rocketTrail.push({x:rocketX, y:rocketY});
     if (rocketTrail.length > 100) rocketTrail.shift();
+    // Рисуем текущее состояние
+    drawRocket(parseFloat(document.getElementById('rocket-multiplier').textContent) || 0, 'active');
     rocketAnimationFrame = requestAnimationFrame(animateRocket);
 }
 
@@ -1935,9 +2057,10 @@ async function updateRocketStatus() {
                 document.getElementById('rocket-cashout-btn').disabled = true;
                 document.getElementById('rocket-start-btn').disabled = false;
                 rocketActive = false;
+                isCrashed = true;
                 if (rocketInterval) clearInterval(rocketInterval);
-                if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
-                drawRocket(display, 'crashed');
+                // Запускаем анимацию взрыва и падения
+                animateRocket();
                 document.getElementById('rocket-result').textContent = '😞 Ракета упала. Ставка проиграна.';
                 document.getElementById('rocket-result').style.color = '#f44336';
                 fetchUserData();
@@ -1952,6 +2075,7 @@ async function updateRocketStatus() {
                 fetchUserData();
                 startCountdown();
             } else {
+                // Обновляем множитель, движение уже в animateRocket
                 drawRocket(display, 'active');
             }
         } else console.error('Status error:', data);
