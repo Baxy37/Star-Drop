@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional, List, Dict
 
 # ==================== НАСТРОЙКИ ====================
-BOT_TOKEN = "8959429297:AAGQnMSXKTH2Q4V36T2nNpHsgdeyxIjNeCE"
+BOT_TOKEN = "8988678866:AAHIWxUB8zKBCoF21g7OVYEEWnwEF_MpLmI"
 
 PAYMENT_LINKS = {
     100: "https://yookassa.ru/my/i/amMy2QzHTXRI/l",
