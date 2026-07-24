@@ -499,7 +499,8 @@ STATIC_FILES = {
                 <div class="bet-control">
                     <label>Ставка: <span id="bet-display">20</span> токенов</label>
                     <input type="range" id="bet-range" min="20" max="100" step="10" value="20">
-                    <div id="slot-chance">Шанс выигрыша: <span id="chance-display">10%</span></div>
+                    <!-- Убираем шанс, добавляем информацию о множителе -->
+                    <div id="slot-multiplier">При выигрыше: <b>x2</b> от ставки</div>
                 </div>
                 <button id="spin-slot-btn">Дёрнуть рычаг 🎰</button>
             </div>
@@ -932,15 +933,14 @@ body.theme-hard {
     accent-color: var(--accent-color);
 }
 
-#slot-chance {
+#slot-multiplier {
     font-size: 14px;
     color: #aaa;
     margin-top: 4px;
 }
 
-#slot-chance span {
+#slot-multiplier b {
     color: var(--accent-color);
-    font-weight: bold;
 }
 
 #spin-slot-btn {
@@ -1396,27 +1396,18 @@ const reels = [
     document.getElementById('reel3')
 ];
 
-// Функция для вычисления шанса выигрыша на клиенте (для отображения)
-function getSlotChance(bet) {
-    if (bet == 20) return 10;
-    else if (bet >= 40 && bet <= 70) return 30;
-    else if (bet >= 71 && bet <= 100) return 15;
-    else return 10;
-}
+// Убираем отображение шанса, оставляем только множитель
+// В HTML уже заменили на #slot-multiplier, ничего не делаем
 
 document.getElementById('bet-range').addEventListener('input', function() {
     const bet = parseInt(this.value);
     document.getElementById('bet-display').textContent = bet;
-    const chance = getSlotChance(bet);
-    document.getElementById('chance-display').textContent = chance + '%';
 });
 
-// Инициализация отображения шанса при загрузке
+// Инициализация отображения ставки при загрузке
 document.addEventListener('DOMContentLoaded', function() {
     const initialBet = parseInt(document.getElementById('bet-range').value);
     document.getElementById('bet-display').textContent = initialBet;
-    const chance = getSlotChance(initialBet);
-    document.getElementById('chance-display').textContent = chance + '%';
 });
 
 document.getElementById('spin-slot-btn').addEventListener('click', async () => {
@@ -1528,7 +1519,7 @@ async function fetchFeed() {
 fetchFeed();
 setInterval(fetchFeed, 5000);
 
-// === Вывод (минимальная сумма изменена на 500) ===
+// === Вывод (минимальная сумма 500) ===
 document.getElementById('withdraw-btn').addEventListener('click', async () => {
     const amount = prompt('Введите сумму вывода (минимум 500 токенов):');
     if (!amount || isNaN(amount) || amount < 500) {
@@ -1669,7 +1660,6 @@ async def api_slot_spin(data: SlotSpinRequest):
     win, symbols, win_amount = get_slot_result(bet)
     if win:
         update_balance(user_id, win_amount, f"Выигрыш в игровом автомате {win_amount} токенов")
-        # Добавляем выигрыш в ленту (как win)
         add_win(user_id, f"🎰 {symbols[0]}{symbols[1]}{symbols[2]}", win_amount, "slot")
     new_balance = get_user(user_id)["balance"]
     return {
@@ -1688,7 +1678,7 @@ async def api_withdraw(data: WithdrawRequest):
         raise HTTPException(status_code=404, detail="User not found")
     if user["balance"] < amount:
         raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    if amount < 500:  # Изменено с 100 на 500
+    if amount < 500:
         raise HTTPException(status_code=400, detail="Минимальная сумма вывода – 500 токенов")
     create_withdraw_request(user_id, amount)
     return {"status": "success", "message": "Заявка на вывод отправлена администратору"}
