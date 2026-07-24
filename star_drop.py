@@ -34,6 +34,7 @@ SPIN_COSTS = {
 # ========= ЧЕРЕДУЮЩИЕСЯ ПРИЗЫ (выигрыш, проигрыш, ...) =========
 PRIZES = {
     "light": [
+        {"name": "❌", "value": 0},
         {"name": "🎁 10", "value": 10},
         {"name": "❌", "value": 0},
         {"name": "🎁 15", "value": 15},
@@ -45,9 +46,9 @@ PRIZES = {
         {"name": "🎁 30", "value": 30},
         {"name": "❌", "value": 0},
         {"name": "🎁 40", "value": 40},
-        {"name": "❌", "value": 0},
     ],
     "normal": [
+        {"name": "❌", "value": 0},
         {"name": "🎁 50", "value": 50},
         {"name": "❌", "value": 0},
         {"name": "🎁 70", "value": 70},
@@ -59,9 +60,9 @@ PRIZES = {
         {"name": "🎁 150", "value": 150},
         {"name": "❌", "value": 0},
         {"name": "🎁 200", "value": 200},
-        {"name": "❌", "value": 0},
     ],
     "hard": [
+        {"name": "❌", "value": 0},
         {"name": "🎁 300", "value": 300},
         {"name": "❌", "value": 0},
         {"name": "🎁 400", "value": 400},
@@ -73,7 +74,6 @@ PRIZES = {
         {"name": "🎁 800", "value": 800},
         {"name": "❌", "value": 0},
         {"name": "🎁 1000", "value": 1000},
-        {"name": "❌", "value": 0},
     ]
 }
 
@@ -95,10 +95,12 @@ REFERRAL_BONUS = 50
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
+    # Добавляем поле phone
     cur.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
             username TEXT,
+            phone TEXT UNIQUE,
             balance INTEGER DEFAULT 0,
             total_spent INTEGER DEFAULT 0,
             total_won INTEGER DEFAULT 0,
@@ -159,6 +161,11 @@ def init_db():
             UNIQUE(user_id, code)
         )
     ''')
+    # Добавляем поле phone, если его нет (для существующих таблиц)
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN phone TEXT UNIQUE")
+    except sqlite3.OperationalError:
+        pass  # поле уже существует
     conn.commit()
     conn.close()
 
@@ -171,14 +178,19 @@ def get_user(user_id: int) -> Optional[Dict]:
     conn.close()
     return dict(row) if row else None
 
-def create_user(user_id: int, username: str = None, referrer_code: str = None):
+def create_user(user_id: int, username: str = None, phone: str = None, referrer_code: str = None):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     code = hashlib.md5(str(user_id).encode()).hexdigest()[:8]
     cur.execute(
-        "INSERT OR IGNORE INTO users (user_id, username, referral_code) VALUES (?, ?, ?)",
-        (user_id, username, code)
+        "INSERT OR IGNORE INTO users (user_id, username, phone, referral_code) VALUES (?, ?, ?, ?)",
+        (user_id, username, phone, code)
     )
+    if phone:
+        cur.execute("UPDATE users SET phone = ? WHERE user_id = ?", (phone, user_id))
+    if username:
+        cur.execute("UPDATE users SET username = ? WHERE user_id = ?", (username, user_id))
+    
     if referrer_code:
         cur.execute("SELECT user_id FROM users WHERE referral_code = ?", (referrer_code,))
         row = cur.fetchone()
@@ -196,8 +208,6 @@ def create_user(user_id: int, username: str = None, referrer_code: str = None):
                         "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
                         (referrer_id, "deposit", REFERRAL_BONUS, f"Бонус за приглашение пользователя {user_id}")
                     )
-    if username:
-        cur.execute("UPDATE users SET username = ? WHERE user_id = ?", (username, user_id))
     conn.commit()
     conn.close()
 
@@ -380,14 +390,25 @@ def get_slot_result(bet: int):
 
 # ==================== ТЕЛЕГРАМ БОТ ====================
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+from aiogram.filters import Command, StateFilter
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, ReplyKeyboardRemove
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
 
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+# Клавиатура для запроса контакта
+def get_phone_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📱 Поделиться номером", request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
+# Клавиатура для открытия приложения
 def get_start_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="🎰 Открыть рулетку", web_app=WebAppInfo(url=WEBAPP_URL))]],
@@ -400,13 +421,55 @@ async def cmd_start(message: types.Message):
     referrer_code = None
     if len(args) > 1 and args[1].startswith("ref_"):
         referrer_code = args[1][4:]
+    
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
-    create_user(user_id, username, referrer_code)
+    
+    # Проверяем, есть ли пользователь с таким ID
+    user = get_user(user_id)
+    if user and user.get("phone"):
+        # Уже зарегистрирован (есть номер) – сразу даём доступ
+        await message.answer(
+            f"🎉 С возвращением, {username}!\n"
+            "Добро пожаловать в **Star Drop** – розыгрыш подарков Telegram!\n\n"
+            "Нажми кнопку ниже, чтобы открыть наше мини-приложение и испытать удачу! 🍀",
+            reply_markup=get_start_keyboard()
+        )
+    else:
+        # Нет номера – запрашиваем
+        if not user:
+            # Создаём запись без телефона
+            create_user(user_id, username, referrer_code=referrer_code)
+        await message.answer(
+            f"👋 Привет, {username}!\n\n"
+            "Для доступа к нашему сервису необходимо поделиться номером телефона.\n"
+            "Нажмите кнопку ниже, чтобы отправить контакт.",
+            reply_markup=get_phone_keyboard()
+        )
+
+# Обработчик контакта
+@dp.message(F.contact)
+async def handle_contact(message: types.Message):
+    contact = message.contact
+    user_id = message.from_user.id
+    username = message.from_user.username or message.from_user.first_name
+    
+    if contact.user_id != user_id:
+        await message.answer("⛔ Пожалуйста, отправьте свой собственный номер.", reply_markup=get_phone_keyboard())
+        return
+    
+    phone = contact.phone_number
+    # Сохраняем номер в базу
+    create_user(user_id, username, phone)
+    
     await message.answer(
-        f"🎉 Приветствую тебя, {username}!\n"
-        "Добро пожаловать в **Star Drop** – розыгрыш подарков Telegram!\n\n"
-        "Нажми кнопку ниже, чтобы открыть наше мини-приложение и испытать удачу! 🍀",
+        "✅ Регистрация успешно завершена!\n\n"
+        "Теперь вы можете пользоваться нашим сервисом. 🎉",
+        reply_markup=ReplyKeyboardRemove()
+    )
+    # Отправляем кнопку для открытия приложения
+    await message.answer(
+        "Нажмите кнопку ниже, чтобы открыть **Star Drop** и начать игру!",
         reply_markup=get_start_keyboard()
     )
 
@@ -443,7 +506,7 @@ async def give_tokens(message: types.Message):
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 import uvicorn
 import aiofiles
@@ -467,23 +530,19 @@ os.makedirs(AVATARS_DIR, exist_ok=True)
 # ==================== ЭНДПОИНТ ДЛЯ АВАТАРКИ ====================
 @app.get("/api/avatar/{user_id}")
 async def get_avatar(user_id: int):
-    """Возвращает URL аватарки пользователя, сохраняя её на сервере."""
     avatar_path = os.path.join(AVATARS_DIR, f"{user_id}.jpg")
     if os.path.exists(avatar_path):
         return {"url": f"/static/avatars/{user_id}.jpg"}
     
     try:
-        # Получаем фото профиля через бота
         photos = await bot.get_user_profile_photos(user_id, limit=1)
         if photos.total_count == 0:
-            # Нет фото – возвращаем заглушку
             return {"url": "/static/default_avatar.png"}
         
         file_id = photos.photos[0][-1].file_id
         file = await bot.get_file(file_id)
         file_path = file.file_path
         
-        # Скачиваем файл
         async with aiohttp.ClientSession() as session:
             url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
             async with session.get(url) as resp:
@@ -498,6 +557,7 @@ async def get_avatar(user_id: int):
         return {"url": "/static/default_avatar.png"}
 
 # ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
+# Теперь index.html, style.css и script.js обновлены с новым дизайном колеса
 STATIC_FILES = {
     "index.html": """<!DOCTYPE html>
 <html lang="ru">
@@ -505,7 +565,7 @@ STATIC_FILES = {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=3">
+    <link rel="stylesheet" href="/static/style.css?v=4">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -565,7 +625,7 @@ STATIC_FILES = {
             </div>
         </div>
 
-        <!-- РУЛЕТКА -->
+        <!-- РУЛЕТКА (НОВЫЙ ДИЗАЙН) -->
         <div id="roulette-page">
             <div id="main-title">
                 <h1>РУЛЕТКА STAR DROP</h1>
@@ -584,10 +644,29 @@ STATIC_FILES = {
                 <button class="mode-btn" data-mode="normal">Normal</button>
                 <button class="mode-btn" data-mode="hard">Hard</button>
             </div>
+
+            <!-- Колесо -->
             <div id="wheel-container">
                 <div id="wheel-pointer">▼</div>
-                <canvas id="wheelCanvas" width="300" height="300"></canvas>
+                <div class="wheel" id="wheel">
+                    <!-- Сектора генерируются через JS, но мы можем оставить статичную разметку и обновлять числа -->
+                    <!-- Для удобства используем классы .sector и data-атрибуты -->
+                    <div class="sector s1" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
+                    <div class="sector s2" data-win-index="0"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">10</span></div></div>
+                    <div class="sector s3" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
+                    <div class="sector s4" data-win-index="1"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">15</span></div></div>
+                    <div class="sector s5" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
+                    <div class="sector s6" data-win-index="2"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">20</span></div></div>
+                    <div class="sector s7" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
+                    <div class="sector s8" data-win-index="3"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">25</span></div></div>
+                    <div class="sector s9" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
+                    <div class="sector s10" data-win-index="4"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">30</span></div></div>
+                    <div class="sector s11" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
+                    <div class="sector s12" data-win-index="5"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">40</span></div></div>
+                    <div class="wheel-center"></div>
+                </div>
             </div>
+
             <div id="spin-area">
                 <div id="spin-info">1 спин = <span id="spin-cost">25</span> монет</div>
                 <button id="spin-btn">КРУТИТЬ <span id="spin-cost-label">25 Токенов</span></button>
@@ -666,7 +745,7 @@ STATIC_FILES = {
         </div>
     </div>
 
-    <script src="/static/script.js?v=3"></script>
+    <script src="/static/script.js?v=4"></script>
 </body>
 </html>""",
     "style.css": """* {
@@ -683,6 +762,11 @@ STATIC_FILES = {
     --text-light: #fff;
     --card-bg: #111;
     --border-color: #333;
+    --wheel-size: 280px; /* Размер колеса */
+    --gold-color: #e6c65c;
+    --red-sector: #ab2b44;
+    --green-sector: #2b805e;
+    --metal-rim: linear-gradient(145deg, #4a4f64, #1a1d2a, #4a4f64);
 }
 
 body {
@@ -968,35 +1052,127 @@ body.theme-hard {
     box-shadow: 0 0 15px var(--accent-glow);
 }
 
+/* ============ НОВЫЙ ДИЗАЙН КОЛЕСА ============ */
 #wheel-container {
     position: relative;
-    width: 280px;
-    height: 280px;
+    width: var(--wheel-size);
+    height: var(--wheel-size);
     margin: 15px auto;
     z-index: 2;
 }
 
 #wheel-pointer {
     position: absolute;
-    top: -12px;
+    top: -20px; /* Немного выше обода */
     left: 50%;
     transform: translateX(-50%);
-    font-size: 24px;
-    color: var(--accent-color);
-    z-index: 5;
-    text-shadow: 0 0 8px var(--accent-glow);
-    transition: color 0.3s, text-shadow 0.3s;
+    width: 0;
+    height: 0;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    border-top: 40px solid var(--gold-color);
+    z-index: 10;
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5));
 }
 
-#wheelCanvas {
+.wheel {
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    box-shadow: 0 0 30px var(--accent-glow);
-    border: 4px solid var(--accent-color);
-    transition: transform 3s cubic-bezier(0.15, 0.7, 0.1, 1),
-                box-shadow 0.3s,
-                border-color 0.3s;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 
+        0 0 0 15px var(--metal-rim),
+        0 0 30px 20px rgba(0, 0, 0, 0.3);
+    background: #000;
+    transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.wheel.spinning {
+    animation: none; /* Управляем через JS transform */
+}
+
+/* Базовый стиль для секторов */
+.sector {
+    position: absolute;
+    width: 50%;
+    height: 50%;
+    transform-origin: 100% 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    box-sizing: border-box;
+    padding-top: 10%;
+    backface-visibility: hidden;
+}
+
+/* Стилизация секторов (чередование цветов) */
+.sector:nth-child(odd) { background-color: var(--red-sector); }
+.sector:nth-child(even) { background-color: var(--green-sector); }
+
+/* Позиционирование 12 секторов (360deg / 12 = 30deg каждый) */
+.s1 { transform: rotate(0deg) skewY(-60deg); }
+.s2 { transform: rotate(30deg) skewY(-60deg); }
+.s3 { transform: rotate(60deg) skewY(-60deg); }
+.s4 { transform: rotate(90deg) skewY(-60deg); }
+.s5 { transform: rotate(120deg) skewY(-60deg); }
+.s6 { transform: rotate(150deg) skewY(-60deg); }
+.s7 { transform: rotate(180deg) skewY(-60deg); }
+.s8 { transform: rotate(210deg) skewY(-60deg); }
+.s9 { transform: rotate(240deg) skewY(-60deg); }
+.s10 { transform: rotate(270deg) skewY(-60deg); }
+.s11 { transform: rotate(300deg) skewY(-60deg); }
+.s12 { transform: rotate(330deg) skewY(-60deg); }
+
+/* Компенсация skewY для контента внутри сектора */
+.sector-content {
+    transform: skewY(60deg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    position: absolute;
+    top: 30px; /* Регулировка положения контента внутри сектора */
+}
+
+/* Иконки */
+.icon {
+    font-size: 28px;
+    margin-bottom: 4px;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+}
+.icon-cross {
+    color: #ff4d4d;
+    font-weight: bold;
+}
+.icon-gift {
+    color: #fff;
+    font-size: 24px;
+}
+
+/* Числа */
+.number {
+    font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+    font-weight: bold;
+    font-size: 22px;
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
+/* Центральная часть */
+.wheel-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20%;
+    height: 20%;
+    background: radial-gradient(circle, #1a1d2a 40%, #000 70%);
+    border-radius: 50%;
+    border: 4px solid var(--gold-color);
+    z-index: 5;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
 }
 
 #spin-area {
@@ -1424,7 +1600,6 @@ let balance = 0;
 let currentMode = 'light';
 let isSpinning = false;
 let currentRotation = 0;
-let slowRotation = 0;
 
 // === Получение данных пользователя из Telegram ===
 function showAuthError(message) {
@@ -1447,9 +1622,7 @@ if (window.Telegram && window.Telegram.WebApp) {
         localStorage.setItem('starDrop_userId', user_id);
         const username = tgUser.username || tgUser.first_name || 'User';
         document.getElementById('username').textContent = '@' + username;
-        // Загружаем аватарку
         loadAvatar(user_id);
-        // Устанавливаем инициалы как запасной вариант
         const placeholder = document.getElementById('avatar-placeholder');
         const name = tgUser.first_name || 'U';
         placeholder.textContent = name.charAt(0).toUpperCase();
@@ -1483,7 +1656,6 @@ async function loadAvatar(userId) {
     }
 }
 
-// Загружаем данные пользователя
 fetchUserData().then(() => {
     initGames();
 }).catch(() => {
@@ -1604,9 +1776,8 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
 // === Инициализация игр ===
 function initGames() {
     applyTheme('light');
-    drawWheel();
+    updateWheel(currentMode);
     updateSpinCost();
-    startSlowSpin();
     const initialBet = parseInt(document.getElementById('bet-range').value);
     document.getElementById('bet-display').textContent = initialBet;
     drawRocket(0, 'idle');
@@ -1671,23 +1842,7 @@ function addFakeWin(amount) {
     if (list.children.length > 10) list.removeChild(list.lastChild);
 }
 
-// === Медленное вращение рулетки ===
-function startSlowSpin() {
-    if (isSpinning) return;
-    let lastTime = 0;
-    function spinStep(time) {
-        if (isSpinning) return;
-        if (!lastTime) lastTime = time;
-        const delta = (time - lastTime) / 1000;
-        lastTime = time;
-        slowRotation += delta * 10;
-        canvas.style.transform = `rotate(${slowRotation}deg)`;
-        requestAnimationFrame(spinStep);
-    }
-    requestAnimationFrame(spinStep);
-}
-
-// === РУЛЕТКА ===
+// ===== НОВАЯ ЛОГИКА РУЛЕТКИ =====
 function applyTheme(mode) {
     document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
     if (mode === 'light') document.body.classList.add('theme-light');
@@ -1703,7 +1858,10 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
         currentMode = btn.dataset.mode;
         updateSpinCost();
         applyTheme(currentMode);
-        drawWheel();
+        updateWheel(currentMode);
+        // Сброс поворота, чтобы колесо смотрело на 0
+        document.getElementById('wheel').style.transform = 'rotate(0deg)';
+        currentRotation = 0;
     });
 });
 
@@ -1714,13 +1872,28 @@ function updateSpinCost() {
     document.getElementById('spin-cost-label').textContent = cost + ' Токенов';
 }
 
-const canvas = document.getElementById('wheelCanvas');
-const ctx = canvas.getContext('2d');
+// Обновление чисел в секторах при смене режима
+function updateWheel(mode) {
+    const prizes = getPrizesForMode(mode);
+    // Зеленые сектора имеют data-win-index от 0 до 5
+    const winSectors = document.querySelectorAll('.sector[data-win-index]');
+    winSectors.forEach(sector => {
+        const idx = parseInt(sector.dataset.winIndex);
+        if (idx >= 0 && idx < prizes.length) {
+            const numberSpan = sector.querySelector('.number');
+            if (numberSpan) {
+                // Берём значение из prizes (только зелёные)
+                const winPrizes = prizes.filter(p => p.value > 0);
+                numberSpan.textContent = winPrizes[idx].value;
+            }
+        }
+    });
+}
 
-// ========= ЧЕРЕДУЮЩИЕСЯ ПРИЗЫ =========
 function getPrizesForMode(mode) {
     const allPrizes = {
         light: [
+            { name: '❌', value: 0 },
             { name: '🎁 10', value: 10 },
             { name: '❌', value: 0 },
             { name: '🎁 15', value: 15 },
@@ -1731,10 +1904,10 @@ function getPrizesForMode(mode) {
             { name: '❌', value: 0 },
             { name: '🎁 30', value: 30 },
             { name: '❌', value: 0 },
-            { name: '🎁 40', value: 40 },
-            { name: '❌', value: 0 }
+            { name: '🎁 40', value: 40 }
         ],
         normal: [
+            { name: '❌', value: 0 },
             { name: '🎁 50', value: 50 },
             { name: '❌', value: 0 },
             { name: '🎁 70', value: 70 },
@@ -1745,10 +1918,10 @@ function getPrizesForMode(mode) {
             { name: '❌', value: 0 },
             { name: '🎁 150', value: 150 },
             { name: '❌', value: 0 },
-            { name: '🎁 200', value: 200 },
-            { name: '❌', value: 0 }
+            { name: '🎁 200', value: 200 }
         ],
         hard: [
+            { name: '❌', value: 0 },
             { name: '🎁 300', value: 300 },
             { name: '❌', value: 0 },
             { name: '🎁 400', value: 400 },
@@ -1759,56 +1932,21 @@ function getPrizesForMode(mode) {
             { name: '❌', value: 0 },
             { name: '🎁 800', value: 800 },
             { name: '❌', value: 0 },
-            { name: '🎁 1000', value: 1000 },
-            { name: '❌', value: 0 }
+            { name: '🎁 1000', value: 1000 }
         ]
     };
     return allPrizes[mode] || allPrizes.light;
 }
 
-function drawWheel() {
-    const width = canvas.width, height = canvas.height;
-    const centerX = width/2, centerY = height/2;
-    const radius = Math.min(width,height)/2 - 4;
-    ctx.clearRect(0,0,width,height);
-    const modePrizes = getPrizesForMode(currentMode);
-    const count = modePrizes.length, angleStep = (2*Math.PI)/count;
-    for (let i=0; i<count; i++) {
-        const startAngle = i*angleStep, endAngle = startAngle + angleStep;
-        ctx.beginPath();
-        ctx.moveTo(centerX,centerY);
-        ctx.arc(centerX,centerY,radius,startAngle,endAngle);
-        ctx.closePath();
-        ctx.fillStyle = modePrizes[i].value > 0 ? '#2e7d32' : '#c62828';
-        ctx.fill();
-        ctx.strokeStyle = '#0a0a0a';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.save();
-        ctx.translate(centerX,centerY);
-        ctx.rotate(startAngle + angleStep/2);
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = 'bold 20px sans-serif';
-        ctx.fillStyle = '#fff';
-        ctx.fillText(modePrizes[i].name, radius*0.65, 0);
-        ctx.restore();
-    }
-    ctx.beginPath();
-    ctx.arc(centerX,centerY,22,0,2*Math.PI);
-    ctx.fillStyle = '#111';
-    ctx.fill();
-    ctx.strokeStyle = currentMode==='light' ? '#ffd700' : (currentMode==='normal' ? '#2196F3' : '#f44336');
-    ctx.lineWidth = 3;
-    ctx.stroke();
-}
-
+// === Обработчик нажатия кнопки "КРУТИТЬ" ===
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (!user_id || isSpinning) return;
     isSpinning = true;
-    document.getElementById('spin-btn').disabled = true;
-    document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>Загрузка...</span>';
+    const btn = document.getElementById('spin-btn');
+    btn.disabled = true;
+    btn.innerHTML = 'КРУТИТЬ <span>Загрузка...</span>';
     document.getElementById('result-message').textContent = '';
+    
     try {
         const resp = await fetch('/api/spin', {
             method: 'POST',
@@ -1818,37 +1956,38 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         const data = await resp.json();
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
-            const extraSpins = 5 + Math.floor(Math.random()*3);
-            const randomAngle = Math.random()*360;
-            currentRotation += (extraSpins*360) + randomAngle;
-            canvas.style.transition = 'transform 2s cubic-bezier(0.2, 0.8, 0.2, 1)';
-            canvas.style.transform = `rotate(${currentRotation}deg)`;
+            // Запускаем анимацию вращения
+            const extraSpins = 5 + Math.floor(Math.random() * 3);
+            const randomAngle = Math.random() * 360;
+            const targetRotation = currentRotation + extraSpins * 360 + randomAngle;
+            currentRotation = targetRotation;
+            const wheel = document.getElementById('wheel');
+            wheel.style.transform = `rotate(${targetRotation}deg)`;
+            
+            // После окончания анимации (4с) показываем результат
             setTimeout(() => {
                 document.getElementById('result-message').textContent = data.message;
                 document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
                 if (data.win) fetchFeed();
                 isSpinning = false;
-                document.getElementById('spin-btn').disabled = false;
+                btn.disabled = false;
                 const cost = { light:25, normal:50, hard:100 }[currentMode];
-                document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
-                canvas.style.transition = 'none';
-                slowRotation = currentRotation;
-                startSlowSpin();
-            }, 2200);
+                btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
+            }, 4000); // синхронизировано с transition-duration
         } else {
             document.getElementById('result-message').textContent = '❌ ' + data.detail;
             isSpinning = false;
-            document.getElementById('spin-btn').disabled = false;
+            btn.disabled = false;
             const cost = { light:25, normal:50, hard:100 }[currentMode];
-            document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
+            btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
         }
     } catch (e) {
         document.getElementById('result-message').textContent = 'Ошибка соединения';
         console.error(e);
         isSpinning = false;
-        document.getElementById('spin-btn').disabled = false;
+        btn.disabled = false;
         const cost = { light:25, normal:50, hard:100 }[currentMode];
-        document.getElementById('spin-btn').innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
+        btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
     }
 });
 
@@ -1912,12 +2051,12 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
-// === РАКЕТКА (ОБНОВЛЁННАЯ ТРАЕКТОРИЯ И АНИМАЦИЯ) ===
+// === РАКЕТКА ===
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
 const rctx = rocketCanvas.getContext('2d');
-let rocketX = 30, rocketY = 160; // стартовая позиция (левый нижний)
+let rocketX = 30, rocketY = 160;
 let rocketSpeed = 2.5;
 let rocketTrail = [];
 let isCrashed = false;
@@ -1927,8 +2066,6 @@ let explosionX = 0, explosionY = 0;
 
 function drawRocket(multiplier, status) {
     rctx.clearRect(0,0,rocketCanvas.width,rocketCanvas.height);
-    
-    // Отрисовка следа
     if (rocketTrail.length > 1 && status !== 'crashed' && status !== 'idle') {
         rctx.beginPath();
         rctx.moveTo(rocketTrail[0].x, rocketTrail[0].y);
@@ -1939,33 +2076,25 @@ function drawRocket(multiplier, status) {
         rctx.lineWidth = 2;
         rctx.stroke();
     }
-    
     if (status === 'crashed') {
-        // Взрыв
         rctx.font = '50px sans-serif';
         rctx.textAlign = 'center';
         rctx.fillText('💥', explosionX, explosionY);
-        // Ракета падает вниз
         if (falling) {
             rctx.font = '30px sans-serif';
             rctx.fillText('🚀', rocketX, fallY);
         }
         return;
     }
-    
     if (status === 'idle') {
-        // Показываем ракету в начальной позиции
         rctx.font = '30px sans-serif';
         rctx.textAlign = 'center';
         rctx.fillText('🚀', rocketX, rocketY);
         return;
     }
-    
-    // Активный полёт (диагонально вверх)
     rctx.font = '30px sans-serif';
     rctx.textAlign = 'center';
     rctx.fillText('🚀', rocketX, rocketY);
-    // Множитель
     rctx.fillStyle = '#ffd700';
     rctx.font = '14px sans-serif';
     rctx.fillText(multiplier.toFixed(2)+'x', rocketX, rocketY-30);
@@ -1996,7 +2125,6 @@ document.getElementById('rocket-start-btn').addEventListener('click', async () =
             document.getElementById('rocket-cashout-btn').disabled = false;
             document.getElementById('rocket-result').textContent = '';
             document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
-            // Начальные координаты (левый нижний)
             rocketX = 30;
             rocketY = 160;
             rocketTrail = [{x:rocketX, y:rocketY}];
@@ -2011,14 +2139,12 @@ document.getElementById('rocket-start-btn').addEventListener('click', async () =
 function animateRocket() {
     if (!rocketActive && !falling) return;
     if (isCrashed && !falling) {
-        // Запускаем падение после взрыва
         falling = true;
         fallY = rocketY;
         explosionX = rocketX;
         explosionY = rocketY - 20;
     }
     if (falling) {
-        // Падение вниз
         fallY += 3;
         if (fallY > rocketCanvas.height + 50) {
             falling = false;
@@ -2031,15 +2157,12 @@ function animateRocket() {
         return;
     }
     if (!rocketActive) return;
-    // Движение по диагонали вверх (x увеличивается, y уменьшается)
     rocketX += rocketSpeed * 0.8;
     rocketY -= rocketSpeed * 0.6;
-    // Ограничение, чтобы не вылететь за пределы
     if (rocketX > rocketCanvas.width - 20) rocketX = rocketCanvas.width - 20;
     if (rocketY < 20) rocketY = 20;
     rocketTrail.push({x:rocketX, y:rocketY});
     if (rocketTrail.length > 100) rocketTrail.shift();
-    // Рисуем текущее состояние
     drawRocket(parseFloat(document.getElementById('rocket-multiplier').textContent) || 0, 'active');
     rocketAnimationFrame = requestAnimationFrame(animateRocket);
 }
@@ -2059,7 +2182,6 @@ async function updateRocketStatus() {
                 rocketActive = false;
                 isCrashed = true;
                 if (rocketInterval) clearInterval(rocketInterval);
-                // Запускаем анимацию взрыва и падения
                 animateRocket();
                 document.getElementById('rocket-result').textContent = '😞 Ракета упала. Ставка проиграна.';
                 document.getElementById('rocket-result').style.color = '#f44336';
@@ -2075,7 +2197,6 @@ async function updateRocketStatus() {
                 fetchUserData();
                 startCountdown();
             } else {
-                // Обновляем множитель, движение уже в animateRocket
                 drawRocket(display, 'active');
             }
         } else console.error('Status error:', data);
