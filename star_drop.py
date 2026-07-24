@@ -31,42 +31,51 @@ SPIN_COSTS = {
     "hard": 100
 }
 
+# ========= ОБНОВЛЁННЫЕ ПРИЗЫ (6 красных, 6 зелёных) =========
 PRIZES = {
     "light": [
-        {"name": "🧸 Мишка", "value": 15},
-        {"name": "🍬 Конфета", "value": 20},
-        {"name": "⭐ Звезда", "value": 25},
-        {"name": "🌹 Роза", "value": 40},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "🧸 Мишка", "value": 10},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "⭐ Звезда", "value": 20},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "🎁 10", "value": 10},
+        {"name": "🎁 15", "value": 15},
+        {"name": "🎁 20", "value": 20},
+        {"name": "🎁 25", "value": 25},
+        {"name": "🎁 30", "value": 30},
+        {"name": "🎁 40", "value": 40},
     ],
     "normal": [
-        {"name": "💍 Кольцо", "value": 120},
-        {"name": "💎 Бриллиант", "value": 200},
-        {"name": "🧁 Торт", "value": 150},
-        {"name": "🏆 Кубок", "value": 250},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "💍 Кольцо", "value": 100},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "💎 Бриллиант", "value": 180},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "🎁 50", "value": 50},
+        {"name": "🎁 70", "value": 70},
+        {"name": "🎁 100", "value": 100},
+        {"name": "🎁 120", "value": 120},
+        {"name": "🎁 150", "value": 150},
+        {"name": "🎁 200", "value": 200},
     ],
     "hard": [
-        {"name": "👑 Корона", "value": 600},
-        {"name": "🧢 Кепка Дурова", "value": 800},
-        {"name": "🚀 Ракета", "value": 700},
-        {"name": "🛸 НЛО", "value": 1000},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "👑 Корона", "value": 500},
-        {"name": "💨 Пусто", "value": 0},
-        {"name": "🚀 Ракета", "value": 650},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "❌", "value": 0},
+        {"name": "🎁 300", "value": 300},
+        {"name": "🎁 400", "value": 400},
+        {"name": "🎁 500", "value": 500},
+        {"name": "🎁 600", "value": 600},
+        {"name": "🎁 800", "value": 800},
+        {"name": "🎁 1000", "value": 1000},
     ]
 }
-
-DB_NAME = "star_drop.db"
-WEBAPP_URL = "https://star-drop.onrender.com"
-REFERRAL_BONUS = 50
 
 SLOT_SYMBOLS = ['🍒', '🍋', '🍊', '🍇', '🍉', '🍓', '🍑', '🎰']
 SLOT_WIN_MULTIPLIER = 2
@@ -78,6 +87,9 @@ PROMOCODES = {
 
 rocket_rounds = {}
 round_counter = 0
+DB_NAME = "star_drop.db"
+WEBAPP_URL = "https://star-drop.onrender.com"
+REFERRAL_BONUS = 50
 
 # ==================== БАЗА ДАННЫХ ====================
 def init_db():
@@ -184,7 +196,6 @@ def create_user(user_id: int, username: str = None, referrer_code: str = None):
                         "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
                         (referrer_id, "deposit", REFERRAL_BONUS, f"Бонус за приглашение пользователя {user_id}")
                     )
-    # Обновляем username, если он изменился
     if username:
         cur.execute("UPDATE users SET username = ? WHERE user_id = ?", (username, user_id))
     conn.commit()
@@ -1362,44 +1373,46 @@ let isSpinning = false;
 let currentRotation = 0;
 let slowRotation = 0;
 
-// === Получение данных пользователя из Telegram ===
+// === Получение данных пользователя из Telegram (только реальный аккаунт) ===
+function showAuthError(message) {
+    document.body.innerHTML = `
+        <div style="display:flex; justify-content:center; align-items:center; height:100vh; flex-direction:column; background:#0a0a0a; color:#fff; text-align:center; padding:20px;">
+            <h1 style="color:var(--accent-color);">⛔ Ошибка авторизации</h1>
+            <p style="color:#ccc; margin:20px 0;">${message}</p>
+            <p style="color:#888; font-size:14px;">Пожалуйста, откройте это приложение через бота Telegram.</p>
+            <button onclick="window.location.href='https://t.me/StarDrop11_bot'" style="background:var(--accent-color); border:none; padding:12px 30px; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:10px;">Открыть бота</button>
+        </div>
+    `;
+    throw new Error('Auth error');
+}
+
 if (window.Telegram && window.Telegram.WebApp) {
     window.Telegram.WebApp.ready();
     const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
     if (tgUser && tgUser.id) {
         user_id = tgUser.id;
         localStorage.setItem('starDrop_userId', user_id);
-        document.getElementById('username').textContent = '@' + (tgUser.username || tgUser.first_name);
+        const username = tgUser.username || tgUser.first_name || 'User';
+        document.getElementById('username').textContent = '@' + username;
         const avatar = document.getElementById('avatar');
         const name = tgUser.first_name || 'U';
         avatar.textContent = name.charAt(0).toUpperCase();
         avatar.style.background = '#' + (user_id % 0xFFFFFF).toString(16).padStart(6, '0');
     } else {
-        // Если Telegram не передал пользователя, используем сохранённый или гостевой
-        const savedId = localStorage.getItem('starDrop_userId');
-        if (savedId) {
-            user_id = parseInt(savedId);
-            document.getElementById('username').textContent = '@user_' + user_id;
-        } else {
-            // Генерируем временный ID для гостя
-            user_id = Math.floor(Math.random() * 1000000000) + 1000000000;
-            localStorage.setItem('starDrop_userId', user_id);
-            document.getElementById('username').textContent = '@guest_' + user_id;
-        }
-        document.getElementById('avatar').textContent = 'G';
+        // Если Telegram WebApp есть, но пользователь не получен (редкий случай)
+        showAuthError('Не удалось получить данные пользователя из Telegram.');
     }
 } else {
-    // Если WebApp не доступен (тестовый режим)
+    // Если приложение открыто не в Telegram (например, в браузере)
+    // Пытаемся использовать сохранённый ID, если он есть (гостевой режим)
     const savedId = localStorage.getItem('starDrop_userId');
     if (savedId) {
         user_id = parseInt(savedId);
         document.getElementById('username').textContent = '@user_' + user_id;
         document.getElementById('avatar').textContent = 'U';
+        console.warn('Гостевой режим: используем сохранённый ID');
     } else {
-        user_id = Math.floor(Math.random() * 1000000000) + 1000000000;
-        localStorage.setItem('starDrop_userId', user_id);
-        document.getElementById('username').textContent = '@guest_' + user_id;
-        document.getElementById('avatar').textContent = 'G';
+        showAuthError('Это приложение работает только в Telegram. Пожалуйста, откройте его через бота.');
     }
 }
 
@@ -1531,7 +1544,6 @@ function initGames() {
     document.getElementById('bet-display').textContent = initialBet;
     drawRocket(0, 'idle');
     document.getElementById('rocket-countdown').textContent = '0';
-    // Запускаем автоматические раунды ракетки
     startAutoRocket();
 }
 
@@ -1540,20 +1552,16 @@ let autoRocketTimer = null;
 function startAutoRocket() {
     if (autoRocketTimer) clearInterval(autoRocketTimer);
     autoRocketTimer = setInterval(() => {
-        // Запускаем автоматический раунд, если ракетка не активна
         if (!rocketActive) {
-            // Симулируем раунд
-            const fakeBet = 500 + Math.floor(Math.random() * 500) * 10; // 500-5500
+            const fakeBet = 500 + Math.floor(Math.random() * 500) * 10;
             simulateRocketRound(fakeBet);
         }
-    }, 10000 + Math.random() * 15000); // 10-25 секунд
+    }, 10000 + Math.random() * 15000);
 }
 
-// Симуляция раунда ракетки
 function simulateRocketRound(bet) {
-    const win = Math.random() < 0.35; // 35% шанс выигрыша
+    const win = Math.random() < 0.35;
     const crashMultiplier = win ? 1.1 + Math.random() * 2.0 : 0.5 + Math.random() * 0.5;
-    // Показываем анимацию
     let progress = 0;
     const interval = setInterval(() => {
         progress += 0.02;
@@ -1561,10 +1569,8 @@ function simulateRocketRound(bet) {
             clearInterval(interval);
             if (win) {
                 const winAmount = Math.floor(bet * crashMultiplier);
-                // Добавляем фейковый выигрыш в ленту
                 addFakeWin(winAmount);
             }
-            // Сброс состояния
             document.getElementById('rocket-multiplier').textContent = '0.00';
             document.getElementById('rocket-status').textContent = 'Ожидание';
             drawRocket(0, 'idle');
@@ -1587,7 +1593,6 @@ function simulateRocketRound(bet) {
     }, 200);
 }
 
-// Добавление фейковых выигрышей в ленту
 function addFakeWin(amount) {
     const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 'player_' + (200000 + Math.floor(Math.random()*800000)), 'gamer_' + (300000 + Math.floor(Math.random()*700000))];
     const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
@@ -1645,25 +1650,50 @@ function updateSpinCost() {
 const canvas = document.getElementById('wheelCanvas');
 const ctx = canvas.getContext('2d');
 
+// ========= ОБНОВЛЁННАЯ ФУНКЦИЯ ПРИЗОВ (6 красных, 6 зелёных) =========
 function getPrizesForMode(mode) {
     const allPrizes = {
         light: [
-            { name: '🧸', value: 15 }, { name: '🍬', value: 20 },
-            { name: '⭐', value: 25 }, { name: '🌹', value: 40 },
-            { name: '💨', value: 0 }, { name: '🧸', value: 10 },
-            { name: '💨', value: 0 }, { name: '⭐', value: 20 }
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '🎁 10', value: 10 },
+            { name: '🎁 15', value: 15 },
+            { name: '🎁 20', value: 20 },
+            { name: '🎁 25', value: 25 },
+            { name: '🎁 30', value: 30 },
+            { name: '🎁 40', value: 40 }
         ],
         normal: [
-            { name: '💍', value: 120 }, { name: '💎', value: 200 },
-            { name: '🧁', value: 150 }, { name: '🏆', value: 250 },
-            { name: '💨', value: 0 }, { name: '💍', value: 100 },
-            { name: '💨', value: 0 }, { name: '💎', value: 180 }
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '🎁 50', value: 50 },
+            { name: '🎁 70', value: 70 },
+            { name: '🎁 100', value: 100 },
+            { name: '🎁 120', value: 120 },
+            { name: '🎁 150', value: 150 },
+            { name: '🎁 200', value: 200 }
         ],
         hard: [
-            { name: '👑', value: 600 }, { name: '🧢', value: 800 },
-            { name: '🚀', value: 700 }, { name: '🛸', value: 1000 },
-            { name: '💨', value: 0 }, { name: '👑', value: 500 },
-            { name: '💨', value: 0 }, { name: '🚀', value: 650 }
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '❌', value: 0 },
+            { name: '🎁 300', value: 300 },
+            { name: '🎁 400', value: 400 },
+            { name: '🎁 500', value: 500 },
+            { name: '🎁 600', value: 600 },
+            { name: '🎁 800', value: 800 },
+            { name: '🎁 1000', value: 1000 }
         ]
     };
     return allPrizes[mode] || allPrizes.light;
@@ -1682,6 +1712,7 @@ function drawWheel() {
         ctx.moveTo(centerX,centerY);
         ctx.arc(centerX,centerY,radius,startAngle,endAngle);
         ctx.closePath();
+        // Красный для value==0 (❌), зелёный для выигрыша
         ctx.fillStyle = modePrizes[i].value > 0 ? '#2e7d32' : '#c62828';
         ctx.fill();
         ctx.strokeStyle = '#0a0a0a';
