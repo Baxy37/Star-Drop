@@ -373,9 +373,12 @@ STATIC_FILES = {
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="theme-light">
-    <!-- Фоновые летящие звёздочки -->
+    <!-- Фоновые летящие элементы: звёзды и подарки -->
     <div class="stars-background">
-        <span>⭐</span><span>✨</span><span>🌟</span><span>💫</span><span>⭐</span><span>✨</span><span>🌟</span><span>💫</span>
+        <span>⭐</span><span>✨</span><span>🌟</span><span>💫</span>
+        <span>🎁</span><span>🧸</span><span>💎</span><span>🧢</span>
+        <span>🚀</span><span>💍</span><span>🧁</span><span>🎈</span>
+        <span>👑</span><span>🛸</span><span>💎</span><span>🎁</span>
     </div>
 
     <div id="top-bar">
@@ -509,7 +512,7 @@ body.theme-hard {
     --accent-glow: #f4433666;
 }
 
-/* Анимированный фоновый элемент (падающие звёздочки) */
+/* Анимированный фон с подарками и звёздами */
 .stars-background {
     position: fixed;
     top: 0;
@@ -525,25 +528,35 @@ body.theme-hard {
     position: absolute;
     display: block;
     animation: fall linear infinite;
-    opacity: 0.5;
+    opacity: 0.4;
     color: var(--accent-color);
-    text-shadow: 0 0 10px var(--accent-glow);
+    text-shadow: 0 0 8px var(--accent-glow);
+    font-size: 18px;
 }
 
-.stars-background span:nth-child(1) { left: 10%; animation-duration: 7s; font-size: 14px; }
-.stars-background span:nth-child(2) { left: 30%; animation-duration: 10s; font-size: 18px; animation-delay: 2s; }
-.stars-background span:nth-child(3) { left: 50%; animation-duration: 6s; font-size: 12px; animation-delay: 1s; }
-.stars-background span:nth-child(4) { left: 70%; animation-duration: 9s; font-size: 20px; animation-delay: 3s; }
-.stars-background span:nth-child(5) { left: 85%; animation-duration: 8s; font-size: 15px; animation-delay: 0.5s; }
-.stars-background span:nth-child(6) { left: 20%; animation-duration: 11s; font-size: 16px; animation-delay: 4s; }
-.stars-background span:nth-child(7) { left: 60%; animation-duration: 7s; font-size: 19px; animation-delay: 2.5s; }
-.stars-background span:nth-child(8) { left: 90%; animation-duration: 12s; font-size: 13px; animation-delay: 1.5s; }
+/* 16 элементов с разными позициями, задержками и скоростями */
+.stars-background span:nth-child(1) { left: 5%; animation-duration: 8s; font-size: 16px; }
+.stars-background span:nth-child(2) { left: 15%; animation-duration: 12s; font-size: 22px; animation-delay: 1s; }
+.stars-background span:nth-child(3) { left: 25%; animation-duration: 7s; font-size: 14px; animation-delay: 2s; }
+.stars-background span:nth-child(4) { left: 35%; animation-duration: 10s; font-size: 20px; animation-delay: 0.5s; }
+.stars-background span:nth-child(5) { left: 45%; animation-duration: 9s; font-size: 24px; animation-delay: 3s; }
+.stars-background span:nth-child(6) { left: 55%; animation-duration: 6s; font-size: 18px; animation-delay: 1.5s; }
+.stars-background span:nth-child(7) { left: 65%; animation-duration: 11s; font-size: 28px; animation-delay: 2.5s; }
+.stars-background span:nth-child(8) { left: 75%; animation-duration: 8s; font-size: 16px; animation-delay: 4s; }
+.stars-background span:nth-child(9) { left: 85%; animation-duration: 10s; font-size: 20px; animation-delay: 0.8s; }
+.stars-background span:nth-child(10) { left: 92%; animation-duration: 7s; font-size: 14px; animation-delay: 3.5s; }
+.stars-background span:nth-child(11) { left: 10%; animation-duration: 13s; font-size: 26px; animation-delay: 5s; }
+.stars-background span:nth-child(12) { left: 40%; animation-duration: 9s; font-size: 30px; animation-delay: 1.2s; }
+.stars-background span:nth-child(13) { left: 70%; animation-duration: 11s; font-size: 22px; animation-delay: 2.8s; }
+.stars-background span:nth-child(14) { left: 20%; animation-duration: 8s; font-size: 18px; animation-delay: 4.5s; }
+.stars-background span:nth-child(15) { left: 60%; animation-duration: 12s; font-size: 28px; animation-delay: 0.2s; }
+.stars-background span:nth-child(16) { left: 80%; animation-duration: 7s; font-size: 20px; animation-delay: 3.8s; }
 
 @keyframes fall {
-    0% { transform: translateY(-20px) rotate(0deg); opacity: 0; }
+    0% { transform: translateY(-30px) rotate(0deg); opacity: 0; }
     20% { opacity: 0.7; }
     80% { opacity: 0.7; }
-    100% { transform: translateY(105vh) rotate(360deg); opacity: 0; }
+    100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
 }
 
 #top-bar {
@@ -972,14 +985,35 @@ document.getElementById('close-ref-modal').addEventListener('click', () => {
     document.getElementById('referral-modal').style.display = 'none';
 });
 
+// Исправленное копирование ссылки с fallback
 document.getElementById('copy-ref-link').addEventListener('click', () => {
     const link = document.getElementById('ref-link').textContent;
-    navigator.clipboard.writeText(link).then(() => {
-        alert('Ссылка скопирована!');
-    }).catch(() => {
-        alert('Скопируйте вручную: ' + link);
-    });
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(() => {
+            alert('Ссылка скопирована!');
+        }).catch(() => {
+            fallbackCopy(link);
+        });
+    } else {
+        fallbackCopy(link);
+    }
 });
+
+function fallbackCopy(text) {
+    const input = document.createElement('input');
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    input.value = text;
+    document.body.appendChild(input);
+    input.select();
+    try {
+        document.execCommand('copy');
+        alert('Ссылка скопирована!');
+    } catch (e) {
+        alert('Не удалось скопировать, скопируйте вручную: ' + text);
+    }
+    document.body.removeChild(input);
+}
 
 document.getElementById('gifts-btn').addEventListener('click', () => {
     alert('Здесь будут ваши выигранные Telegram-подарки!');
