@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Optional, List, Dict
 import json
 import hashlib
+import math
 
 # ==================== НАСТРОЙКИ ====================
 BOT_TOKEN = "8988678866:AAHIWxUB8zKBCoF21g7OVYEEWnwEF_MpLmI"
@@ -63,7 +64,7 @@ PRIZES = {
 }
 
 DB_NAME = "star_drop.db"
-WEBAPP_URL = "https://star-drop.onrender.com"  # ваш домен
+WEBAPP_URL = "https://star-drop.onrender.com"
 REFERRAL_BONUS = 50
 
 SLOT_SYMBOLS = ['🍒', '🍋', '🍊', '🍇', '🍉', '🍓', '🍑', '🎰']
@@ -215,6 +216,21 @@ def get_recent_wins(limit: int = 10) -> List[Dict]:
         ORDER BY w.created_at DESC
         LIMIT ?
     ''', (limit,))
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def get_user_bets(user_id: int, limit: int = 20) -> List[Dict]:
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT type, amount, description, created_at
+        FROM transactions
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+    ''', (user_id, limit))
     rows = cur.fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -418,11 +434,14 @@ STATIC_FILES = {
     </div>
 
     <div id="top-bar">
-        <div id="username" style="cursor:pointer;">@user</div>
+        <div id="user-info" style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+            <div id="avatar" style="width:32px; height:32px; border-radius:50%; background:var(--accent-color); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:16px; color:#0a0a0a;">U</div>
+            <span id="username">@user</span>
+        </div>
         <div id="balance">
             <span id="balance-amount">0</span> 🌟
             <button id="deposit-btn">+</button>
-            <button id="gifts-btn">Мои подарки</button>
+            <button id="bets-btn">Мои ставки</button>
         </div>
     </div>
 
@@ -445,6 +464,15 @@ STATIC_FILES = {
             <span style="color:#aaa;">Приглашено друзей: <b id="ref-count">0</b></span>
             <br><br>
             <button id="close-ref-modal" style="background:#333; border:none; color:#fff; padding:8px 20px; border-radius:6px; cursor:pointer;">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- Модалка "Мои ставки" -->
+    <div id="bets-modal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
+        <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:400px; width:90%; max-height:80%; overflow-y:auto; border:1px solid var(--accent-color);">
+            <h3 style="color:var(--accent-color); margin-bottom:10px;">Мои ставки</h3>
+            <ul id="bets-list" style="list-style:none; padding:0; margin:0;"></ul>
+            <button id="close-bets-modal" style="background:#333; border:none; color:#fff; padding:8px 20px; border-radius:6px; margin-top:10px; cursor:pointer;">Закрыть</button>
         </div>
     </div>
 
@@ -513,6 +541,9 @@ STATIC_FILES = {
                 <div id="rocket-multiplier">0.00</div>
                 <div id="rocket-status">Ожидание</div>
             </div>
+            <div id="rocket-canvas-container">
+                <canvas id="rocketCanvas" width="300" height="200"></canvas>
+            </div>
             <div id="rocket-bet-control">
                 <label>Ставка: <span id="rocket-bet-display">500</span> токенов</label>
                 <input type="range" id="rocket-bet-range" min="500" max="5000" step="100" value="500">
@@ -521,6 +552,7 @@ STATIC_FILES = {
                 <button id="rocket-start-btn">🚀 Старт</button>
                 <button id="rocket-cashout-btn" disabled>💰 Стоп</button>
             </div>
+            <div id="rocket-timer">Следующий взлёт через: <span id="rocket-countdown">5</span>с</div>
             <div id="rocket-result"></div>
         </div>
     </div>
@@ -642,11 +674,31 @@ body.theme-hard {
     z-index: 2;
 }
 
+#user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+#avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 16px;
+    color: #0a0a0a;
+    transition: background 0.3s;
+}
+
 #username {
     font-size: 18px;
     font-weight: 600;
     color: var(--accent-color);
-    cursor: pointer;
     transition: color 0.3s;
 }
 
@@ -663,21 +715,7 @@ body.theme-hard {
     font-weight: 700;
 }
 
-#deposit-btn {
-    background: var(--accent-color);
-    border: none;
-    border-radius: 50%;
-    width: 28px;
-    height: 28px;
-    font-size: 20px;
-    font-weight: bold;
-    color: #0a0a0a;
-    cursor: pointer;
-    transition: background 0.3s, transform 0.2s;
-}
-#deposit-btn:hover { transform: scale(1.1); }
-
-#gifts-btn {
+#deposit-btn, #bets-btn {
     background: var(--accent-color);
     border: none;
     border-radius: 8px;
@@ -687,6 +725,14 @@ body.theme-hard {
     cursor: pointer;
     font-size: 12px;
     transition: background 0.3s;
+}
+
+#deposit-btn {
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    font-size: 20px;
+    padding: 0;
 }
 
 #deposit-menu {
@@ -997,7 +1043,7 @@ body.theme-hard {
 
 #rocket-display {
     text-align: center;
-    padding: 15px 0;
+    padding: 10px 0;
 }
 
 #rocket-multiplier {
@@ -1012,6 +1058,18 @@ body.theme-hard {
     font-size: 16px;
     color: #aaa;
     margin-top: 5px;
+}
+
+#rocket-canvas-container {
+    width: 100%;
+    text-align: center;
+}
+
+#rocketCanvas {
+    width: 100%;
+    height: auto;
+    background: #0a0a0a;
+    border-radius: 12px;
 }
 
 #rocket-bet-control {
@@ -1062,6 +1120,17 @@ body.theme-hard {
 
 #rocket-start-btn:active, #rocket-cashout-btn:active {
     transform: scale(0.95);
+}
+
+#rocket-timer {
+    font-size: 14px;
+    color: #aaa;
+    margin: 5px 0;
+    text-align: center;
+}
+
+#rocket-timer span {
+    color: var(--accent-color);
 }
 
 #rocket-result {
@@ -1203,6 +1272,20 @@ body.theme-hard {
     color: var(--accent-color);
     background: rgba(255,215,0,0.1);
 }
+
+/* Модальные окна */
+#bets-modal ul li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+    color: #ddd;
+    font-size: 14px;
+}
+#bets-modal ul li span.positive {
+    color: #4CAF50;
+}
+#bets-modal ul li span.negative {
+    color: #f44336;
+}
 """,
     "script.js": """const BASE_URL = window.location.origin;
 let user_id = null;
@@ -1211,18 +1294,29 @@ let currentMode = 'light';
 let isSpinning = false;
 let currentRotation = 0;
 
+// === Авторизация через Telegram ===
 if (window.Telegram && window.Telegram.WebApp) {
     window.Telegram.WebApp.ready();
     const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
     if (tgUser && tgUser.id) {
         user_id = tgUser.id;
         document.getElementById('username').textContent = '@' + (tgUser.username || tgUser.first_name);
+        // Устанавливаем аватарку (первая буква или эмодзи)
+        const avatar = document.getElementById('avatar');
+        const name = tgUser.first_name || 'U';
+        avatar.textContent = name.charAt(0).toUpperCase();
+        // Можно добавить цвет фона в зависимости от ID
+        avatar.style.background = '#' + (tgUser.id % 0xFFFFFF).toString(16).padStart(6, '0');
         fetchUserData();
+    } else {
+        // Если пользователь не авторизован, предлагаем войти через бота
+        alert('Пожалуйста, откройте приложение через бота Telegram');
     }
-}
-if (!user_id) {
+} else {
+    // fallback для тестирования
     user_id = prompt('Введите ваш Telegram ID (для теста):') || 123456789;
     document.getElementById('username').textContent = '@user_' + user_id;
+    document.getElementById('avatar').textContent = 'T';
     fetchUserData();
 }
 
@@ -1243,7 +1337,8 @@ function updateBalanceUI(newBalance) {
     document.getElementById('balance-amount').textContent = newBalance;
 }
 
-document.getElementById('username').addEventListener('click', async () => {
+// === Клик по юзеру — рефералка ===
+document.getElementById('user-info').addEventListener('click', async () => {
     try {
         const resp = await fetch(`/api/referral/${user_id}`);
         const data = await resp.json();
@@ -1288,10 +1383,45 @@ function fallbackCopy(text) {
     document.body.removeChild(input);
 }
 
-document.getElementById('gifts-btn').addEventListener('click', () => {
-    alert('Здесь будут ваши выигранные Telegram-подарки!');
+// === Мои ставки ===
+document.getElementById('bets-btn').addEventListener('click', async () => {
+    try {
+        const resp = await fetch(`/api/user_bets/${user_id}`);
+        const bets = await resp.json();
+        const list = document.getElementById('bets-list');
+        list.innerHTML = '';
+        if (bets.length === 0) {
+            list.innerHTML = '<li style="color:#aaa;">Ставок пока нет</li>';
+        } else {
+            bets.forEach(b => {
+                const li = document.createElement('li');
+                let sign = '';
+                let cls = '';
+                if (b.amount > 0) { sign = '+'; cls = 'positive'; }
+                else if (b.amount < 0) { sign = ''; cls = 'negative'; }
+                else { sign = '0'; cls = ''; }
+                li.innerHTML = `<span class="${cls}">${sign}${b.amount}</span> ${b.description} <span style="color:#888;font-size:12px;">${new Date(b.created_at).toLocaleString()}</span>`;
+                list.appendChild(li);
+            });
+        }
+        document.getElementById('bets-modal').style.display = 'flex';
+    } catch (e) {
+        alert('Ошибка загрузки ставок');
+        console.error(e);
+    }
 });
 
+document.getElementById('close-bets-modal').addEventListener('click', () => {
+    document.getElementById('bets-modal').style.display = 'none';
+});
+
+document.getElementById('bets-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+        document.getElementById('bets-modal').style.display = 'none';
+    }
+});
+
+// === Промокоды ===
 document.getElementById('promo-btn').addEventListener('click', async () => {
     const input = document.getElementById('promo-input');
     const code = input.value.trim();
@@ -1321,6 +1451,7 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
     }
 });
 
+// === РУЛЕТКА ===
 function applyTheme(mode) {
     document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
     if (mode === 'light') document.body.classList.add('theme-light');
@@ -1407,14 +1538,12 @@ function drawWheel() {
         ctx.arc(centerX, centerY, radius, startAngle, endAngle);
         ctx.closePath();
         
-        if (currentMode === 'light') {
-            ctx.fillStyle = i % 2 === 0 ? '#ffea75' : '#e6c229';
-        } else if (currentMode === 'normal') {
-            ctx.fillStyle = i % 2 === 0 ? '#64b5f6' : '#1976d2';
+        // Зелёные для выигрышных (value>0), красные для пустых (value==0)
+        if (modePrizes[i].value > 0) {
+            ctx.fillStyle = '#2e7d32'; // зелёный
         } else {
-            ctx.fillStyle = i % 2 === 0 ? '#e57373' : '#d32f2f';
+            ctx.fillStyle = '#c62828'; // красный
         }
-        
         ctx.fill();
         ctx.strokeStyle = '#0a0a0a';
         ctx.lineWidth = 2;
@@ -1425,11 +1554,14 @@ function drawWheel() {
         ctx.rotate(startAngle + angleStep / 2);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = 'bold 24px sans-serif';
-        ctx.fillText(modePrizes[i].name, radius * 0.65, 0);
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillStyle = '#fff';
+        const label = modePrizes[i].name;
+        ctx.fillText(label, radius * 0.65, 0);
         ctx.restore();
     }
 
+    // Центральный кружок
     ctx.beginPath();
     ctx.arc(centerX, centerY, 22, 0, 2 * Math.PI);
     ctx.fillStyle = '#111';
@@ -1460,13 +1592,20 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
-            const extraSpins = 5;
+            // Анимация вращения
+            const extraSpins = 5 + Math.floor(Math.random() * 3);
             const randomAngle = Math.random() * 360;
             currentRotation += (extraSpins * 360) + randomAngle;
             canvas.style.transform = `rotate(${currentRotation}deg)`;
 
             setTimeout(() => {
                 document.getElementById('result-message').textContent = data.message;
+                // Показываем стрелку (указатель уже есть)
+                if (data.win) {
+                    document.getElementById('result-message').style.color = '#4CAF50';
+                } else {
+                    document.getElementById('result-message').style.color = '#f44336';
+                }
                 if (data.win) fetchFeed();
             }, 3000);
         } else {
@@ -1568,6 +1707,54 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
 let rocketInterval = null;
 let rocketRoundId = null;
 let rocketActive = false;
+let rocketCountdown = 5;
+let countdownInterval = null;
+let rocketAnimationFrame = null;
+let rocketCanvas = document.getElementById('rocketCanvas');
+let rctx = rocketCanvas.getContext('2d');
+let rocketY = 0;
+let rocketMultiplier = 0;
+
+function drawRocket(multiplier, status) {
+    rctx.clearRect(0, 0, rocketCanvas.width, rocketCanvas.height);
+    // Рисуем ракету
+    let y = rocketCanvas.height - 30 - (multiplier / 100) * (rocketCanvas.height - 60);
+    if (y < 10) y = 10;
+    // Рисуем пламя
+    rctx.fillStyle = '#ff5722';
+    rctx.beginPath();
+    rctx.moveTo(rocketCanvas.width/2 - 10, y + 20);
+    rctx.lineTo(rocketCanvas.width/2, y + 40);
+    rctx.lineTo(rocketCanvas.width/2 + 10, y + 20);
+    rctx.fill();
+    // Ракета
+    rctx.fillStyle = '#fff';
+    rctx.fillRect(rocketCanvas.width/2 - 10, y - 30, 20, 30);
+    rctx.fillStyle = '#ff5722';
+    rctx.beginPath();
+    rctx.moveTo(rocketCanvas.width/2, y - 45);
+    rctx.lineTo(rocketCanvas.width/2 - 12, y - 30);
+    rctx.lineTo(rocketCanvas.width/2 + 12, y - 30);
+    rctx.fill();
+    // Окно
+    rctx.fillStyle = '#2196F3';
+    rctx.beginPath();
+    rctx.arc(rocketCanvas.width/2, y - 15, 6, 0, 2*Math.PI);
+    rctx.fill();
+    // Текст множителя на ракете
+    rctx.fillStyle = '#fff';
+    rctx.font = '12px sans-serif';
+    rctx.textAlign = 'center';
+    rctx.fillText(multiplier.toFixed(2)+'x', rocketCanvas.width/2, y - 22);
+    // Линия старта
+    rctx.strokeStyle = '#444';
+    rctx.setLineDash([5,5]);
+    rctx.beginPath();
+    rctx.moveTo(0, rocketCanvas.height-30);
+    rctx.lineTo(rocketCanvas.width, rocketCanvas.height-30);
+    rctx.stroke();
+    rctx.setLineDash([]);
+}
 
 document.getElementById('rocket-bet-range').addEventListener('input', function() {
     document.getElementById('rocket-bet-display').textContent = this.value;
@@ -1599,10 +1786,13 @@ document.getElementById('rocket-start-btn').addEventListener('click', async () =
             document.getElementById('rocket-cashout-btn').disabled = false;
             document.getElementById('rocket-result').textContent = '';
             document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
-
+            rocketMultiplier = 0;
             if (rocketInterval) clearInterval(rocketInterval);
-            rocketInterval = setInterval(updateRocketStatus, 300); // обновляем чаще
+            rocketInterval = setInterval(updateRocketStatus, 200);
             updateRocketStatus();
+            // Анимация ракеты
+            if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
+            drawRocket(0, 'active');
         } else {
             alert('❌ ' + data.detail);
         }
@@ -1618,7 +1808,10 @@ async function updateRocketStatus() {
         const resp = await fetch(`/api/rocket/status/${rocketRoundId}`);
         const data = await resp.json();
         if (resp.ok) {
-            document.getElementById('rocket-multiplier').textContent = data.display_multiplier.toFixed(2);
+            const display = data.display_multiplier;
+            document.getElementById('rocket-multiplier').textContent = display.toFixed(2);
+            rocketMultiplier = display;
+            drawRocket(display, data.crashed ? 'crashed' : (data.cashed_out ? 'cashed' : 'active'));
             if (data.crashed) {
                 document.getElementById('rocket-status').textContent = '💥 Упала!';
                 document.getElementById('rocket-cashout-btn').disabled = true;
@@ -1631,6 +1824,7 @@ async function updateRocketStatus() {
                 document.getElementById('rocket-result').textContent = '😞 Ракета упала. Ставка проиграна.';
                 document.getElementById('rocket-result').style.color = '#f44336';
                 fetchUserData();
+                startCountdown();
             } else if (data.cashed_out) {
                 document.getElementById('rocket-status').textContent = '💰 Выведено!';
                 document.getElementById('rocket-cashout-btn').disabled = true;
@@ -1641,6 +1835,7 @@ async function updateRocketStatus() {
                     rocketInterval = null;
                 }
                 fetchUserData();
+                startCountdown();
             }
         } else {
             console.error('Status error:', data);
@@ -1672,6 +1867,7 @@ document.getElementById('rocket-cashout-btn').addEventListener('click', async ()
             }
             updateBalanceUI(data.new_balance);
             fetchFeed();
+            startCountdown();
         } else {
             alert('❌ ' + data.detail);
         }
@@ -1680,6 +1876,27 @@ document.getElementById('rocket-cashout-btn').addEventListener('click', async ()
         console.error(e);
     }
 });
+
+function startCountdown() {
+    rocketCountdown = 5;
+    document.getElementById('rocket-countdown').textContent = rocketCountdown;
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+        rocketCountdown--;
+        document.getElementById('rocket-countdown').textContent = rocketCountdown;
+        if (rocketCountdown <= 0) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+            document.getElementById('rocket-countdown').textContent = '0';
+            // Автоматический старт
+            document.getElementById('rocket-start-btn').click();
+        }
+    }, 1000);
+}
+
+// Инициализация ракетки
+drawRocket(0, 'idle');
+document.getElementById('rocket-countdown').textContent = '0';
 
 // === ОБЩИЕ ФУНКЦИИ ===
 document.getElementById('deposit-btn').addEventListener('click', () => {
@@ -1827,6 +2044,14 @@ async def api_get_user(user_id: int):
         raise HTTPException(status_code=404, detail="User not found")
     return {"balance": user["balance"], "username": user["username"]}
 
+@app.get("/api/user_bets/{user_id}")
+async def api_user_bets(user_id: int):
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    bets = get_user_bets(user_id, 50)
+    return bets
+
 @app.post("/api/spin")
 async def api_spin(data: SpinRequest):
     user_id = data.user_id
@@ -1893,8 +2118,6 @@ async def rocket_start(data: RocketStartRequest):
     
     update_balance(user_id, -bet, f"Ставка в ракетке {bet} токенов")
     
-    # Генерируем crash point (отображаемый множитель)
-    # 95%: от 0.0 до 0.7, 5%: от 0.7 до 99.0
     if random.random() < 0.05:
         crash_display = 0.7 + random.random() * 98.3
     else:
@@ -1934,7 +2157,6 @@ async def rocket_status(round_id: int):
         }
     
     elapsed = time.time() - round_data["start_time"]
-    # Растёт со скоростью 0.3 в секунду (медленно)
     display_multiplier = elapsed * 0.3
     if display_multiplier >= round_data["crash_display"]:
         round_data["status"] = "crashed"
@@ -1969,7 +2191,6 @@ async def rocket_cashout(data: RocketCashoutRequest):
         round_data["status"] = "crashed"
         raise HTTPException(status_code=400, detail="Ракета уже упала")
     
-    # Реальный множитель для выигрыша = 1 + display_multiplier
     real_multiplier = 1.0 + display_multiplier
     win_amount = int(round_data["bet"] * real_multiplier)
     update_balance(user_id, win_amount, f"Выигрыш в ракетке {win_amount} токенов")
