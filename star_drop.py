@@ -7,6 +7,7 @@ import random
 import signal
 from datetime import datetime
 from typing import Optional, List, Dict
+import json
 
 # ==================== НАСТРОЙКИ ====================
 BOT_TOKEN = "8988678866:AAHIWxUB8zKBCoF21g7OVYEEWnwEF_MpLmI"
@@ -62,6 +63,7 @@ PRIZES = {
 WIN_CHANCE = 35
 DB_NAME = "star_drop.db"
 WEBAPP_URL = "https://star-drop.onrender.com"  # ваш домен
+REFERRAL_BONUS = 50  # бонус за приведённого друга в токенах
 
 # ==================== БАЗА ДАННЫХ ====================
 def init_db():
@@ -74,7 +76,9 @@ def init_db():
             balance INTEGER DEFAULT 0,
             total_spent INTEGER DEFAULT 0,
             total_won INTEGER DEFAULT 0,
-            registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            referrer_id INTEGER,
+            referral_code TEXT UNIQUE
         )
     ''')
     cur.execute('''
@@ -109,6 +113,16 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(user_id)
         )
     ''')
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS referrals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            referrer_id INTEGER,
+            referred_id INTEGER UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (referrer_id) REFERENCES users(user_id),
+            FOREIGN KEY (referred_id) REFERENCES users(user_id)
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -121,10 +135,37 @@ def get_user(user_id: int) -> Optional[Dict]:
     conn.close()
     return dict(row) if row else None
 
-def create_user(user_id: int, username: str = None):
+def create_user(user_id: int, username: str = None, referrer_code: str = None):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    cur.execute("INSERT OR IGNORE INTO users (user_id, username) VALUES (?, ?)", (user_id, username))
+    # Генерируем уникальный реферальный код
+    import hashlib
+    code = hashlib.md5(str(user_id).encode()).hexdigest()[:8]
+    cur.execute(
+        "INSERT OR IGNORE INTO users (user_id, username, referral_code) VALUES (?, ?, ?)",
+        (user_id, username, code)
+    )
+    # Если есть реферер, добавляем запись и бонус
+    if referrer_code:
+        cur.execute("SELECT user_id FROM users WHERE referral_code = ?", (referrer_code,))
+        row = cur.fetchone()
+        if row:
+            referrer_id = row[0]
+            if referrer_id != user_id:
+                # Проверяем, не был ли уже этот пользователь приглашён
+                cur.execute("SELECT id FROM referrals WHERE referred_id = ?", (user_id,))
+                if not cur.fetchone():
+                    cur.execute(
+                        "INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)",
+                        (referrer_id, user_id)
+                    )
+                    # Начисляем бонус рефереру
+                    cur.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (REFERRAL_BONUS, referrer_id))
+                    # Записываем транзакцию
+                    cur.execute(
+                        "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
+                        (referrer_id, "deposit", REFERRAL_BONUS, f"Бонус за приглашение пользователя {user_id}")
+                    )
     conn.commit()
     conn.close()
 
@@ -206,6 +247,24 @@ def reject_withdraw(request_id: int):
     conn.commit()
     conn.close()
 
+def get_referral_info(user_id: int) -> Dict:
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT referral_code FROM users WHERE user_id = ?", (user_id,))
+    row = cur.fetchone()
+    code = row["referral_code"] if row else None
+    cur.execute("SELECT COUNT(*) as count FROM referrals WHERE referrer_id = ?", (user_id,))
+    count = cur.fetchone()["count"]
+    conn.close()
+    return {"code": code, "count": count}
+
+def get_referral_link(user_id: int) -> str:
+    info = get_referral_info(user_id)
+    if info["code"]:
+        return f"https://t.me/StarDrop11_bot?start=ref_{info['code']}"
+    return None
+
 init_db()
 
 # ==================== УТИЛИТЫ ====================
@@ -225,6 +284,7 @@ def get_prizes_for_mode(mode: str):
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+from aiogram.filters import CommandObject
 
 logging.basicConfig(level=logging.INFO)
 
@@ -233,15 +293,19 @@ dp = Dispatcher()
 
 def get_start_keyboard():
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="🎰 Старт", web_app=WebAppInfo(url=WEBAPP_URL))]],
+        keyboard=[[KeyboardButton(text="🎰 Открыть рулетку", web_app=WebAppInfo(url=WEBAPP_URL))]],
         resize_keyboard=True
     )
 
 @dp.message(Command("start"))
-async def cmd_start(message: types.Message):
+async def cmd_start(message: types.Message, command: CommandObject):
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
-    create_user(user_id, username)
+    # Проверяем, есть ли реферальный код в аргументах
+    referrer_code = None
+    if command.args and command.args.startswith("ref_"):
+        referrer_code = command.args[4:]  # убираем "ref_"
+    create_user(user_id, username, referrer_code)
     await message.answer(
         f"🎉 Приветствую тебя, {username}!\n"
         "Добро пожаловать в **Star Drop** – розыгрыш подарков Telegram!\n\n"
@@ -249,26 +313,8 @@ async def cmd_start(message: types.Message):
         reply_markup=get_start_keyboard()
     )
 
-async def start_bot():
-    # Принудительно удаляем вебхук и сбрасываем ожидающие обновления
-    await bot.delete_webhook(drop_pending_updates=True)
-    # Запускаем polling с обработкой конфликтов
-    retries = 0
-    while True:
-        try:
-            await dp.start_polling(bot)
-            break
-        except Exception as e:
-            if "Conflict" in str(e) and retries < 5:
-                retries += 1
-                wait = 2 ** retries  # экспоненциальная задержка: 2, 4, 8, 16, 32 сек
-                logging.warning(f"Конфликт, повтор через {wait} сек...")
-                await asyncio.sleep(wait)
-            else:
-                raise
-
 # ==================== ВЕБ-СЕРВЕР (FASTAPI) ====================
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
@@ -285,7 +331,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Создаём папку static и файлы, если их нет (только один раз)
+# Создаём папку static и файлы, если их нет
 STATIC_DIR = "static"
 os.makedirs(STATIC_DIR, exist_ok=True)
 
@@ -300,18 +346,31 @@ STATIC_FILES = {
 </head>
 <body>
     <div id="top-bar">
-        <div id="username">@user</div>
+        <div id="username" style="cursor:pointer;">@user</div>
         <div id="balance">
-            <span id="balance-amount">0</span> 🪙
+            <span id="balance-amount">0</span> 💰
             <button id="deposit-btn">+</button>
         </div>
     </div>
     <div id="deposit-menu" style="display: none;">
+        <div style="width:100%; text-align:center; margin-bottom:10px; font-weight:bold; color:var(--accent-color);">Пополнить баланс</div>
         <button class="deposit-option" data-amount="100">100₽</button>
         <button class="deposit-option" data-amount="200">200₽</button>
         <button class="deposit-option" data-amount="500">500₽</button>
         <button class="deposit-option" data-amount="1000">1000₽</button>
         <button id="close-deposit">✖</button>
+    </div>
+    <div id="referral-modal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
+        <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:300px; width:90%; text-align:center; border:1px solid var(--accent-color);">
+            <h3 style="color:var(--accent-color); margin-bottom:10px;">Реферальная система</h3>
+            <p style="color:#ccc; font-size:14px;">Приведи друга и получи <b>+50 токенов</b> на баланс!</p>
+            <p style="color:#fff; word-break:break-all; background:#222; padding:10px; border-radius:6px; margin:10px 0;" id="ref-link">Загрузка...</p>
+            <button id="copy-ref-link" style="background:var(--accent-color); border:none; padding:8px 20px; border-radius:6px; font-weight:bold; cursor:pointer;">Копировать ссылку</button>
+            <br><br>
+            <span style="color:#aaa;">Приглашено друзей: <b id="ref-count">0</b></span>
+            <br><br>
+            <button id="close-ref-modal" style="background:#333; border:none; color:#fff; padding:8px 20px; border-radius:6px; cursor:pointer;">Закрыть</button>
+        </div>
     </div>
     <div id="mode-selector">
         <button class="mode-btn active" data-mode="light">Light</button>
@@ -381,6 +440,10 @@ body.theme-hard {
     font-size: 18px;
     font-weight: 600;
     color: var(--accent-color);
+    cursor: pointer;
+}
+#username:hover {
+    text-decoration: underline;
 }
 #balance {
     font-size: 18px;
@@ -568,6 +631,39 @@ function updateBalanceUI(newBalance) {
     balance = newBalance;
     document.getElementById('balance-amount').textContent = newBalance;
 }
+
+// === Реферальное окно ===
+document.getElementById('username').addEventListener('click', async () => {
+    try {
+        const resp = await fetch(`/api/referral/${user_id}`);
+        const data = await resp.json();
+        document.getElementById('ref-link').textContent = data.link;
+        document.getElementById('ref-count').textContent = data.count;
+        document.getElementById('referral-modal').style.display = 'flex';
+    } catch (e) {
+        alert('Ошибка загрузки реферальной информации');
+    }
+});
+
+document.getElementById('close-ref-modal').addEventListener('click', () => {
+    document.getElementById('referral-modal').style.display = 'none';
+});
+
+document.getElementById('copy-ref-link').addEventListener('click', () => {
+    const link = document.getElementById('ref-link').textContent;
+    navigator.clipboard.writeText(link).then(() => {
+        alert('Ссылка скопирована!');
+    }).catch(() => {
+        alert('Не удалось скопировать ссылку, скопируйте вручную: ' + link);
+    });
+});
+
+// Закрытие по клику вне окна
+document.getElementById('referral-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) {
+        document.getElementById('referral-modal').style.display = 'none';
+    }
+});
 
 function applyTheme(mode) {
     document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
@@ -786,6 +882,17 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 async def root():
     return RedirectResponse(url="/static/index.html")
 
+@app.head("/")
+async def root_head():
+    return RedirectResponse(url="/static/index.html")
+
+# Webhook endpoint для Telegram
+@app.post("/webhook")
+async def webhook(request: Request):
+    update = types.Update(**(await request.json()))
+    await dp.feed_update(bot, update)
+    return {"status": "ok"}
+
 # API модели
 class SpinRequest(BaseModel):
     user_id: int
@@ -863,7 +970,22 @@ async def api_get_prizes(mode: str):
         raise HTTPException(status_code=400, detail="Invalid mode")
     return get_prizes_for_mode(mode)
 
-# ==================== ЗАПУСК ОБОИХ СЕРВИСОВ ====================
+@app.get("/api/referral/{user_id}")
+async def api_get_referral(user_id: int):
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    info = get_referral_info(user_id)
+    link = get_referral_link(user_id)
+    return {"code": info["code"], "count": info["count"], "link": link}
+
+# ==================== ЗАПУСК ====================
+async def set_webhook():
+    port = int(os.environ.get("PORT", 10000))
+    webhook_url = f"https://star-drop.onrender.com/webhook"
+    await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+    logging.info(f"Webhook установлен на {webhook_url}")
+
 async def run_uvicorn():
     port = int(os.environ.get("PORT", 10000))
     config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
@@ -872,6 +994,7 @@ async def run_uvicorn():
 
 async def shutdown(sig, loop):
     logging.info(f"Received signal {sig}, shutting down...")
+    await bot.delete_webhook()
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     for task in tasks:
         task.cancel()
@@ -882,11 +1005,8 @@ async def main():
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown(sig, loop)))
-
-    await asyncio.gather(
-        start_bot(),
-        run_uvicorn()
-    )
+    await set_webhook()
+    await run_uvicorn()
 
 if __name__ == "__main__":
     try:
