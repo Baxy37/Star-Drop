@@ -494,7 +494,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=24">
+    <link rel="stylesheet" href="/static/style.css?v=25">
 </head>
 <body>
     <!-- ЭКРАН ВХОДА -->
@@ -671,7 +671,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
         </div>
     </div>
 
-    <script src="/static/script.js?v=24"></script>
+    <script src="/static/script.js?v=25"></script>
 </body>
 </html>""")
 
@@ -1602,14 +1602,24 @@ function initGames() {
     startAutoRocket();
     startFakeWins();
     buildRouletteStrip();
+    
+    // ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ РУЛЕТКИ
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentMode = this.dataset.mode;
+            updateSpinCost();
+            applyTheme(currentMode);
+        });
+    });
 }
 
-// ========== РУЛЕТКА (БЕСКОНЕЧНЫЕ СЛОТЫ) ==========
+// ========== РУЛЕТКА ==========
 function buildRouletteStrip() {
     const strip = document.getElementById('wheel-strip');
     strip.innerHTML = '';
     const symbols = ['❌', '🎫'];
-    // 2000 слотов для полной уверенности
     for (let i = 0; i < 2000; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
@@ -1651,7 +1661,6 @@ function animateRouletteWheel(win) {
         if (targetIndex === -1) targetIndex = startRange;
 
         let targetOffset = targetIndex * cellWidth + cellWidth/2 - containerWidth/2;
-        // Много оборотов для долгого вращения
         const extraLoops = 20 + Math.floor(Math.random() * 10);
         const totalOffset = targetOffset + extraLoops * cells.length * cellWidth;
 
@@ -2127,17 +2136,6 @@ function updateKeyColor(mode) {
     else if (mode === 'hard') keyDisplay.textContent = '🎫';
 }
 
-document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        if (isSpinning) return;
-        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentMode = btn.dataset.mode;
-        updateSpinCost();
-        applyTheme(currentMode);
-    });
-});
-
 function updateSpinCost() {
     const costs = { light: 25, normal: 50, hard: 100 };
     const cost = costs[currentMode];
@@ -2458,25 +2456,17 @@ async def rocket_start(data: RocketStartRequest):
     update_balance(user_id, -bet, f"Ставка в ракетке {bet} токенов")
     
     # НОВАЯ ЛОГИКА ВЗРЫВА РАКЕТКИ
-    # От 0.00 до 1.00: 70% шанс взрыва (проигрыш)
-    # От 1.00 до 2.50: 90% шанс взрыва (редкий выигрыш)
     crash_display = random.uniform(0.01, 2.50)
     
-    # Если краш меньше 1.00, то 70% шанс что взорвётся именно там
     if crash_display < 1.00:
-        if random.random() < 0.70:  # 70% шанс взрыва до 1.00
-            # Оставляем как есть
+        if random.random() < 0.70:
             pass
         else:
-            # 30% шанс что долетит дальше
             crash_display = random.uniform(1.00, 2.50)
     else:
-        # Если краш больше 1.00, то 90% шанс взрыва в этом диапазоне
         if random.random() < 0.90:
-            # Оставляем как есть
             pass
         else:
-            # 10% шанс что долетит до максимума
             crash_display = 2.50
     
     global round_counter
