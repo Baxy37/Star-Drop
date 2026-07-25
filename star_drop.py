@@ -517,7 +517,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=18">
+    <link rel="stylesheet" href="/static/style.css?v=19">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -678,11 +678,11 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
         </div>
     </div>
 
-    <script src="/static/script.js?v=18"></script>
+    <script src="/static/script.js?v=19"></script>
 </body>
 </html>""")
 
-# CSS - добавляем стиль для большего количества ячеек
+# CSS
 with open(os.path.join(STATIC_DIR, "style.css"), "w", encoding="utf-8") as f:
     f.write("""* {
     margin: 0;
@@ -1396,7 +1396,7 @@ body.theme-hard {
 }
 """)
 
-# JavaScript - УВЕЛИЧЕННОЕ КОЛИЧЕСТВО СЛОТОВ
+# JavaScript - ИСПРАВЛЕННЫЙ (ракетка и рулетка)
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
 let user_id = null;
@@ -1608,24 +1608,15 @@ function initGames() {
     buildRouletteStrip();
 }
 
-// ========== РУЛЕТКА С УВЕЛИЧЕННЫМ КОЛИЧЕСТВОМ СЛОТОВ ==========
+// ========== РУЛЕТКА ==========
 function buildRouletteStrip() {
     const strip = document.getElementById('wheel-strip');
     strip.innerHTML = '';
     const symbols = ['❌', '🎫'];
-    // Создаем 150 слотов с чередованием (75 пар)
-    for (let i = 0; i < 150; i++) {
+    for (let i = 0; i < 300; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
         cell.dataset.index = i;
-        cell.textContent = symbols[i % 2];
-        strip.appendChild(cell);
-    }
-    // Дублируем еще раз для плавности (всего 300 слотов)
-    for (let i = 0; i < 150; i++) {
-        const cell = document.createElement('div');
-        cell.className = 'wheel-cell';
-        cell.dataset.index = i + 150;
         cell.textContent = symbols[i % 2];
         strip.appendChild(cell);
     }
@@ -1640,20 +1631,17 @@ function animateRouletteWheel(win) {
         const containerWidth = container.offsetWidth;
 
         const targetSymbol = win ? '🎫' : '❌';
-        let startIdx = Math.floor(Math.random() * cells.length);
         let targetIndex = -1;
         for (let i = 0; i < cells.length; i++) {
-            const idx = (startIdx + i) % cells.length;
-            if (cells[idx].textContent === targetSymbol) {
-                targetIndex = idx;
+            if (cells[i].textContent === targetSymbol) {
+                targetIndex = i;
                 break;
             }
         }
         if (targetIndex === -1) targetIndex = 0;
 
         let targetOffset = targetIndex * cellWidth + cellWidth/2 - containerWidth/2;
-        // Больше оборотов для длительного вращения
-        const extraLoops = 8 + Math.floor(Math.random() * 6);
+        const extraLoops = 12 + Math.floor(Math.random() * 8);
         const totalOffset = targetOffset + extraLoops * cells.length * cellWidth;
 
         strip.style.transform = `translateX(0px)`;
@@ -1715,6 +1703,11 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
             if (data.win) {
                 addFakeWinToFeed('user_' + user_id, data.prize_name, data.prize_value);
             }
+            // Показываем результат 3 секунды, затем скрываем полосу и показываем ключ
+            setTimeout(() => {
+                document.getElementById('key-container').style.display = 'flex';
+                document.getElementById('wheel-wrapper').style.display = 'none';
+            }, 3000);
         } else {
             document.getElementById('result-message').textContent = '❌ ' + data.detail;
         }
@@ -1728,7 +1721,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     btn.innerHTML = 'КРУТИТЬ <span>' + cost2 + ' Токенов</span>';
 });
 
-// СЛОТ-МАШИНА
+// ========== СЛОТ-МАШИНА ==========
 let slotSpinning = false;
 const slotSymbols = ['🍒','🍋','🍊','🍇','🍉','🍓','🍑','🎰'];
 const reels = [
@@ -1788,7 +1781,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
-// РАКЕТКА (полный код)
+// ========== РАКЕТКА (ИСПРАВЛЕННАЯ) ==========
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
@@ -1800,6 +1793,7 @@ let falling = false;
 let fallY = 0;
 let explosionX = 0, explosionY = 0;
 let startTime = 0;
+let isRocketRoundFinished = false;
 
 function drawRocket(multiplier, status) {
     rctx.clearRect(0,0,rocketCanvas.width,rocketCanvas.height);
@@ -1843,9 +1837,21 @@ document.getElementById('rocket-bet-range').addEventListener('input', function()
 
 document.getElementById('rocket-start-btn').addEventListener('click', async () => {
     if (!user_id || rocketActive) return;
+    // Если раунд завершён, сбрасываем флаг
+    if (isRocketRoundFinished) {
+        isRocketRoundFinished = false;
+    }
     const bet = parseInt(document.getElementById('rocket-bet-range').value);
     if (isNaN(bet) || bet<100 || bet>1000) { alert('Ставка от 100 до 1000'); return; }
     if (balance < bet) { alert('Недостаточно токенов!'); return; }
+    
+    // Сбрасываем состояние
+    if (rocketInterval) clearInterval(rocketInterval);
+    if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
+    rocketTrail = [];
+    isCrashed = false;
+    falling = false;
+    
     try {
         const resp = await fetch('/api/rocket/start', {
             method: 'POST',
@@ -1856,12 +1862,12 @@ document.getElementById('rocket-start-btn').addEventListener('click', async () =
         if (resp.ok) {
             rocketRoundId = data.round_id;
             rocketActive = true;
-            isCrashed = false;
-            falling = false;
+            isRocketRoundFinished = false;
             document.getElementById('rocket-start-btn').disabled = true;
             document.getElementById('rocket-cashout-btn').disabled = false;
             document.getElementById('rocket-result').textContent = '';
             document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
+            document.getElementById('rocket-multiplier').textContent = '0.00';
             rocketX = 30;
             rocketY = 170;
             rocketTrail = [{x:rocketX, y:rocketY}];
@@ -1875,7 +1881,12 @@ document.getElementById('rocket-start-btn').addEventListener('click', async () =
 });
 
 function animateRocket() {
-    if (!rocketActive && !falling) return;
+    if (!rocketActive && !falling) {
+        if (!isRocketRoundFinished) {
+            rocketAnimationFrame = requestAnimationFrame(animateRocket);
+        }
+        return;
+    }
     if (isCrashed && !falling) {
         falling = true;
         fallY = rocketY;
@@ -1887,6 +1898,7 @@ function animateRocket() {
         if (fallY > rocketCanvas.height + 50) {
             falling = false;
             isCrashed = false;
+            isRocketRoundFinished = true;
             drawRocket(0, 'idle');
             return;
         }
@@ -1897,28 +1909,29 @@ function animateRocket() {
     if (!rocketActive) return;
     
     const elapsed = (Date.now() - startTime) / 1000;
-    const speedFactor = 1 + elapsed * 0.15;
-    const dx = 2.2 * speedFactor;
-    const dy = 1.8 * speedFactor;
+    // Медленная скорость
+    const speedFactor = 1 + elapsed * 0.06;
+    const dx = 1.2 * speedFactor;
+    const dy = 0.8 * speedFactor;
     rocketX += dx;
     rocketY -= dy;
     if (rocketX > 280) rocketX = 280;
     if (rocketY < 20) rocketY = 20;
-    const sinOffset = 15 * Math.sin(elapsed * 1.7 + 0.5);
-    let targetY = 170 - (rocketX - 30) * (150 / 250);
+    const sinOffset = 10 * Math.sin(elapsed * 1.2 + 0.5);
+    let targetY = 170 - (rocketX - 30) * (140 / 250);
     rocketY = targetY + sinOffset;
     if (rocketY < 10) rocketY = 10;
     if (rocketY > 190) rocketY = 190;
     
     rocketTrail.push({x:rocketX, y:rocketY});
-    if (rocketTrail.length > 150) rocketTrail.shift();
+    if (rocketTrail.length > 120) rocketTrail.shift();
     const mult = parseFloat(document.getElementById('rocket-multiplier').textContent) || 0;
     drawRocket(mult, 'active');
     rocketAnimationFrame = requestAnimationFrame(animateRocket);
 }
 
 async function updateRocketStatus() {
-    if (!rocketRoundId) return;
+    if (!rocketRoundId || isRocketRoundFinished) return;
     try {
         const resp = await fetch(`/api/rocket/status/${rocketRoundId}`);
         const data = await resp.json();
@@ -1931,6 +1944,7 @@ async function updateRocketStatus() {
                 document.getElementById('rocket-start-btn').disabled = false;
                 rocketActive = false;
                 isCrashed = true;
+                isRocketRoundFinished = true;
                 if (rocketInterval) clearInterval(rocketInterval);
                 animateRocket();
                 document.getElementById('rocket-result').textContent = '😞 Ракета упала. Ставка проиграна.';
@@ -1942,6 +1956,7 @@ async function updateRocketStatus() {
                 document.getElementById('rocket-cashout-btn').disabled = true;
                 document.getElementById('rocket-start-btn').disabled = false;
                 rocketActive = false;
+                isRocketRoundFinished = true;
                 if (rocketInterval) clearInterval(rocketInterval);
                 if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
                 fetchUserData();
@@ -1952,7 +1967,7 @@ async function updateRocketStatus() {
 }
 
 document.getElementById('rocket-cashout-btn').addEventListener('click', async () => {
-    if (!user_id || !rocketRoundId || !rocketActive) return;
+    if (!user_id || !rocketRoundId || !rocketActive || isRocketRoundFinished) return;
     try {
         const resp = await fetch('/api/rocket/cashout', {
             method: 'POST',
@@ -1967,6 +1982,7 @@ document.getElementById('rocket-cashout-btn').addEventListener('click', async ()
             document.getElementById('rocket-cashout-btn').disabled = true;
             document.getElementById('rocket-start-btn').disabled = false;
             rocketActive = false;
+            isRocketRoundFinished = true;
             if (rocketInterval) clearInterval(rocketInterval);
             if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
             updateBalanceUI(data.new_balance);
@@ -1987,7 +2003,8 @@ function startCountdown() {
             clearInterval(countdownInterval);
             countdownInterval = null;
             document.getElementById('rocket-countdown').textContent = '0';
-            document.getElementById('rocket-start-btn').click();
+            // Больше не нажимаем старт автоматически!
+            document.getElementById('rocket-start-btn').disabled = false;
         }
     }, 1000);
 }
@@ -1996,7 +2013,7 @@ let autoRocketTimer = null;
 function startAutoRocket() {
     if (autoRocketTimer) clearInterval(autoRocketTimer);
     autoRocketTimer = setInterval(() => {
-        if (!rocketActive) {
+        if (!rocketActive && isRocketRoundFinished) {
             const fakeBet = 100 + Math.floor(Math.random() * 900) * 10;
             simulateRocketRound(fakeBet);
         }
@@ -2005,7 +2022,7 @@ function startAutoRocket() {
 
 function simulateRocketRound(bet) {
     const win = Math.random() < 0.35;
-    const crashMultiplier = win ? 1.1 + Math.random() * 2.0 : 0.5 + Math.random() * 0.5;
+    const crashMultiplier = win ? 1.1 + Math.random() * 2.0 : 0.01 + Math.random() * 0.5;
     let progress = 0;
     const interval = setInterval(() => {
         progress += 0.02;
@@ -2020,25 +2037,29 @@ function simulateRocketRound(bet) {
             document.getElementById('rocket-multiplier').textContent = '0.00';
             document.getElementById('rocket-status').textContent = 'Ожидание';
             drawRocket(0, 'idle');
+            isRocketRoundFinished = true;
             return;
         }
-        const currentMultiplier = win ? 1 + progress * crashMultiplier : progress * 0.8;
+        const currentMultiplier = win ? 1 + progress * crashMultiplier : progress * 0.3;
         document.getElementById('rocket-multiplier').textContent = currentMultiplier.toFixed(2);
         if (win) {
             document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
             drawRocket(currentMultiplier, 'active');
         } else {
-            if (progress > 0.6) {
+            if (progress > 0.3) {
                 document.getElementById('rocket-status').textContent = '💥 Упала!';
                 drawRocket(currentMultiplier, 'crashed');
+                isRocketRoundFinished = true;
+                clearInterval(interval);
             } else {
                 document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
                 drawRocket(currentMultiplier, 'active');
             }
         }
-    }, 200);
+    }, 150);
 }
 
+// ========== ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ ==========
 function startFakeWins() {
     setInterval(() => {
         const isWin = Math.random() < 0.75;
@@ -2177,7 +2198,15 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
             document.getElementById('key-container').style.display = 'flex';
             document.getElementById('wheel-wrapper').style.display = 'none';
         }
-        if (tab==='rocket') fetchUserData();
+        if (tab==='rocket') {
+            fetchUserData();
+            // Сбрасываем состояние ракетки при входе
+            if (!rocketActive) {
+                isRocketRoundFinished = true;
+                document.getElementById('rocket-start-btn').disabled = false;
+                document.getElementById('rocket-cashout-btn').disabled = true;
+            }
+        }
     });
 });
 """)
@@ -2332,7 +2361,7 @@ async def api_spin(data: SpinRequest):
     else:
         message = "😞 К сожалению, вы проиграли. Попробуйте ещё раз!"
     new_balance = get_user(user_id)["balance"]
-    await asyncio.sleep(3)
+    await asyncio.sleep(1)
     return {
         "win": win,
         "prize_name": prize_name if win else None,
@@ -2358,7 +2387,7 @@ async def api_slot_spin(data: SlotSpinRequest):
         update_balance(user_id, win_amount, f"Выигрыш в игровом автомате {win_amount} токенов")
         add_win(user_id, f"🎰 {symbols[0]}{symbols[1]}{symbols[2]}", win_amount, "slot")
     new_balance = get_user(user_id)["balance"]
-    await asyncio.sleep(3)
+    await asyncio.sleep(1)
     return {
         "win": win,
         "symbols": symbols,
@@ -2378,11 +2407,8 @@ async def rocket_start(data: RocketStartRequest):
     if user["balance"] < bet:
         raise HTTPException(status_code=400, detail="Недостаточно токенов")
     update_balance(user_id, -bet, f"Ставка в ракетке {bet} токенов")
-    crash_display = random.lognormvariate(0.8, 0.6)
-    if crash_display < 1.0:
-        crash_display = 1.0 + random.random() * 0.5
-    elif crash_display > 30:
-        crash_display = 30.0
+    # КРАШ МОЖЕТ БЫТЬ ОТ 0.01 ДО 30.0
+    crash_display = random.uniform(0.01, 30.0)
     global round_counter
     round_counter += 1
     round_id = round_counter
@@ -2414,7 +2440,8 @@ async def rocket_status(round_id: int):
             "cashed_out": True
         }
     elapsed = time.time() - round_data["start_time"]
-    display_multiplier = elapsed * 0.3
+    # Очень медленный рост (0.08 вместо 0.3)
+    display_multiplier = elapsed * 0.08
     if display_multiplier >= round_data["crash_display"]:
         round_data["status"] = "crashed"
         return {
@@ -2442,7 +2469,7 @@ async def rocket_cashout(data: RocketCashoutRequest):
     if round_data["status"] != "active":
         raise HTTPException(status_code=400, detail="Round already finished")
     elapsed = time.time() - round_data["start_time"]
-    display_multiplier = elapsed * 0.3
+    display_multiplier = elapsed * 0.08
     if display_multiplier >= round_data["crash_display"]:
         round_data["status"] = "crashed"
         raise HTTPException(status_code=400, detail="Ракета уже упала")
