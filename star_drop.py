@@ -2123,4 +2123,438 @@ document.querySelectorAll('.deposit-option').forEach(btn => {
             return;
         }
         try {
-            const resp = await fetch('/api/create_payment',
+            const resp = await fetch('/api/create_payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id, amount })
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                window.open(data.payment_url, '_blank');
+                localStorage.setItem('current_order', data.order_id);
+                alert('Ссылка на оплату открыта. После оплаты баланс обновится автоматически.');
+            } else {
+                alert('Ошибка: ' + data.detail);
+            }
+        } catch (e) {
+            alert('Ошибка соединения');
+            console.error(e);
+        }
+    });
+});
+
+document.getElementById('close-deposit').addEventListener('click', () => {
+    document.getElementById('deposit-menu').style.display = 'none';
+});
+
+document.getElementById('withdraw-btn').addEventListener('click', async () => {
+    if (!user_id) return;
+    const amount = prompt('Введите сумму вывода (минимум 500 токенов):');
+    if (!amount || isNaN(amount) || amount < 500) {
+        alert('Введите корректное число не менее 500');
+        return;
+    }
+    try {
+        const resp = await fetch('/api/withdraw', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id, amount: parseInt(amount) })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            alert('✅ Заявка на вывод отправлена!');
+            fetchUserData();
+        } else alert('❌ ' + data.detail);
+    } catch (e) { alert('Ошибка соединения'); console.error(e); }
+});
+
+document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        document.getElementById('roulette-page').style.display = tab==='roulette' ? 'block' : 'none';
+        document.getElementById('slot-page').style.display = tab==='slot' ? 'block' : 'none';
+        document.getElementById('rocket-page').style.display = tab==='rocket' ? 'block' : 'none';
+        if (tab==='rocket') fetchUserData();
+    });
+});
+""")
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/static/index.html")
+
+@app.head("/")
+async def root_head():
+    return RedirectResponse(url="/static/index.html")
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    update = types.Update(**(await request.json()))
+    await dp.feed_update(bot, update)
+    return {"status": "ok"}
+
+# API модели
+class SpinRequest(BaseModel):
+    user_id: int
+    mode: str
+
+class WithdrawRequest(BaseModel):
+    user_id: int
+    amount: int
+
+class PromoRequest(BaseModel):
+    user_id: int
+    code: str
+
+class SlotSpinRequest(BaseModel):
+    user_id: int
+    bet: int
+
+class RocketStartRequest(BaseModel):
+    user_id: int
+    bet: int
+
+class RocketCashoutRequest(BaseModel):
+    round_id: int
+    user_id: int
+
+class PaymentRequest(BaseModel):
+    user_id: int
+    amount: int
+
+class RegisterRequest(BaseModel):
+    user_id: int
+    username: str = None
+
+class YookassaNotification(BaseModel):
+    event: str
+    object: dict
+
+# ==================== НОВЫЕ ЭНДПОИНТЫ ====================
+
+@app.post("/api/register")
+async def register_user(data: RegisterRequest):
+    user = get_user(data.user_id)
+    if user:
+        return {"balance": user["balance"]}
+    create_user(data.user_id, data.username)
+    new_user = get_user(data.user_id)
+    return {"balance": new_user["balance"]}
+
+@app.post("/api/create_payment")
+async def create_payment(data: PaymentRequest):
+    user = get_user(data.user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+    if data.amount not in PAYMENT_LINKS:
+        raise HTTPException(400, "Invalid amount")
+
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("INSERT INTO orders (user_id, amount, status) VALUES (?, ?, 'pending')", 
+                (data.user_id, data.amount))
+    order_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+
+    payment_url = PAYMENT_LINKS[data.amount]
+    return {"payment_url": payment_url, "order_id": order_id}
+
+@app.post("/api/payment_callback")
+async def payment_callback(notification: YookassaNotification):
+    if notification.event == "payment.succeeded":
+        payment_id = notification.object.get("id")
+        amount = notification.object.get("amount", {}).get("value")
+        if amount is None:
+            return {"error": "No amount"}
+
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+        cur.execute("SELECT id, user_id FROM orders WHERE amount = ? AND status = 'pending' ORDER BY id DESC LIMIT 1", 
+                    (int(float(amount)),))
+        order = cur.fetchone()
+        if not order:
+            conn.close()
+            return {"error": "Order not found"}
+
+        order_id, user_id = order
+        tokens = int(float(amount))
+        update_balance(user_id, tokens, f"Пополнение через ЮKassa (заказ {order_id})")
+        cur.execute("UPDATE orders SET status = 'paid', payment_id = ? WHERE id = ?", 
+                    (payment_id, order_id))
+        conn.commit()
+        conn.close()
+        return {"status": "ok"}
+    return {"status": "ignored"}
+
+# ==================== ОСТАВШИЕСЯ ЭНДПОИНТЫ ====================
+
+@app.get("/api/user/{user_id}")
+async def api_get_user(user_id: int):
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] == 0:
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET balance = ? WHERE user_id = ?", (START_BALANCE, user_id))
+        cur.execute(
+            "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
+            (user_id, "deposit", START_BALANCE, "Стартовый бонус 50 токенов (восстановлен через API)")
+        )
+        conn.commit()
+        conn.close()
+        user["balance"] = START_BALANCE
+    return {"balance": user["balance"], "username": user["username"]}
+
+@app.get("/api/user_bets/{user_id}")
+async def api_user_bets(user_id: int):
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    bets = get_user_bets(user_id, 50)
+    return bets
+
+@app.post("/api/spin")
+async def api_spin(data: SpinRequest):
+    user_id = data.user_id
+    mode = data.mode
+    cost = SPIN_COSTS.get(mode, 25)
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < cost:
+        raise HTTPException(status_code=400, detail="Недостаточно токенов")
+    update_balance(user_id, -cost, f"Спин в режиме {mode}")
+    win, prize_name, prize_value = get_next_spin_result(user_id, mode)
+    if win:
+        update_balance(user_id, prize_value, f"Выигрыш: {prize_name}")
+        add_win(user_id, prize_name, prize_value, mode)
+        message = f"🎉 Вы выиграли {prize_name} (+{prize_value} токенов)!"
+    else:
+        message = "😞 К сожалению, вы проиграли. Попробуйте ещё раз!"
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "win": win,
+        "prize_name": prize_name if win else None,
+        "prize_value": prize_value if win else 0,
+        "new_balance": new_balance,
+        "message": message
+    }
+
+@app.post("/api/slot_spin")
+async def api_slot_spin(data: SlotSpinRequest):
+    user_id = data.user_id
+    bet = data.bet
+    if bet < 20 or bet > 100:
+        raise HTTPException(status_code=400, detail="Ставка должна быть от 20 до 100 токенов")
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < bet:
+        raise HTTPException(status_code=400, detail="Недостаточно токенов")
+    
+    update_balance(user_id, -bet, f"Ставка в игровом автомате {bet} токенов")
+    win, symbols, win_amount = get_slot_result(bet)
+    if win:
+        update_balance(user_id, win_amount, f"Выигрыш в игровом автомате {win_amount} токенов")
+        add_win(user_id, f"🎰 {symbols[0]}{symbols[1]}{symbols[2]}", win_amount, "slot")
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "win": win,
+        "symbols": symbols,
+        "win_amount": win_amount if win else 0,
+        "new_balance": new_balance
+    }
+
+@app.post("/api/rocket/start")
+async def rocket_start(data: RocketStartRequest):
+    user_id = data.user_id
+    bet = data.bet
+    if bet < 100 or bet > 1000:
+        raise HTTPException(status_code=400, detail="Ставка должна быть от 100 до 1000 токенов")
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < bet:
+        raise HTTPException(status_code=400, detail="Недостаточно токенов")
+    
+    update_balance(user_id, -bet, f"Ставка в ракетке {bet} токенов")
+    
+    # Генерация краша с логнормальным распределением
+    crash_display = random.lognormvariate(0.8, 0.6)
+    if crash_display < 1.0:
+        crash_display = 1.0 + random.random() * 0.5
+    elif crash_display > 30:
+        crash_display = 30.0
+    
+    global round_counter
+    round_counter += 1
+    round_id = round_counter
+    rocket_rounds[round_id] = {
+        "user_id": user_id,
+        "bet": bet,
+        "crash_display": crash_display,
+        "start_time": time.time(),
+        "status": "active",
+        "current_display": 0.0
+    }
+    
+    return {"round_id": round_id}
+
+@app.get("/api/rocket/status/{round_id}")
+async def rocket_status(round_id: int):
+    if round_id not in rocket_rounds:
+        raise HTTPException(status_code=404, detail="Round not found")
+    round_data = rocket_rounds[round_id]
+    
+    if round_data["status"] == "crashed":
+        return {
+            "display_multiplier": round_data["crash_display"],
+            "crashed": True,
+            "cashed_out": False
+        }
+    if round_data["status"] == "cashed_out":
+        return {
+            "display_multiplier": round_data["current_display"],
+            "crashed": False,
+            "cashed_out": True
+        }
+    
+    elapsed = time.time() - round_data["start_time"]
+    display_multiplier = elapsed * 0.3
+    if display_multiplier >= round_data["crash_display"]:
+        round_data["status"] = "crashed"
+        return {
+            "display_multiplier": round_data["crash_display"],
+            "crashed": True,
+            "cashed_out": False
+        }
+    else:
+        round_data["current_display"] = display_multiplier
+        return {
+            "display_multiplier": display_multiplier,
+            "crashed": False,
+            "cashed_out": False
+        }
+
+@app.post("/api/rocket/cashout")
+async def rocket_cashout(data: RocketCashoutRequest):
+    round_id = data.round_id
+    user_id = data.user_id
+    if round_id not in rocket_rounds:
+        raise HTTPException(status_code=404, detail="Round not found")
+    round_data = rocket_rounds[round_id]
+    if round_data["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Not your round")
+    if round_data["status"] != "active":
+        raise HTTPException(status_code=400, detail="Round already finished")
+    
+    elapsed = time.time() - round_data["start_time"]
+    display_multiplier = elapsed * 0.3
+    if display_multiplier >= round_data["crash_display"]:
+        round_data["status"] = "crashed"
+        raise HTTPException(status_code=400, detail="Ракета уже упала")
+    
+    real_multiplier = 1.0 + display_multiplier
+    win_amount = int(round_data["bet"] * real_multiplier)
+    update_balance(user_id, win_amount, f"Выигрыш в ракетке {win_amount} токенов")
+    add_win(user_id, f"🚀 x{real_multiplier:.2f}", win_amount, "rocket")
+    round_data["status"] = "cashed_out"
+    round_data["current_display"] = display_multiplier
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "win_amount": win_amount,
+        "new_balance": new_balance,
+        "multiplier": real_multiplier
+    }
+
+@app.post("/api/withdraw")
+async def api_withdraw(data: WithdrawRequest):
+    user_id = data.user_id
+    amount = data.amount
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < amount:
+        raise HTTPException(status_code=400, detail="Недостаточно токенов")
+    if amount < 500:
+        raise HTTPException(status_code=400, detail="Минимальная сумма вывода – 500 токенов")
+    create_withdraw_request(user_id, amount)
+    return {"status": "success", "message": "Заявка на вывод отправлена администратору"}
+
+@app.get("/api/leaderboard")
+async def api_leaderboard():
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10")
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+@app.get("/api/recent_wins")
+async def api_recent_wins():
+    return get_recent_wins(limit=10)
+
+@app.get("/api/referral/{user_id}")
+async def api_get_referral(user_id: int):
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    info = get_referral_info(user_id)
+    link = get_referral_link(user_id)
+    return {"code": info["code"], "count": info["count"], "link": link}
+
+@app.post("/api/activate_promo")
+async def activate_promo(data: PromoRequest):
+    user_id = data.user_id
+    code = data.code.lower().strip()
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if code not in PROMOCODES:
+        raise HTTPException(status_code=400, detail="Неверный промокод")
+    
+    if is_promo_used(user_id, code):
+        raise HTTPException(status_code=400, detail="Вы уже использовали этот промокод")
+    
+    reward = PROMOCODES[code]
+    update_balance(user_id, reward, f"Промокод {code}")
+    use_promo(user_id, code)
+    
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "status": "success",
+        "message": f"Промокод активирован! Вы получили +{reward} токенов",
+        "new_balance": new_balance
+    }
+
+# ==================== ЗАПУСК ====================
+async def set_webhook():
+    webhook_url = f"https://star-drop.onrender.com/webhook"
+    await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+    logging.info(f"Webhook установлен на {webhook_url}")
+
+async def run_uvicorn():
+    port = int(os.environ.get("PORT", 10000))
+    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
+
+async def main():
+    server_task = asyncio.create_task(run_uvicorn())
+    await set_webhook()
+    await server_task
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n🛑 Остановка сервисов...")
+        sys.exit(0)
