@@ -72,12 +72,14 @@ def get_next_spin_result(user_id: int, mode: str):
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
+    # Обновлённая таблица users с username и password
     cur.execute('''
         CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            username TEXT,
-            phone TEXT UNIQUE,
-            balance INTEGER DEFAULT 0,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            telegram_id INTEGER,
+            balance INTEGER DEFAULT 50,
             total_spent INTEGER DEFAULT 0,
             total_won INTEGER DEFAULT 0,
             registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -89,32 +91,35 @@ def init_db():
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
+            username TEXT,
             type TEXT,
             amount INTEGER,
             description TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(user_id)
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     ''')
     cur.execute('''
         CREATE TABLE IF NOT EXISTS wins (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
+            username TEXT,
             prize_name TEXT,
             prize_value INTEGER,
             mode TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(user_id)
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     ''')
     cur.execute('''
         CREATE TABLE IF NOT EXISTS withdraw_requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
+            username TEXT,
             amount INTEGER,
             status TEXT DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(user_id)
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     ''')
     cur.execute('''
@@ -123,8 +128,8 @@ def init_db():
             referrer_id INTEGER,
             referred_id INTEGER UNIQUE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (referrer_id) REFERENCES users(user_id),
-            FOREIGN KEY (referred_id) REFERENCES users(user_id)
+            FOREIGN KEY (referrer_id) REFERENCES users(id),
+            FOREIGN KEY (referred_id) REFERENCES users(id)
         )
     ''')
     cur.execute('''
@@ -133,7 +138,7 @@ def init_db():
             user_id INTEGER,
             code TEXT,
             used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(user_id),
+            FOREIGN KEY (user_id) REFERENCES users(id),
             UNIQUE(user_id, code)
         )
     ''')
@@ -141,113 +146,95 @@ def init_db():
         CREATE TABLE IF NOT EXISTS orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
+            username TEXT,
             amount INTEGER,
             status TEXT DEFAULT 'pending',
             payment_id TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(user_id)
+            FOREIGN KEY (user_id) REFERENCES users(id)
         )
     ''')
-    try:
-        cur.execute("ALTER TABLE users ADD COLUMN phone TEXT UNIQUE")
-    except sqlite3.OperationalError:
-        pass
     conn.commit()
     conn.close()
 
-def get_user(user_id: int) -> Optional[Dict]:
+def get_user_by_username(username: str) -> Optional[Dict]:
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+    cur.execute("SELECT * FROM users WHERE username = ?", (username,))
     row = cur.fetchone()
     conn.close()
     return dict(row) if row else None
 
-def create_user(user_id: int, username: str = None, phone: str = None, referrer_code: str = None):
+def get_user_by_id(user_id: int) -> Optional[Dict]:
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def create_user(username: str, password: str, telegram_id: int = None) -> Optional[Dict]:
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    code = hashlib.md5(str(user_id).encode()).hexdigest()[:8]
     
-    cur.execute("SELECT user_id, balance FROM users WHERE user_id = ?", (user_id,))
-    row = cur.fetchone()
+    # Проверяем, существует ли пользователь
+    cur.execute("SELECT id FROM users WHERE username = ?", (username,))
+    if cur.fetchone():
+        conn.close()
+        return None
     
-    if row is None:
-        cur.execute(
-            "INSERT INTO users (user_id, username, phone, referral_code, balance) VALUES (?, ?, ?, ?, ?)",
-            (user_id, username, phone, code, START_BALANCE)
-        )
-        cur.execute(
-            "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
-            (user_id, "deposit", START_BALANCE, "Стартовый бонус 50 токенов")
-        )
-    else:
-        if phone:
-            cur.execute("UPDATE users SET phone = ? WHERE user_id = ?", (phone, user_id))
-        if username:
-            cur.execute("UPDATE users SET username = ? WHERE user_id = ?", (username, user_id))
-        if row[1] == 0:
-            cur.execute("UPDATE users SET balance = ? WHERE user_id = ?", (START_BALANCE, user_id))
-            cur.execute(
-                "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
-                (user_id, "deposit", START_BALANCE, "Стартовый бонус 50 токенов (восстановлен)")
-            )
+    # Создаём пользователя
+    code = hashlib.md5(username.encode()).hexdigest()[:8]
+    cur.execute(
+        "INSERT INTO users (username, password, telegram_id, referral_code, balance) VALUES (?, ?, ?, ?, ?)",
+        (username, password, telegram_id, code, START_BALANCE)
+    )
+    user_id = cur.lastrowid
     
-    if referrer_code and row is None:
-        cur.execute("SELECT user_id FROM users WHERE referral_code = ?", (referrer_code,))
-        ref_row = cur.fetchone()
-        if ref_row:
-            referrer_id = ref_row[0]
-            if referrer_id != user_id:
-                cur.execute("SELECT id FROM referrals WHERE referred_id = ?", (user_id,))
-                if not cur.fetchone():
-                    cur.execute(
-                        "INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)",
-                        (referrer_id, user_id)
-                    )
-                    cur.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (REFERRAL_BONUS, referrer_id))
-                    cur.execute(
-                        "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
-                        (referrer_id, "deposit", REFERRAL_BONUS, f"Бонус за приглашение пользователя {user_id}")
-                    )
+    cur.execute(
+        "INSERT INTO transactions (user_id, username, type, amount, description) VALUES (?, ?, ?, ?, ?)",
+        (user_id, username, "deposit", START_BALANCE, "Стартовый бонус 50 токенов")
+    )
     
     conn.commit()
     conn.close()
+    return get_user_by_id(user_id)
+
+def login_user(username: str, password: str) -> Optional[Dict]:
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password))
+    row = cur.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 def update_balance(user_id: int, delta: int, description: str = ""):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    cur.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (delta, user_id))
+    cur.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (delta, user_id))
+    cur.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+    row = cur.fetchone()
+    username = row[0] if row else None
     t_type = "spin" if "спин" in description else "deposit" if delta > 0 else "withdraw"
-    cur.execute("INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
-                (user_id, t_type, delta, description))
+    cur.execute("INSERT INTO transactions (user_id, username, type, amount, description) VALUES (?, ?, ?, ?, ?)",
+                (user_id, username, t_type, delta, description))
     conn.commit()
     conn.close()
 
 def add_win(user_id: int, prize_name: str, prize_value: int, mode: str):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    cur.execute("INSERT INTO wins (user_id, prize_name, prize_value, mode) VALUES (?, ?, ?, ?)",
-                (user_id, prize_name, prize_value, mode))
-    cur.execute("UPDATE users SET total_won = total_won + ? WHERE user_id = ?", (prize_value, user_id))
+    cur.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+    row = cur.fetchone()
+    username = row[0] if row else None
+    cur.execute("INSERT INTO wins (user_id, username, prize_name, prize_value, mode) VALUES (?, ?, ?, ?, ?)",
+                (user_id, username, prize_name, prize_value, mode))
+    cur.execute("UPDATE users SET total_won = total_won + ? WHERE id = ?", (prize_value, user_id))
     conn.commit()
     conn.close()
-
-def get_recent_wins(limit: int = 10) -> List[Dict]:
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute('''
-        SELECT u.username, w.prize_name, w.prize_value, w.created_at
-        FROM wins w
-        JOIN users u ON w.user_id = u.user_id
-        WHERE w.prize_value > 0
-        ORDER BY w.created_at DESC
-        LIMIT ?
-    ''', (limit,))
-    rows = cur.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
 
 def get_user_bets(user_id: int, limit: int = 20) -> List[Dict]:
     conn = sqlite3.connect(DB_NAME)
@@ -264,27 +251,28 @@ def get_user_bets(user_id: int, limit: int = 20) -> List[Dict]:
     conn.close()
     return [dict(row) for row in rows]
 
+def create_withdraw_request(user_id: int, amount: int):
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+    row = cur.fetchone()
+    username = row[0] if row else None
+    cur.execute("INSERT INTO withdraw_requests (user_id, username, amount) VALUES (?, ?, ?)", (user_id, username, amount))
+    conn.commit()
+    conn.close()
+
 def get_withdraw_requests(status: str = "pending") -> List[Dict]:
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute('''
-        SELECT w.*, u.username 
-        FROM withdraw_requests w
-        JOIN users u ON w.user_id = u.user_id
-        WHERE w.status = ?
-        ORDER BY w.created_at ASC
+        SELECT * FROM withdraw_requests
+        WHERE status = ?
+        ORDER BY created_at ASC
     ''', (status,))
     rows = cur.fetchall()
     conn.close()
     return [dict(row) for row in rows]
-
-def create_withdraw_request(user_id: int, amount: int):
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    cur.execute("INSERT INTO withdraw_requests (user_id, amount) VALUES (?, ?)", (user_id, amount))
-    conn.commit()
-    conn.close()
 
 def approve_withdraw(request_id: int):
     conn = sqlite3.connect(DB_NAME)
@@ -294,9 +282,12 @@ def approve_withdraw(request_id: int):
     row = cur.fetchone()
     if row:
         user_id, amount = row
-        cur.execute("UPDATE users SET balance = balance - ? WHERE user_id = ?", (amount, user_id))
-        cur.execute("INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
-                    (user_id, "withdraw", -amount, f"Вывод {amount} токенов (одобрено)"))
+        cur.execute("UPDATE users SET balance = balance - ? WHERE id = ?", (amount, user_id))
+        cur.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+        username_row = cur.fetchone()
+        username = username_row[0] if username_row else None
+        cur.execute("INSERT INTO transactions (user_id, username, type, amount, description) VALUES (?, ?, ?, ?, ?)",
+                    (user_id, username, "withdraw", -amount, f"Вывод {amount} токенов (одобрено)"))
     conn.commit()
     conn.close()
 
@@ -306,24 +297,6 @@ def reject_withdraw(request_id: int):
     cur.execute("UPDATE withdraw_requests SET status = 'rejected' WHERE id = ?", (request_id,))
     conn.commit()
     conn.close()
-
-def get_referral_info(user_id: int) -> Dict:
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("SELECT referral_code FROM users WHERE user_id = ?", (user_id,))
-    row = cur.fetchone()
-    code = row["referral_code"] if row else None
-    cur.execute("SELECT COUNT(*) as count FROM referrals WHERE referrer_id = ?", (user_id,))
-    count = cur.fetchone()["count"]
-    conn.close()
-    return {"code": code, "count": count}
-
-def get_referral_link(user_id: int) -> str:
-    info = get_referral_info(user_id)
-    if info["code"]:
-        return f"https://t.me/StarDrop11_bot?start=ref_{info['code']}"
-    return None
 
 def is_promo_used(user_id: int, code: str) -> bool:
     conn = sqlite3.connect(DB_NAME)
@@ -339,6 +312,39 @@ def use_promo(user_id: int, code: str):
     cur.execute("INSERT INTO used_promocodes (user_id, code) VALUES (?, ?)", (user_id, code))
     conn.commit()
     conn.close()
+
+def get_referral_info(user_id: int) -> Dict:
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT referral_code FROM users WHERE id = ?", (user_id,))
+    row = cur.fetchone()
+    code = row["referral_code"] if row else None
+    cur.execute("SELECT COUNT(*) as count FROM referrals WHERE referrer_id = ?", (user_id,))
+    count = cur.fetchone()["count"]
+    conn.close()
+    return {"code": code, "count": count}
+
+def get_referral_link(user_id: int) -> str:
+    info = get_referral_info(user_id)
+    if info["code"]:
+        return f"https://t.me/StarDrop11_bot?start=ref_{info['code']}"
+    return None
+
+def get_recent_wins(limit: int = 10) -> List[Dict]:
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute('''
+        SELECT username, prize_name, prize_value, created_at
+        FROM wins
+        WHERE prize_value > 0
+        ORDER BY created_at DESC
+        LIMIT ?
+    ''', (limit,))
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 init_db()
 
@@ -391,45 +397,19 @@ async def cmd_start(message: types.Message):
     
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
-    create_user(user_id, username, referrer_code=referrer_code)
     
-    user = get_user(user_id)
-    if user and user.get("phone"):
-        await message.answer(
-            f"🎉 С возвращением!\n"
-            f"Ваш баланс: {user['balance']} токенов 🎫\n\n"
-            "Добро пожаловать в **Star Drop** – розыгрыш подарков Telegram!\n"
-            "Нажми кнопку ниже, чтобы открыть наше мини-приложение и испытать удачу! 🍀",
-            reply_markup=get_start_keyboard()
-        )
-    else:
-        await message.answer(
-            f"👋 Привет!\n\n"
-            "Для доступа к нашему сервису необходимо поделиться номером телефона.\n"
-            "Нажмите кнопку ниже, чтобы отправить контакт.",
-            reply_markup=get_phone_keyboard()
-        )
+    await message.answer(
+        "👋 Добро пожаловать в **Star Drop**!\n\n"
+        "Для входа в игру используйте наше мини-приложение.\n"
+        "Нажмите кнопку ниже, чтобы открыть приложение и войти в свой аккаунт.",
+        reply_markup=get_start_keyboard()
+    )
 
 @dp.message(F.contact)
 async def handle_contact(message: types.Message):
-    contact = message.contact
-    user_id = message.from_user.id
-    username = message.from_user.username or message.from_user.first_name
-    if contact.user_id != user_id:
-        await message.answer("⛔ Пожалуйста, отправьте свой собственный номер.", reply_markup=get_phone_keyboard())
-        return
-    phone = contact.phone_number
-    create_user(user_id, username, phone)
-    user = get_user(user_id)
-    balance = user['balance'] if user else 0
     await message.answer(
-        f"✅ Регистрация успешно завершена!\n"
-        f"Ваш баланс: {balance} токенов 🎫\n\n"
-        "Теперь вы можете пользоваться нашим сервисом. 🎉",
-        reply_markup=ReplyKeyboardRemove()
-    )
-    await message.answer(
-        "Нажмите кнопку ниже, чтобы открыть **Star Drop** и начать игру!",
+        "📱 Для входа используйте мини-приложение.\n"
+        "Нажмите кнопку '🎰 Открыть рулетку' ниже.",
         reply_markup=get_start_keyboard()
     )
 
@@ -440,26 +420,26 @@ async def give_tokens(message: types.Message):
         return
     args = message.text.split()
     if len(args) != 3:
-        await message.answer("Использование: /give <user_id> <количество>")
+        await message.answer("Использование: /give <username> <количество>")
         return
     try:
-        target_id = int(args[1])
+        target_username = args[1]
         amount = int(args[2])
         if amount <= 0:
             await message.answer("Сумма должна быть положительной.")
             return
-        user = get_user(target_id)
+        user = get_user_by_username(target_username)
         if not user:
-            await message.answer(f"Пользователь с ID {target_id} не найден.")
+            await message.answer(f"Пользователь с именем {target_username} не найден.")
             return
-        update_balance(target_id, amount, f"Администратор выдал {amount} токенов")
-        new_balance = get_user(target_id)['balance']
+        update_balance(user['id'], amount, f"Администратор выдал {amount} токенов")
+        new_balance = get_user_by_id(user['id'])['balance']
         await message.answer(
-            f"✅ Пользователю @{user['username']} (ID: {target_id}) начислено {amount} токенов.\n"
+            f"✅ Пользователю @{target_username} начислено {amount} токенов.\n"
             f"Новый баланс: {new_balance}"
         )
     except ValueError:
-        await message.answer("ID и сумма должны быть числами.")
+        await message.answer("Сумма должна быть числом.")
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
@@ -517,33 +497,46 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=19">
+    <link rel="stylesheet" href="/static/style.css?v=20">
 </head>
-<body class="theme-light">
-    <div class="stars-background">
-        <span>⭐</span><span>✨</span><span>🌟</span><span>💫</span>
-        <span>🎁</span><span>🧸</span><span>💎</span><span>🧢</span>
-        <span>🚀</span><span>💍</span><span>🧁</span><span>🎈</span>
-        <span>👑</span><span>🛸</span><span>💎</span><span>🎁</span>
-        <span>🎰</span><span>💵</span><span>⌚</span><span>👟</span>
-        <span>📱</span><span>💻</span><span>🖥️</span><span>⌨️</span>
-        <span>🕹️</span><span>🎮</span><span>🏆</span><span>🎖️</span>
-        <span>💎</span><span>👑</span><span>🚀</span><span>🛸</span>
+<body>
+    <!-- ЭКРАН ВХОДА -->
+    <div id="login-screen" style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; width:100%; max-width:400px; padding:20px; background:#0a0a0a;">
+        <h1 style="color:var(--accent-color, #ffd700); font-size:28px; margin-bottom:10px;">⭐ STAR DROP</h1>
+        <p style="color:#aaa; margin-bottom:30px;">Войдите в свой аккаунт</p>
+        <div style="width:100%; max-width:300px;">
+            <input id="login-username" type="text" placeholder="Имя пользователя" style="width:100%; padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#fff; margin-bottom:10px; font-size:16px;">
+            <input id="login-password" type="password" placeholder="Пароль" style="width:100%; padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#fff; margin-bottom:15px; font-size:16px;">
+            <button id="login-btn" style="width:100%; padding:14px; background:#ffd700; color:#0a0a0a; border:none; border-radius:8px; font-weight:bold; font-size:18px; cursor:pointer;">Войти</button>
+            <div id="login-error" style="color:#ff1744; margin-top:10px; text-align:center; font-size:14px;"></div>
+        </div>
     </div>
 
-    <div id="app-content" style="width:100%; max-width:400px;">
+    <!-- ОСНОВНОЕ ПРИЛОЖЕНИЕ -->
+    <div id="app-content" style="display:none; width:100%; max-width:400px;">
+        <div class="stars-background">
+            <span>⭐</span><span>✨</span><span>🌟</span><span>💫</span>
+            <span>🎁</span><span>🧸</span><span>💎</span><span>🧢</span>
+            <span>🚀</span><span>💍</span><span>🧁</span><span>🎈</span>
+            <span>👑</span><span>🛸</span><span>💎</span><span>🎁</span>
+            <span>🎰</span><span>💵</span><span>⌚</span><span>👟</span>
+            <span>📱</span><span>💻</span><span>🖥️</span><span>⌨️</span>
+            <span>🕹️</span><span>🎮</span><span>🏆</span><span>🎖️</span>
+            <span>💎</span><span>👑</span><span>🚀</span><span>🛸</span>
+        </div>
+
         <div id="top-bar">
             <div id="user-info" style="display:flex; align-items:center; gap:10px; cursor:pointer;">
                 <div id="avatar-container" style="width:32px; height:32px; border-radius:50%; overflow:hidden; background:var(--accent-color);">
                     <img id="avatar-img" src="" alt="avatar" style="width:100%; height:100%; object-fit:cover; display:none;">
                     <span id="avatar-placeholder" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; font-weight:bold; font-size:16px; color:#0a0a0a;">U</span>
                 </div>
-                <span id="username" style="display:none;"></span>
+                <span id="username-display" style="color:var(--accent-color); font-weight:600; font-size:14px;"></span>
             </div>
             <div id="balance">
                 <span id="balance-amount">0</span> 🎫
                 <button id="deposit-btn">+</button>
-                <button id="bets-btn">Мои ставки</button>
+                <button id="bets-btn">Ставки</button>
             </div>
         </div>
 
@@ -675,10 +668,11 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
             <button class="nav-btn active" data-tab="roulette">Рулетка</button>
             <button class="nav-btn" data-tab="slot">Барабан</button>
             <button class="nav-btn" data-tab="rocket">Ракетка</button>
+            <button id="logout-btn" style="background:transparent; color:#888; border:none; font-size:14px; font-weight:600; padding:6px 20px; border-radius:20px; cursor:pointer;">🚪 Выход</button>
         </div>
     </div>
 
-    <script src="/static/script.js?v=19"></script>
+    <script src="/static/script.js?v=20"></script>
 </body>
 </html>""")
 
@@ -838,8 +832,10 @@ body.theme-hard {
     font-size: 16px;
     color: #0a0a0a;
 }
-#username {
-    display: none !important;
+#username-display {
+    color: var(--accent-color);
+    font-weight: 600;
+    font-size: 14px;
 }
 #balance {
     font-size: 18px;
@@ -1360,6 +1356,7 @@ body.theme-hard {
     padding: 0 10px;
     will-change: transform;
     transition: none;
+    min-width: 100%;
 }
 .wheel-cell {
     flex: 0 0 70px;
@@ -1373,6 +1370,7 @@ body.theme-hard {
     border: 2px solid #444;
     box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
     transition: border-color 0.3s, box-shadow 0.3s;
+    flex-shrink: 0;
 }
 .wheel-cell.win-cell {
     border-color: #4CAF50;
@@ -1394,62 +1392,83 @@ body.theme-hard {
     z-index: 5;
     line-height: 1;
 }
+
+#logout-btn:hover {
+    color: #ff1744 !important;
+}
 """)
 
-# JavaScript - ИСПРАВЛЕННЫЙ (ракетка и рулетка)
+# JavaScript
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
-let user_id = null;
+let current_user = null;
 let balance = 0;
 let currentMode = 'light';
 let isSpinning = false;
 
-function showAuthError(message) {
-    document.body.innerHTML = `
-        <div style="display:flex; justify-content:center; align-items:center; height:100vh; flex-direction:column; background:#0a0a0a; color:#fff; text-align:center; padding:20px;">
-            <h1 style="color:var(--accent-color);">⛔ Ошибка авторизации</h1>
-            <p style="color:#ccc; margin:20px 0;">${message}</p>
-            <p style="color:#888; font-size:14px;">Пожалуйста, откройте это приложение через бота Telegram.</p>
-            <button onclick="window.location.href='https://t.me/StarDrop11_bot'" style="background:var(--accent-color); border:none; padding:12px 30px; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:10px;">Открыть бота</button>
-        </div>
-    `;
-    throw new Error('Auth error');
-}
-
-if (window.Telegram && window.Telegram.WebApp) {
-    window.Telegram.WebApp.ready();
-    const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
-    if (tgUser && tgUser.id) {
-        user_id = tgUser.id;
-        localStorage.setItem('starDrop_userId', user_id);
-        loadAvatar(user_id);
-        const placeholder = document.getElementById('avatar-placeholder');
-        const name = tgUser.first_name || 'U';
-        placeholder.textContent = name.charAt(0).toUpperCase();
-    } else {
-        const saved = localStorage.getItem('starDrop_userId');
-        if (saved) {
-            user_id = parseInt(saved);
-            document.getElementById('avatar-placeholder').textContent = 'U';
-            console.warn('Гостевой режим: используем сохранённый ID');
-        } else {
-            showAuthError('Не удалось получить данные пользователя из Telegram.');
-        }
+// ========== ЭКРАН ВХОДА ==========
+document.getElementById('login-btn').addEventListener('click', async () => {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value.trim();
+    const errorEl = document.getElementById('login-error');
+    
+    if (!username || !password) {
+        errorEl.textContent = 'Заполните все поля!';
+        return;
     }
-} else {
-    const savedId = localStorage.getItem('starDrop_userId');
-    if (savedId) {
-        user_id = parseInt(savedId);
-        document.getElementById('avatar-placeholder').textContent = 'U';
-        console.warn('Гостевой режим: используем сохранённый ID');
-    } else {
-        showAuthError('Это приложение работает только в Telegram. Пожалуйста, откройте его через бота.');
+    
+    if (username.length < 3) {
+        errorEl.textContent = 'Имя должно быть минимум 3 символа!';
+        return;
     }
-}
-
-async function loadAvatar(userId) {
+    
+    if (password.length < 3) {
+        errorEl.textContent = 'Пароль должен быть минимум 3 символа!';
+        return;
+    }
+    
+    errorEl.textContent = 'Загрузка...';
+    
     try {
-        const resp = await fetch(`/api/avatar/${userId}`);
+        const resp = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await resp.json();
+        
+        if (resp.ok) {
+            current_user = data;
+            balance = data.balance;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-content').style.display = 'block';
+            document.getElementById('balance-amount').textContent = balance;
+            document.getElementById('username-display').textContent = '@' + username;
+            document.getElementById('avatar-placeholder').textContent = username.charAt(0).toUpperCase();
+            initGames();
+            if (data.telegram_id) {
+                loadAvatar(data.telegram_id);
+            }
+        } else {
+            errorEl.textContent = data.detail || 'Ошибка входа';
+        }
+    } catch (e) {
+        errorEl.textContent = 'Ошибка соединения с сервером';
+        console.error(e);
+    }
+});
+
+// Enter key для входа
+document.getElementById('login-password').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') document.getElementById('login-btn').click();
+});
+document.getElementById('login-username').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') document.getElementById('login-btn').click();
+});
+
+async function loadAvatar(telegramId) {
+    try {
+        const resp = await fetch(`/api/avatar/${telegramId}`);
         const data = await resp.json();
         if (data.url) {
             const img = document.getElementById('avatar-img');
@@ -1463,45 +1482,18 @@ async function loadAvatar(userId) {
 }
 
 async function fetchUserData() {
-    if (!user_id) {
-        const saved = localStorage.getItem('starDrop_userId');
-        if (saved) {
-            user_id = parseInt(saved);
-        } else {
-            showAuthError('Не удалось определить пользователя. Пожалуйста, откройте приложение через бота.');
-            return;
-        }
-    }
+    if (!current_user) return;
     try {
-        const resp = await fetch(`/api/user/${user_id}`);
-        if (resp.status === 404) {
-            const regResp = await fetch('/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id, username: 'user_' + user_id })
-            });
-            if (!regResp.ok) throw new Error('Registration failed');
-            const regData = await regResp.json();
-            balance = regData.balance;
-            document.getElementById('balance-amount').textContent = balance;
-            localStorage.setItem('starDrop_userId', user_id);
-            return;
-        }
+        const resp = await fetch(`/api/user/${current_user.id}`);
         const data = await resp.json();
-        balance = data.balance;
-        document.getElementById('balance-amount').textContent = balance;
-        localStorage.setItem('starDrop_userId', user_id);
+        if (resp.ok) {
+            balance = data.balance;
+            document.getElementById('balance-amount').textContent = balance;
+        }
     } catch (e) {
         console.error('Ошибка загрузки пользователя:', e);
-        document.getElementById('balance-amount').textContent = '?';
     }
 }
-
-fetchUserData().then(() => {
-    initGames();
-}).catch(() => {
-    initGames();
-});
 
 function updateBalanceUI(newBalance) {
     balance = newBalance;
@@ -1509,9 +1501,9 @@ function updateBalanceUI(newBalance) {
 }
 
 document.getElementById('user-info').addEventListener('click', async () => {
-    if (!user_id) return;
+    if (!current_user) return;
     try {
-        const resp = await fetch(`/api/referral/${user_id}`);
+        const resp = await fetch(`/api/referral/${current_user.id}`);
         const data = await resp.json();
         document.getElementById('ref-link').textContent = data.link;
         document.getElementById('ref-count').textContent = data.count;
@@ -1523,6 +1515,9 @@ document.getElementById('user-info').addEventListener('click', async () => {
 
 document.getElementById('close-ref-modal').addEventListener('click', () => {
     document.getElementById('referral-modal').style.display = 'none';
+});
+document.getElementById('referral-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) document.getElementById('referral-modal').style.display = 'none';
 });
 
 document.getElementById('copy-ref-link').addEventListener('click', () => {
@@ -1546,9 +1541,9 @@ function fallbackCopy(text) {
 }
 
 document.getElementById('bets-btn').addEventListener('click', async () => {
-    if (!user_id) return;
+    if (!current_user) return;
     try {
-        const resp = await fetch(`/api/user_bets/${user_id}`);
+        const resp = await fetch(`/api/user_bets/${current_user.id}`);
         const bets = await resp.json();
         const list = document.getElementById('bets-list');
         list.innerHTML = '';
@@ -1574,7 +1569,7 @@ document.getElementById('bets-modal').addEventListener('click', (e) => {
 });
 
 document.getElementById('promo-btn').addEventListener('click', async () => {
-    if (!user_id) return;
+    if (!current_user) return;
     const input = document.getElementById('promo-input');
     const code = input.value.trim();
     const msg = document.getElementById('promo-message');
@@ -1583,7 +1578,7 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
         const resp = await fetch('/api/activate_promo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id, code })
+            body: JSON.stringify({ user_id: current_user.id, code })
         });
         const data = await resp.json();
         if (resp.ok) {
@@ -1613,7 +1608,8 @@ function buildRouletteStrip() {
     const strip = document.getElementById('wheel-strip');
     strip.innerHTML = '';
     const symbols = ['❌', '🎫'];
-    for (let i = 0; i < 300; i++) {
+    // 400 слотов для долгого вращения
+    for (let i = 0; i < 400; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
         cell.dataset.index = i;
@@ -1641,7 +1637,7 @@ function animateRouletteWheel(win) {
         if (targetIndex === -1) targetIndex = 0;
 
         let targetOffset = targetIndex * cellWidth + cellWidth/2 - containerWidth/2;
-        const extraLoops = 12 + Math.floor(Math.random() * 8);
+        const extraLoops = 15 + Math.floor(Math.random() * 10);
         const totalOffset = targetOffset + extraLoops * cells.length * cellWidth;
 
         strip.style.transform = `translateX(0px)`;
@@ -1672,7 +1668,7 @@ function animateRouletteWheel(win) {
 }
 
 document.getElementById('spin-btn').addEventListener('click', async () => {
-    if (!user_id || isSpinning) return;
+    if (!current_user || isSpinning) return;
     const cost = { light:25, normal:50, hard:100 }[currentMode];
     if (balance < cost) {
         document.getElementById('result-message').textContent = '❌ Недостаточно токенов!';
@@ -1687,12 +1683,14 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     document.getElementById('key-container').style.display = 'none';
     const wheelWrapper = document.getElementById('wheel-wrapper');
     wheelWrapper.style.display = 'flex';
+    // Пересоздаём полосу для свежести
+    buildRouletteStrip();
 
     try {
         const resp = await fetch('/api/spin', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id, mode: currentMode })
+            body: JSON.stringify({ user_id: current_user.id, mode: currentMode })
         });
         const data = await resp.json();
         if (resp.ok) {
@@ -1701,9 +1699,8 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
             document.getElementById('result-message').textContent = data.message;
             document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
             if (data.win) {
-                addFakeWinToFeed('user_' + user_id, data.prize_name, data.prize_value);
+                addFakeWinToFeed(current_user.username, data.prize_name, data.prize_value);
             }
-            // Показываем результат 3 секунды, затем скрываем полосу и показываем ключ
             setTimeout(() => {
                 document.getElementById('key-container').style.display = 'flex';
                 document.getElementById('wheel-wrapper').style.display = 'none';
@@ -1733,7 +1730,7 @@ document.getElementById('bet-range').addEventListener('input', function() {
     document.getElementById('bet-display').textContent = this.value;
 });
 document.getElementById('spin-slot-btn').addEventListener('click', async () => {
-    if (!user_id || slotSpinning) return;
+    if (!current_user || slotSpinning) return;
     const bet = parseInt(document.getElementById('bet-range').value);
     if (isNaN(bet) || bet<20 || bet>100) { alert('Ставка от 20 до 100'); return; }
     if (balance < bet) { alert('Недостаточно токенов!'); return; }
@@ -1750,7 +1747,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
         const resp = await fetch('/api/slot_spin', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id, bet })
+            body: JSON.stringify({ user_id: current_user.id, bet })
         });
         const data = await resp.json();
         clearInterval(interval);
@@ -1763,7 +1760,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
             if (data.win) {
                 resultDiv.textContent = '🎉 ВЫИГРЫШ! +' + data.win_amount + ' токенов!';
                 resultDiv.style.color = '#4CAF50';
-                addFakeWinToFeed('user_' + user_id, '🎰 Слот', data.win_amount);
+                addFakeWinToFeed(current_user.username, '🎰 Слот', data.win_amount);
             } else {
                 resultDiv.textContent = '😞 Проигрыш. -' + bet + ' токенов';
                 resultDiv.style.color = '#f44336';
@@ -1781,7 +1778,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
-// ========== РАКЕТКА (ИСПРАВЛЕННАЯ) ==========
+// ========== РАКЕТКА ==========
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
@@ -1793,7 +1790,7 @@ let falling = false;
 let fallY = 0;
 let explosionX = 0, explosionY = 0;
 let startTime = 0;
-let isRocketRoundFinished = false;
+let isRocketRoundFinished = true;
 
 function drawRocket(multiplier, status) {
     rctx.clearRect(0,0,rocketCanvas.width,rocketCanvas.height);
@@ -1836,16 +1833,13 @@ document.getElementById('rocket-bet-range').addEventListener('input', function()
 });
 
 document.getElementById('rocket-start-btn').addEventListener('click', async () => {
-    if (!user_id || rocketActive) return;
-    // Если раунд завершён, сбрасываем флаг
-    if (isRocketRoundFinished) {
-        isRocketRoundFinished = false;
-    }
+    if (!current_user || rocketActive || !isRocketRoundFinished) return;
+    
     const bet = parseInt(document.getElementById('rocket-bet-range').value);
     if (isNaN(bet) || bet<100 || bet>1000) { alert('Ставка от 100 до 1000'); return; }
     if (balance < bet) { alert('Недостаточно токенов!'); return; }
     
-    // Сбрасываем состояние
+    isRocketRoundFinished = false;
     if (rocketInterval) clearInterval(rocketInterval);
     if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
     rocketTrail = [];
@@ -1856,13 +1850,12 @@ document.getElementById('rocket-start-btn').addEventListener('click', async () =
         const resp = await fetch('/api/rocket/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id, bet })
+            body: JSON.stringify({ user_id: current_user.id, bet })
         });
         const data = await resp.json();
         if (resp.ok) {
             rocketRoundId = data.round_id;
             rocketActive = true;
-            isRocketRoundFinished = false;
             document.getElementById('rocket-start-btn').disabled = true;
             document.getElementById('rocket-cashout-btn').disabled = false;
             document.getElementById('rocket-result').textContent = '';
@@ -1909,22 +1902,21 @@ function animateRocket() {
     if (!rocketActive) return;
     
     const elapsed = (Date.now() - startTime) / 1000;
-    // Медленная скорость
-    const speedFactor = 1 + elapsed * 0.06;
-    const dx = 1.2 * speedFactor;
-    const dy = 0.8 * speedFactor;
+    const speedFactor = 1 + elapsed * 0.04;
+    const dx = 0.8 * speedFactor;
+    const dy = 0.5 * speedFactor;
     rocketX += dx;
     rocketY -= dy;
     if (rocketX > 280) rocketX = 280;
     if (rocketY < 20) rocketY = 20;
-    const sinOffset = 10 * Math.sin(elapsed * 1.2 + 0.5);
+    const sinOffset = 8 * Math.sin(elapsed * 0.8 + 0.5);
     let targetY = 170 - (rocketX - 30) * (140 / 250);
     rocketY = targetY + sinOffset;
     if (rocketY < 10) rocketY = 10;
     if (rocketY > 190) rocketY = 190;
     
     rocketTrail.push({x:rocketX, y:rocketY});
-    if (rocketTrail.length > 120) rocketTrail.shift();
+    if (rocketTrail.length > 100) rocketTrail.shift();
     const mult = parseFloat(document.getElementById('rocket-multiplier').textContent) || 0;
     drawRocket(mult, 'active');
     rocketAnimationFrame = requestAnimationFrame(animateRocket);
@@ -1967,12 +1959,12 @@ async function updateRocketStatus() {
 }
 
 document.getElementById('rocket-cashout-btn').addEventListener('click', async () => {
-    if (!user_id || !rocketRoundId || !rocketActive || isRocketRoundFinished) return;
+    if (!current_user || !rocketRoundId || !rocketActive || isRocketRoundFinished) return;
     try {
         const resp = await fetch('/api/rocket/cashout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ round_id: rocketRoundId, user_id })
+            body: JSON.stringify({ round_id: rocketRoundId, user_id: current_user.id })
         });
         const data = await resp.json();
         if (resp.ok) {
@@ -1986,7 +1978,7 @@ document.getElementById('rocket-cashout-btn').addEventListener('click', async ()
             if (rocketInterval) clearInterval(rocketInterval);
             if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
             updateBalanceUI(data.new_balance);
-            addFakeWinToFeed('user_' + user_id, '🚀 Ракетка', data.win_amount);
+            addFakeWinToFeed(current_user.username, '🚀 Ракетка', data.win_amount);
             startCountdown();
         } else alert('❌ ' + data.detail);
     } catch (e) { alert('Ошибка соединения'); console.error(e); }
@@ -2003,7 +1995,6 @@ function startCountdown() {
             clearInterval(countdownInterval);
             countdownInterval = null;
             document.getElementById('rocket-countdown').textContent = '0';
-            // Больше не нажимаем старт автоматически!
             document.getElementById('rocket-start-btn').disabled = false;
         }
     }, 1000);
@@ -2017,7 +2008,7 @@ function startAutoRocket() {
             const fakeBet = 100 + Math.floor(Math.random() * 900) * 10;
             simulateRocketRound(fakeBet);
         }
-    }, 10000 + Math.random() * 15000);
+    }, 12000 + Math.random() * 18000);
 }
 
 function simulateRocketRound(bet) {
@@ -2136,15 +2127,15 @@ document.getElementById('deposit-btn').addEventListener('click', () => {
 document.querySelectorAll('.deposit-option').forEach(btn => {
     btn.addEventListener('click', async () => {
         const amount = parseInt(btn.dataset.amount);
-        if (!user_id) {
-            alert('Ошибка авторизации. Откройте приложение через бота.');
+        if (!current_user) {
+            alert('Ошибка авторизации.');
             return;
         }
         try {
             const resp = await fetch('/api/create_payment', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id, amount })
+                body: JSON.stringify({ user_id: current_user.id, amount })
             });
             const data = await resp.json();
             if (resp.ok) {
@@ -2166,7 +2157,7 @@ document.getElementById('close-deposit').addEventListener('click', () => {
 });
 
 document.getElementById('withdraw-btn').addEventListener('click', async () => {
-    if (!user_id) return;
+    if (!current_user) return;
     const amount = prompt('Введите сумму вывода (минимум 500 токенов):');
     if (!amount || isNaN(amount) || amount < 500) {
         alert('Введите корректное число не менее 500');
@@ -2176,7 +2167,7 @@ document.getElementById('withdraw-btn').addEventListener('click', async () => {
         const resp = await fetch('/api/withdraw', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id, amount: parseInt(amount) })
+            body: JSON.stringify({ user_id: current_user.id, amount: parseInt(amount) })
         });
         const data = await resp.json();
         if (resp.ok) {
@@ -2200,7 +2191,6 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
         }
         if (tab==='rocket') {
             fetchUserData();
-            // Сбрасываем состояние ракетки при входе
             if (!rocketActive) {
                 isRocketRoundFinished = true;
                 document.getElementById('rocket-start-btn').disabled = false;
@@ -2208,6 +2198,23 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
             }
         }
     });
+});
+
+// Кнопка выхода
+document.getElementById('logout-btn').addEventListener('click', () => {
+    if (confirm('Вы уверены, что хотите выйти?')) {
+        current_user = null;
+        document.getElementById('app-content').style.display = 'none';
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('login-username').value = '';
+        document.getElementById('login-password').value = '';
+        document.getElementById('login-error').textContent = '';
+        if (rocketInterval) clearInterval(rocketInterval);
+        if (countdownInterval) clearInterval(countdownInterval);
+        if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
+        rocketActive = false;
+        isRocketRoundFinished = true;
+    }
 });
 """)
 
@@ -2227,7 +2234,11 @@ async def webhook(request: Request):
     await dp.feed_update(bot, update)
     return {"status": "ok"}
 
-# API МОДЕЛИ
+# ==================== API МОДЕЛИ ====================
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 class SpinRequest(BaseModel):
     user_id: int
     mode: str
@@ -2257,34 +2268,48 @@ class PaymentRequest(BaseModel):
     amount: int
 
 class RegisterRequest(BaseModel):
-    user_id: int
-    username: str = None
+    username: str
+    password: str
+    telegram_id: int = None
 
 class YookassaNotification(BaseModel):
     event: str
     object: dict
 
-# API ЭНДПОИНТЫ
-@app.post("/api/register")
-async def register_user(data: RegisterRequest):
-    user = get_user(data.user_id)
+# ==================== API ЭНДПОИНТЫ ====================
+@app.post("/api/login")
+async def api_login(data: LoginRequest):
+    user = login_user(data.username, data.password)
+    if not user:
+        # Пробуем зарегистрировать нового пользователя
+        new_user = create_user(data.username, data.password)
+        if new_user:
+            return {"id": new_user["id"], "username": new_user["username"], "balance": new_user["balance"], "telegram_id": new_user["telegram_id"]}
+        else:
+            raise HTTPException(status_code=400, detail="Имя пользователя уже занято!")
+    return {"id": user["id"], "username": user["username"], "balance": user["balance"], "telegram_id": user["telegram_id"]}
+
+@app.post("/api/register_telegram")
+async def register_telegram(data: RegisterRequest):
+    user = get_user_by_username(data.username)
     if user:
-        return {"balance": user["balance"]}
-    create_user(data.user_id, data.username)
-    new_user = get_user(data.user_id)
-    return {"balance": new_user["balance"]}
+        raise HTTPException(status_code=400, detail="Имя пользователя уже занято!")
+    new_user = create_user(data.username, data.password, data.telegram_id)
+    if not new_user:
+        raise HTTPException(status_code=400, detail="Ошибка создания пользователя")
+    return {"id": new_user["id"], "username": new_user["username"], "balance": new_user["balance"]}
 
 @app.post("/api/create_payment")
 async def create_payment(data: PaymentRequest):
-    user = get_user(data.user_id)
+    user = get_user_by_id(data.user_id)
     if not user:
         raise HTTPException(404, "User not found")
     if data.amount not in PAYMENT_LINKS:
         raise HTTPException(400, "Invalid amount")
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    cur.execute("INSERT INTO orders (user_id, amount, status) VALUES (?, ?, 'pending')", 
-                (data.user_id, data.amount))
+    cur.execute("INSERT INTO orders (user_id, username, amount, status) VALUES (?, ?, ?, 'pending')", 
+                (data.user_id, user["username"], data.amount))
     order_id = cur.lastrowid
     conn.commit()
     conn.close()
@@ -2318,16 +2343,16 @@ async def payment_callback(notification: YookassaNotification):
 
 @app.get("/api/user/{user_id}")
 async def api_get_user(user_id: int):
-    user = get_user(user_id)
+    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if user["balance"] == 0:
         conn = sqlite3.connect(DB_NAME)
         cur = conn.cursor()
-        cur.execute("UPDATE users SET balance = ? WHERE user_id = ?", (START_BALANCE, user_id))
+        cur.execute("UPDATE users SET balance = ? WHERE id = ?", (START_BALANCE, user_id))
         cur.execute(
-            "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
-            (user_id, "deposit", START_BALANCE, "Стартовый бонус 50 токенов (восстановлен через API)")
+            "INSERT INTO transactions (user_id, username, type, amount, description) VALUES (?, ?, ?, ?, ?)",
+            (user_id, user["username"], "deposit", START_BALANCE, "Стартовый бонус 50 токенов (восстановлен через API)")
         )
         conn.commit()
         conn.close()
@@ -2336,7 +2361,7 @@ async def api_get_user(user_id: int):
 
 @app.get("/api/user_bets/{user_id}")
 async def api_user_bets(user_id: int):
-    user = get_user(user_id)
+    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     bets = get_user_bets(user_id, 50)
@@ -2347,7 +2372,7 @@ async def api_spin(data: SpinRequest):
     user_id = data.user_id
     mode = data.mode
     cost = SPIN_COSTS.get(mode, 25)
-    user = get_user(user_id)
+    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if user["balance"] < cost:
@@ -2360,7 +2385,7 @@ async def api_spin(data: SpinRequest):
         message = f"🎉 Вы выиграли {prize_name} (+{prize_value} токенов)!"
     else:
         message = "😞 К сожалению, вы проиграли. Попробуйте ещё раз!"
-    new_balance = get_user(user_id)["balance"]
+    new_balance = get_user_by_id(user_id)["balance"]
     await asyncio.sleep(1)
     return {
         "win": win,
@@ -2376,7 +2401,7 @@ async def api_slot_spin(data: SlotSpinRequest):
     bet = data.bet
     if bet < 20 or bet > 100:
         raise HTTPException(status_code=400, detail="Ставка должна быть от 20 до 100 токенов")
-    user = get_user(user_id)
+    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if user["balance"] < bet:
@@ -2386,7 +2411,7 @@ async def api_slot_spin(data: SlotSpinRequest):
     if win:
         update_balance(user_id, win_amount, f"Выигрыш в игровом автомате {win_amount} токенов")
         add_win(user_id, f"🎰 {symbols[0]}{symbols[1]}{symbols[2]}", win_amount, "slot")
-    new_balance = get_user(user_id)["balance"]
+    new_balance = get_user_by_id(user_id)["balance"]
     await asyncio.sleep(1)
     return {
         "win": win,
@@ -2401,7 +2426,7 @@ async def rocket_start(data: RocketStartRequest):
     bet = data.bet
     if bet < 100 or bet > 1000:
         raise HTTPException(status_code=400, detail="Ставка должна быть от 100 до 1000 токенов")
-    user = get_user(user_id)
+    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if user["balance"] < bet:
@@ -2440,8 +2465,8 @@ async def rocket_status(round_id: int):
             "cashed_out": True
         }
     elapsed = time.time() - round_data["start_time"]
-    # Очень медленный рост (0.08 вместо 0.3)
-    display_multiplier = elapsed * 0.08
+    # Очень медленный рост
+    display_multiplier = elapsed * 0.06
     if display_multiplier >= round_data["crash_display"]:
         round_data["status"] = "crashed"
         return {
@@ -2469,7 +2494,7 @@ async def rocket_cashout(data: RocketCashoutRequest):
     if round_data["status"] != "active":
         raise HTTPException(status_code=400, detail="Round already finished")
     elapsed = time.time() - round_data["start_time"]
-    display_multiplier = elapsed * 0.08
+    display_multiplier = elapsed * 0.06
     if display_multiplier >= round_data["crash_display"]:
         round_data["status"] = "crashed"
         raise HTTPException(status_code=400, detail="Ракета уже упала")
@@ -2479,7 +2504,7 @@ async def rocket_cashout(data: RocketCashoutRequest):
     add_win(user_id, f"🚀 x{real_multiplier:.2f}", win_amount, "rocket")
     round_data["status"] = "cashed_out"
     round_data["current_display"] = display_multiplier
-    new_balance = get_user(user_id)["balance"]
+    new_balance = get_user_by_id(user_id)["balance"]
     return {
         "win_amount": win_amount,
         "new_balance": new_balance,
@@ -2490,7 +2515,7 @@ async def rocket_cashout(data: RocketCashoutRequest):
 async def api_withdraw(data: WithdrawRequest):
     user_id = data.user_id
     amount = data.amount
-    user = get_user(user_id)
+    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if user["balance"] < amount:
@@ -2500,23 +2525,13 @@ async def api_withdraw(data: WithdrawRequest):
     create_withdraw_request(user_id, amount)
     return {"status": "success", "message": "Заявка на вывод отправлена администратору"}
 
-@app.get("/api/leaderboard")
-async def api_leaderboard():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10")
-    rows = cur.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
-
 @app.get("/api/recent_wins")
 async def api_recent_wins():
     return get_recent_wins(limit=10)
 
 @app.get("/api/referral/{user_id}")
 async def api_get_referral(user_id: int):
-    user = get_user(user_id)
+    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     info = get_referral_info(user_id)
@@ -2527,24 +2542,28 @@ async def api_get_referral(user_id: int):
 async def activate_promo(data: PromoRequest):
     user_id = data.user_id
     code = data.code.lower().strip()
-    user = get_user(user_id)
+    user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
     if code not in PROMOCODES:
         raise HTTPException(status_code=400, detail="Неверный промокод")
+    
     if is_promo_used(user_id, code):
         raise HTTPException(status_code=400, detail="Вы уже использовали этот промокод")
+    
     reward = PROMOCODES[code]
     update_balance(user_id, reward, f"Промокод {code}")
     use_promo(user_id, code)
-    new_balance = get_user(user_id)["balance"]
+    
+    new_balance = get_user_by_id(user_id)["balance"]
     return {
         "status": "success",
         "message": f"Промокод активирован! Вы получили +{reward} токенов",
         "new_balance": new_balance
     }
 
-# ЗАПУСК
+# ==================== ЗАПУСК ====================
 async def set_webhook():
     webhook_url = f"https://star-drop.onrender.com/webhook"
     await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
