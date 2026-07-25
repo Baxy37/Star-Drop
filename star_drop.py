@@ -18,7 +18,7 @@ RUB_TO_TOKEN = 1
 SPIN_COSTS = {"light": 25, "normal": 50, "hard": 100}
 REFERRAL_BONUS = 50
 DB_NAME = "star_drop.db"
-START_BALANCE = 50  # 👈 стартовый баланс
+START_BALANCE = 50
 
 PAYMENT_LINKS = {
     100: "https://yookassa.ru/my/i/amMy2QzHTXRI/l",
@@ -518,7 +518,7 @@ async def api_gift_battle(data: GiftBattleRequest):
         "gift": gift
     }
 
-# ==================== ОСТАЛЬНЫЕ ЭНДПОИНТЫ (без изменений) ====================
+# ==================== ОСТАЛЬНЫЕ ЭНДПОИНТЫ ====================
 @app.get("/api/avatar/{user_id}")
 async def get_avatar(user_id: int):
     avatar_path = os.path.join(AVATARS_DIR, f"{user_id}.jpg")
@@ -784,7 +784,7 @@ static_files = {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=8">
+    <link rel="stylesheet" href="/static/style.css?v=9">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -867,71 +867,82 @@ static_files = {
                 <div class="wheel-wrapper">
                     <div id="wheel-pointer">▼</div>
                     <div class="wheel" id="wheel">
-                        <!-- 12 секторов -->
-                        <div class="sector s1" data-win-index="-1">
+                        <!-- Сектор 1 - зелёный (выигрыш) -->
+                        <div class="sector s1" data-win-index="0">
                             <div class="sector-content">
-                                <span class="icon icon-cross">✕</span>
-                            </div>
-                        </div>
-                        <div class="sector s2" data-win-index="0">
-                            <div class="sector-content">
-                                <span class="icon icon-gift">🎁</span>
+                                <span class="icon icon-gift">🧸</span>
                                 <span class="number">10</span>
                             </div>
                         </div>
-                        <div class="sector s3" data-win-index="-1">
+                        <!-- Сектор 2 - красный (проигрыш) -->
+                        <div class="sector s2" data-win-index="-1">
                             <div class="sector-content">
                                 <span class="icon icon-cross">✕</span>
                             </div>
                         </div>
-                        <div class="sector s4" data-win-index="1">
+                        <!-- Сектор 3 - зелёный -->
+                        <div class="sector s3" data-win-index="1">
                             <div class="sector-content">
-                                <span class="icon icon-gift">🎁</span>
+                                <span class="icon icon-gift">💎</span>
                                 <span class="number">15</span>
                             </div>
                         </div>
-                        <div class="sector s5" data-win-index="-1">
+                        <!-- Сектор 4 - красный -->
+                        <div class="sector s4" data-win-index="-1">
                             <div class="sector-content">
                                 <span class="icon icon-cross">✕</span>
                             </div>
                         </div>
-                        <div class="sector s6" data-win-index="2">
+                        <!-- Сектор 5 - зелёный -->
+                        <div class="sector s5" data-win-index="2">
                             <div class="sector-content">
-                                <span class="icon icon-gift">🎁</span>
+                                <span class="icon icon-gift">💍</span>
                                 <span class="number">20</span>
                             </div>
                         </div>
-                        <div class="sector s7" data-win-index="-1">
+                        <!-- Сектор 6 - красный -->
+                        <div class="sector s6" data-win-index="-1">
                             <div class="sector-content">
                                 <span class="icon icon-cross">✕</span>
                             </div>
                         </div>
-                        <div class="sector s8" data-win-index="3">
+                        <!-- Сектор 7 - зелёный -->
+                        <div class="sector s7" data-win-index="3">
                             <div class="sector-content">
-                                <span class="icon icon-gift">🎁</span>
+                                <span class="icon icon-gift">🧁</span>
                                 <span class="number">25</span>
                             </div>
                         </div>
-                        <div class="sector s9" data-win-index="-1">
+                        <!-- Сектор 8 - красный -->
+                        <div class="sector s8" data-win-index="-1">
                             <div class="sector-content">
                                 <span class="icon icon-cross">✕</span>
                             </div>
                         </div>
-                        <div class="sector s10" data-win-index="4">
+                        <!-- Сектор 9 - зелёный -->
+                        <div class="sector s9" data-win-index="4">
                             <div class="sector-content">
-                                <span class="icon icon-gift">🎁</span>
+                                <span class="icon icon-gift">🧢</span>
                                 <span class="number">30</span>
                             </div>
                         </div>
-                        <div class="sector s11" data-win-index="-1">
+                        <!-- Сектор 10 - красный -->
+                        <div class="sector s10" data-win-index="-1">
                             <div class="sector-content">
                                 <span class="icon icon-cross">✕</span>
                             </div>
                         </div>
-                        <div class="sector s12" data-win-index="5">
+                        <!-- Сектор 11 - зелёный -->
+                        <div class="sector s11" data-win-index="5">
                             <div class="sector-content">
-                                <span class="icon icon-gift">🎁</span>
+                                <span class="icon icon-gift">🚀</span>
                                 <span class="number">40</span>
+                            </div>
+                        </div>
+                        <!-- Сектор 12 - красный -->
+                        <div class="sector s12" data-win-index="-1">
+                            <div class="sector-content">
+                                <span class="icon icon-cross">✕</span>
                             </div>
                         </div>
                         <div class="wheel-center"></div>
@@ -1034,7 +1045,7 @@ static_files = {
         </div>
     </div>
 
-    <script src="/static/script.js?v=8"></script>
+    <script src="/static/script.js?v=9"></script>
 </body>
 </html>""",
     "style.css": """* {
@@ -1313,7 +1324,7 @@ body.theme-hard {
     box-shadow: 0 0 15px var(--accent-glow);
 }
 
-/* ===== КОЛЕСО (обновлённое) ===== */
+/* ===== КОЛЕСО (финальная версия) ===== */
 #wheel-container {
     position: relative;
     width: var(--wheel-size);
@@ -1363,7 +1374,6 @@ body.theme-hard {
         0 0 50px rgba(255, 215, 0, 0.3);
 }
 
-/* Сектора */
 .sector {
     position: absolute;
     width: 50%;
@@ -1381,10 +1391,10 @@ body.theme-hard {
 }
 
 .sector:nth-child(odd) {
-    background: linear-gradient(145deg, #ab2b44, #8b1a2b);
+    background: linear-gradient(145deg, #2b805e, #1a5a3e); /* зелёные */
 }
 .sector:nth-child(even) {
-    background: linear-gradient(145deg, #2b805e, #1a5a3e);
+    background: linear-gradient(145deg, #ab2b44, #8b1a2b); /* красные */
 }
 
 .sector-content {
@@ -1411,9 +1421,9 @@ body.theme-hard {
     font-weight: 900;
     text-shadow: 0 0 12px #ff4d4d88;
 }
+
 .icon-gift {
-    color: #fff;
-    font-size: 32px;
+    font-size: 36px;
 }
 
 .number {
@@ -1429,8 +1439,8 @@ body.theme-hard {
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Проигрышные сектора – скрываем цифры */
-.sector .icon-cross ~ .number {
+/* У красных секторов скрываем число (если оно вдруг есть) */
+.sector:nth-child(even) .number {
     display: none;
 }
 
@@ -1518,9 +1528,10 @@ body.theme-hard {
     100% { opacity: 0.35; }
 }
 
-/* Мобильная адаптация */
+/* Адаптация для мобильных */
 @media (max-width: 480px) {
     .icon { font-size: 28px; }
+    .icon-gift { font-size: 30px; }
     .number { font-size: 18px; padding: 1px 10px; }
     #wheel-pointer { border-left-width: 16px; border-right-width: 16px; border-top-width: 38px; top: -22px; }
     .wheel-center { font-size: 16px; border-width: 4px; }
@@ -2161,7 +2172,7 @@ function initGames() {
     drawRocket(0, 'idle');
     document.getElementById('rocket-countdown').textContent = '0';
     startAutoRocket();
-    loadGifts(); // загружаем подарки для битвы
+    loadGifts();
 }
 
 let autoRocketTimer = null;
