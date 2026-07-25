@@ -494,7 +494,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=21">
+    <link rel="stylesheet" href="/static/style.css?v=22">
 </head>
 <body>
     <!-- ЭКРАН ВХОДА -->
@@ -597,7 +597,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
             <div id="result-message"></div>
         </div>
 
-        <!-- СЛОТ -->
+        <!-- СЛОТ (УВЕЛИЧЕННЫЙ БАРАБАН) -->
         <div id="slot-page" style="display:none;">
             <div id="main-title">
                 <h1>⭐ STAR DROP</h1>
@@ -671,7 +671,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
         </div>
     </div>
 
-    <script src="/static/script.js?v=21"></script>
+    <script src="/static/script.js?v=22"></script>
 </body>
 </html>""")
 
@@ -1002,6 +1002,7 @@ body.theme-hard {
     transition: color 0.3s, text-shadow 0.3s;
 }
 
+/* УВЕЛИЧЕННЫЙ БАРАБАН ДЛЯ СЛОТА */
 #slot-machine {
     background: var(--card-bg);
     border-radius: 20px;
@@ -1015,18 +1016,18 @@ body.theme-hard {
 #reels {
     display: flex;
     justify-content: center;
-    gap: 15px;
-    padding: 15px 0;
+    gap: 20px;
+    padding: 20px 0;
 }
 .reel {
-    width: 70px;
-    height: 80px;
+    width: 85px;
+    height: 100px;
     background: #222;
-    border-radius: 12px;
+    border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 48px;
+    font-size: 56px;
     border: 2px solid var(--border-color);
     box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
     transition: transform 0.1s;
@@ -1352,21 +1353,22 @@ body.theme-hard {
     display: flex;
     height: 100%;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     padding: 0 10px;
     will-change: transform;
     transition: none;
     min-width: 100%;
+    width: max-content;
 }
 .wheel-cell {
-    flex: 0 0 70px;
+    flex: 0 0 60px;
     height: 80px;
     background: #222;
-    border-radius: 12px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 44px;
+    font-size: 36px;
     border: 2px solid #444;
     box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
     transition: border-color 0.3s, box-shadow 0.3s;
@@ -1603,12 +1605,13 @@ function initGames() {
     buildRouletteStrip();
 }
 
-// ========== РУЛЕТКА ==========
+// ========== РУЛЕТКА (600 СЛОТОВ) ==========
 function buildRouletteStrip() {
     const strip = document.getElementById('wheel-strip');
     strip.innerHTML = '';
     const symbols = ['❌', '🎫'];
-    for (let i = 0; i < 400; i++) {
+    // 600 слотов для долгого вращения
+    for (let i = 0; i < 600; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
         cell.dataset.index = i;
@@ -1622,21 +1625,40 @@ function animateRouletteWheel(win) {
         const container = document.getElementById('wheel-container');
         const strip = document.getElementById('wheel-strip');
         const cells = strip.children;
-        const cellWidth = cells[0].offsetWidth + 6;
+        const cellWidth = cells[0].offsetWidth + 4;
         const containerWidth = container.offsetWidth;
 
         const targetSymbol = win ? '🎫' : '❌';
+        
+        // Ищем целевой слот в диапазоне 550-580
         let targetIndex = -1;
-        for (let i = 0; i < cells.length; i++) {
+        const startRange = 550;
+        const endRange = 580;
+        
+        // Сначала ищем в диапазоне 550-580
+        for (let i = startRange; i <= endRange && i < cells.length; i++) {
             if (cells[i].textContent === targetSymbol) {
                 targetIndex = i;
                 break;
             }
         }
-        if (targetIndex === -1) targetIndex = 0;
+        
+        // Если не нашли в диапазоне, ищем по всему массиву
+        if (targetIndex === -1) {
+            for (let i = 0; i < cells.length; i++) {
+                if (cells[i].textContent === targetSymbol) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+        }
+        if (targetIndex === -1) targetIndex = startRange;
 
+        // Вычисляем смещение для целевого слота
         let targetOffset = targetIndex * cellWidth + cellWidth/2 - containerWidth/2;
-        const extraLoops = 15 + Math.floor(Math.random() * 10);
+        
+        // Добавляем обороты для длительного вращения
+        const extraLoops = 8 + Math.floor(Math.random() * 4);
         const totalOffset = targetOffset + extraLoops * cells.length * cellWidth;
 
         strip.style.transform = `translateX(0px)`;
@@ -1682,6 +1704,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     document.getElementById('key-container').style.display = 'none';
     const wheelWrapper = document.getElementById('wheel-wrapper');
     wheelWrapper.style.display = 'flex';
+    // Пересоздаём полосу с 600 слотами
     buildRouletteStrip();
 
     try {
@@ -1699,6 +1722,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
             if (data.win) {
                 addFakeWinToFeed(current_user.username, data.prize_name, data.prize_value);
             }
+            // Показываем результат 3 секунды, затем скрываем полосу
             setTimeout(() => {
                 document.getElementById('key-container').style.display = 'flex';
                 document.getElementById('wheel-wrapper').style.display = 'none';
