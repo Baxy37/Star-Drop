@@ -784,7 +784,7 @@ static_files = {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=9">
+    <link rel="stylesheet" href="/static/style.css?v=10">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -1045,7 +1045,7 @@ static_files = {
         </div>
     </div>
 
-    <script src="/static/script.js?v=9"></script>
+    <script src="/static/script.js?v=10"></script>
 </body>
 </html>""",
     "style.css": """* {
@@ -1390,11 +1390,13 @@ body.theme-hard {
     box-shadow: inset 0 -6px 12px rgba(0, 0, 0, 0.4);
 }
 
+/* Зелёные (выигрышные) – нечётные сектора */
 .sector:nth-child(odd) {
-    background: linear-gradient(145deg, #2b805e, #1a5a3e); /* зелёные */
+    background: linear-gradient(145deg, #2b805e, #1a5a3e);
 }
+/* Красные (проигрышные) – чётные сектора */
 .sector:nth-child(even) {
-    background: linear-gradient(145deg, #ab2b44, #8b1a2b); /* красные */
+    background: linear-gradient(145deg, #ab2b44, #8b1a2b);
 }
 
 .sector-content {
@@ -1439,7 +1441,7 @@ body.theme-hard {
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* У красных секторов скрываем число (если оно вдруг есть) */
+/* У красных секторов скрываем число */
 .sector:nth-child(even) .number {
     display: none;
 }
