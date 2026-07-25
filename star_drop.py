@@ -344,9 +344,8 @@ def use_promo(user_id: int, code: str):
 
 init_db()
 
-# ==================== ИЗМЕНЁННАЯ ФУНКЦИЯ ДЛЯ СЛОТА (ШАНС 50%) ====================
+# ==================== ФУНКЦИЯ ДЛЯ СЛОТА (ШАНС 50%) ====================
 def get_slot_result(bet: int):
-    # Шанс выигрыша всегда 50%
     chance = 50
     if random.randint(1, 100) <= chance:
         symbol = random.choice(SLOT_SYMBOLS)
@@ -367,17 +366,13 @@ def get_slot_result(bet: int):
 
 # ==================== ТЕЛЕГРАМ БОТ ====================
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, ReplyKeyboardRemove
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import StatesGroup, State
 
 logging.basicConfig(level=logging.INFO)
-
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Клавиатура для запроса контакта
 def get_phone_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="📱 Поделиться номером", request_contact=True)]],
@@ -385,7 +380,6 @@ def get_phone_keyboard():
         one_time_keyboard=True
     )
 
-# Клавиатура для открытия приложения
 def get_start_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="🎰 Открыть рулетку", web_app=WebAppInfo(url=WEBAPP_URL))]],
@@ -401,7 +395,6 @@ async def cmd_start(message: types.Message):
     
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
-    
     create_user(user_id, username, referrer_code=referrer_code)
     
     user = get_user(user_id)
@@ -426,17 +419,13 @@ async def handle_contact(message: types.Message):
     contact = message.contact
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
-    
     if contact.user_id != user_id:
         await message.answer("⛔ Пожалуйста, отправьте свой собственный номер.", reply_markup=get_phone_keyboard())
         return
-    
     phone = contact.phone_number
     create_user(user_id, username, phone)
-    
     user = get_user(user_id)
     balance = user['balance'] if user else 0
-    
     await message.answer(
         f"✅ Регистрация успешно завершена!\n"
         f"Ваш баланс: {balance} токенов 🎫\n\n"
@@ -487,7 +476,6 @@ import aiofiles
 import aiohttp
 
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -501,22 +489,19 @@ AVATARS_DIR = os.path.join(STATIC_DIR, "avatars")
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(AVATARS_DIR, exist_ok=True)
 
-# ==================== ЭНДПОИНТ ДЛЯ АВАТАРКИ ====================
+# ==================== ЭНДПОИНТ АВАТАРКИ ====================
 @app.get("/api/avatar/{user_id}")
 async def get_avatar(user_id: int):
     avatar_path = os.path.join(AVATARS_DIR, f"{user_id}.jpg")
     if os.path.exists(avatar_path):
         return {"url": f"/static/avatars/{user_id}.jpg"}
-    
     try:
         photos = await bot.get_user_profile_photos(user_id, limit=1)
         if photos.total_count == 0:
             return {"url": "/static/default_avatar.png"}
-        
         file_id = photos.photos[0][-1].file_id
         file = await bot.get_file(file_id)
         file_path = file.file_path
-        
         async with aiohttp.ClientSession() as session:
             url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
             async with session.get(url) as resp:
@@ -530,10 +515,8 @@ async def get_avatar(user_id: int):
         logging.error(f"Avatar error: {e}")
         return {"url": "/static/default_avatar.png"}
 
-# ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
-os.makedirs(STATIC_DIR, exist_ok=True)
-
-# index.html
+# ==================== СОЗДАНИЕ СТАТИЧЕСКИХ ФАЙЛОВ ====================
+# index.html (новая рулетка с полосой и стрелкой)
 with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     f.write("""<!DOCTYPE html>
 <html lang="ru">
@@ -541,7 +524,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=13">
+    <link rel="stylesheet" href="/static/style.css?v=15">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -601,7 +584,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
             </div>
         </div>
 
-        <!-- НОВАЯ РУЛЕТКА С КЛЮЧОМ -->
+        <!-- РУЛЕТКА (новая полоса) -->
         <div id="roulette-page">
             <div id="main-title">
                 <h1>РУЛЕТКА STAR DROP</h1>
@@ -613,9 +596,11 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                 <button class="mode-btn" data-mode="hard">Hard</button>
             </div>
 
-            <!-- Центральный блок с ключом -->
-            <div id="key-container">
-                <div id="key-display">🔑</div>
+            <div id="wheel-wrapper">
+                <div id="wheel-container">
+                    <div id="wheel-strip"></div>
+                    <div id="wheel-arrow">▼</div>
+                </div>
             </div>
 
             <div id="spin-area">
@@ -696,11 +681,11 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
         </div>
     </div>
 
-    <script src="/static/script.js?v=13"></script>
+    <script src="/static/script.js?v=15"></script>
 </body>
 </html>""")
 
-# style.css
+# style.css (включая стили для новой рулетки)
 with open(os.path.join(STATIC_DIR, "style.css"), "w", encoding="utf-8") as f:
     f.write("""* {
     margin: 0;
@@ -965,42 +950,6 @@ body.theme-hard {
     background: var(--accent-color);
     color: #0a0a0a;
     box-shadow: 0 0 15px var(--accent-glow);
-}
-
-#key-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin: 10px 0 20px;
-}
-#key-display {
-    font-size: 80px;
-    color: var(--key-color);
-    text-shadow: 0 0 30px var(--accent-glow);
-    transition: color 0.3s, text-shadow 0.3s;
-}
-
-#slot-animation-container {
-    display: none;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-    margin: 10px 0;
-    background: #1a1a1a;
-    padding: 10px;
-    border-radius: 12px;
-    border: 2px solid var(--accent-color);
-}
-#slot-animation-container .anim-reel {
-    width: 60px;
-    height: 70px;
-    background: #222;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 40px;
-    border: 1px solid #444;
 }
 
 #spin-area {
@@ -1377,8 +1326,66 @@ body.theme-hard {
 #bets-modal ul li span.negative {
     color: #f44336;
 }
-.csgo-cell {
+
+/* ===== НОВАЯ РУЛЕТКА (ПОЛОСА + СТРЕЛКА) ===== */
+#wheel-wrapper {
+    display: flex;
+    justify-content: center;
+    margin: 10px 0 5px;
+}
+#wheel-container {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    height: 120px;
+    overflow: hidden;
+    border: 3px solid var(--accent-color);
+    border-radius: 16px;
+    background: #111;
+    box-shadow: 0 0 30px var(--accent-glow);
+    margin: 0 auto;
+}
+#wheel-strip {
+    display: flex;
+    height: 100%;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    will-change: transform;
+    transition: none;
+}
+.wheel-cell {
+    flex: 0 0 70px;
+    height: 80px;
+    background: #222;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 44px;
+    border: 2px solid #444;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
     transition: border-color 0.3s, box-shadow 0.3s;
+}
+.wheel-cell.win-cell {
+    border-color: #4CAF50;
+    box-shadow: 0 0 20px #4CAF5066;
+}
+.wheel-cell.lose-cell {
+    border-color: #f44336;
+    box-shadow: 0 0 20px #f4433666;
+}
+#wheel-arrow {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 36px;
+    color: var(--accent-color);
+    text-shadow: 0 0 20px var(--accent-glow);
+    pointer-events: none;
+    z-index: 5;
+    line-height: 1;
 }
 """)
 
@@ -1598,146 +1605,82 @@ function initGames() {
     document.getElementById('rocket-countdown').textContent = '0';
     startAutoRocket();
     startFakeWins();
+    buildRouletteStrip();
 }
 
-function startFakeWins() {
-    setInterval(() => {
-        const isWin = Math.random() < 0.75;
-        const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 
-                           'player_' + (200000 + Math.floor(Math.random()*800000)), 
-                           'gamer_' + (300000 + Math.floor(Math.random()*700000)), 
-                           'winner_' + (400000 + Math.floor(Math.random()*600000))];
-        const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
-        const prizes = ['🎰 Слот', '🎡 Рулетка', '🚀 Ракетка', '🎁 Подарок'];
-        const prize = prizes[Math.floor(Math.random()*prizes.length)];
-        const amount = Math.floor(Math.random() * 150) + 10;
-        if (isWin) {
-            addFakeWinToFeed(username, prize, amount);
-        } else {
-            const loseMessages = ['проиграл', 'не повезло', 'удача отвернулась', 'мимо', 'сгорел'];
-            const msg = loseMessages[Math.floor(Math.random() * loseMessages.length)];
-            addFakeLoseToFeed(username, prize, msg);
-        }
-    }, 2000);
-}
-function addFakeWinToFeed(username, prize, amount) {
-    const list = document.getElementById('feed-list');
-    const li = document.createElement('li');
-    li.textContent = '@' + username + ' выиграл ' + prize + ' (+' + amount + ' токенов) 🎉';
-    list.insertBefore(li, list.firstChild);
-    if (list.children.length > 10) list.removeChild(list.lastChild);
-}
-function addFakeLoseToFeed(username, prize, msg) {
-    const list = document.getElementById('feed-list');
-    const li = document.createElement('li');
-    li.textContent = '@' + username + ' ' + msg + ' в ' + prize + ' 😞';
-    list.insertBefore(li, list.firstChild);
-    if (list.children.length > 10) list.removeChild(list.lastChild);
+// ========== НОВАЯ РУЛЕТКА (ПОЛОСА) ==========
+function buildRouletteStrip() {
+    const strip = document.getElementById('wheel-strip');
+    strip.innerHTML = '';
+    const symbols = ['❌', '🎫'];
+    for (let i = 0; i < 30; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'wheel-cell';
+        cell.dataset.index = i;
+        cell.textContent = symbols[i % 2];
+        strip.appendChild(cell);
+    }
+    for (let i = 0; i < 30; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'wheel-cell';
+        cell.dataset.index = i + 30;
+        cell.textContent = symbols[i % 2];
+        strip.appendChild(cell);
+    }
 }
 
-function applyTheme(mode) {
-    document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
-    if (mode === 'light') document.body.classList.add('theme-light');
-    else if (mode === 'normal') document.body.classList.add('theme-normal');
-    else if (mode === 'hard') document.body.classList.add('theme-hard');
-    updateKeyColor(mode);
-}
-
-function updateKeyColor(mode) {
-    const keyDisplay = document.getElementById('key-display');
-    if (mode === 'light') keyDisplay.textContent = '🔑';
-    else if (mode === 'normal') keyDisplay.textContent = '🎟';
-    else if (mode === 'hard') keyDisplay.textContent = '🎫';
-}
-
-document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        if (isSpinning) return;
-        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentMode = btn.dataset.mode;
-        updateSpinCost();
-        applyTheme(currentMode);
-    });
-});
-
-function updateSpinCost() {
-    const costs = { light: 25, normal: 50, hard: 100 };
-    const cost = costs[currentMode];
-    document.getElementById('spin-cost').textContent = cost;
-    document.getElementById('spin-cost-label').textContent = cost + ' Токенов';
-}
-
-// ========== НОВАЯ АНИМАЦИЯ ДЛЯ РУЛЕТКИ (CS:GO) ==========
-function animateCsgoUnboxing(win, prizeValue) {
+function animateRouletteWheel(win) {
     return new Promise((resolve) => {
-        let container = document.getElementById('slot-animation-container');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'slot-animation-container';
-            container.style.display = 'flex';
-            container.style.flexWrap = 'nowrap';
-            container.style.overflow = 'hidden';
-            container.style.justifyContent = 'center';
-            container.style.alignItems = 'center';
-            container.style.gap = '4px';
-            container.style.margin = '10px 0';
-            container.style.padding = '10px';
-            container.style.background = '#1a1a1a';
-            container.style.borderRadius = '12px';
-            container.style.border = '2px solid var(--accent-color)';
-            const keyContainer = document.getElementById('key-container');
-            keyContainer.parentNode.insertBefore(container, keyContainer.nextSibling);
+        const container = document.getElementById('wheel-container');
+        const strip = document.getElementById('wheel-strip');
+        const cells = strip.children;
+        const cellWidth = cells[0].offsetWidth + 6; // ширина + gap
+        const containerWidth = container.offsetWidth;
+
+        const targetSymbol = win ? '🎫' : '❌';
+        let startIdx = Math.floor(Math.random() * cells.length);
+        let targetIndex = -1;
+        for (let i = 0; i < cells.length; i++) {
+            const idx = (startIdx + i) % cells.length;
+            if (cells[idx].textContent === targetSymbol) {
+                targetIndex = idx;
+                break;
+            }
         }
-        container.style.display = 'flex';
-        container.innerHTML = '';
-        
-        const cellsCount = 20;
-        const cells = [];
-        for (let i = 0; i < cellsCount; i++) {
-            const cell = document.createElement('div');
-            cell.className = 'csgo-cell';
-            cell.style.width = '36px';
-            cell.style.height = '36px';
-            cell.style.background = '#222';
-            cell.style.borderRadius = '6px';
-            cell.style.display = 'flex';
-            cell.style.alignItems = 'center';
-            cell.style.justifyContent = 'center';
-            cell.style.fontSize = '22px';
-            cell.style.border = '1px solid #444';
-            cell.style.flexShrink = '0';
-            cell.textContent = '❌';
-            container.appendChild(cell);
-            cells.push(cell);
+        if (targetIndex === -1) targetIndex = 0;
+
+        let targetOffset = targetIndex * cellWidth + cellWidth/2 - containerWidth/2;
+        const extraLoops = 5 + Math.floor(Math.random() * 5);
+        const totalOffset = targetOffset + extraLoops * cells.length * cellWidth;
+
+        strip.style.transform = `translateX(0px)`;
+
+        const duration = 15000;
+        const startTime = performance.now();
+        const startOffset = 0;
+
+        function easeOutCubic(t) {
+            return 1 - Math.pow(1 - t, 3);
         }
 
-        // Запускаем анимацию – быстро меняем все ячейки
-        let interval = setInterval(() => {
-            cells.forEach(cell => {
-                cell.textContent = Math.random() < 0.5 ? '❌' : '🎫';
-            });
-        }, 80);
+        function animate(now) {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const easedProgress = easeOutCubic(progress);
+            const currentOffset = startOffset + (totalOffset - startOffset) * easedProgress;
+            strip.style.transform = `translateX(-${currentOffset}px)`;
 
-        // Через 3 секунды останавливаем и показываем результат
-        setTimeout(() => {
-            clearInterval(interval);
-            const symbol = win ? '🎫' : '❌';
-            cells.forEach(cell => {
-                cell.textContent = symbol;
-                cell.style.borderColor = win ? '#4CAF50' : '#f44336';
-                cell.style.boxShadow = win ? '0 0 10px #4CAF50' : '0 0 10px #f44336';
-            });
-            // Скрываем контейнер через 2 секунды
-            setTimeout(() => {
-                container.style.display = 'none';
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
                 resolve();
-            }, 2000);
-        }, 3000);
+            }
+        }
+        requestAnimationFrame(animate);
     });
 }
 
-// ========== ОБРАБОТЧИК РУЛЕТКИ (СПИН) ==========
+// ========== ОБРАБОТЧИК РУЛЕТКИ ==========
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (!user_id || isSpinning) return;
     const cost = { light:25, normal:50, hard:100 }[currentMode];
@@ -1759,8 +1702,8 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         });
         const data = await resp.json();
         if (resp.ok) {
+            await animateRouletteWheel(data.win);
             updateBalanceUI(data.new_balance);
-            await animateCsgoUnboxing(data.win, data.prize_value);
             document.getElementById('result-message').textContent = data.message;
             document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
             if (data.win) {
@@ -1999,8 +1942,6 @@ async function updateRocketStatus() {
                 if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
                 fetchUserData();
                 startCountdown();
-            } else {
-                // ничего не делаем, анимация уже идёт
             }
         } else console.error('Status error:', data);
     } catch (e) { console.error(e); }
@@ -2095,6 +2036,75 @@ function simulateRocketRound(bet) {
     }, 200);
 }
 
+// ========== ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ ==========
+function startFakeWins() {
+    setInterval(() => {
+        const isWin = Math.random() < 0.75;
+        const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 
+                           'player_' + (200000 + Math.floor(Math.random()*800000)), 
+                           'gamer_' + (300000 + Math.floor(Math.random()*700000)), 
+                           'winner_' + (400000 + Math.floor(Math.random()*600000))];
+        const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
+        const prizes = ['🎰 Слот', '🎡 Рулетка', '🚀 Ракетка', '🎁 Подарок'];
+        const prize = prizes[Math.floor(Math.random()*prizes.length)];
+        const amount = Math.floor(Math.random() * 150) + 10;
+        if (isWin) {
+            addFakeWinToFeed(username, prize, amount);
+        } else {
+            const loseMessages = ['проиграл', 'не повезло', 'удача отвернулась', 'мимо', 'сгорел'];
+            const msg = loseMessages[Math.floor(Math.random() * loseMessages.length)];
+            addFakeLoseToFeed(username, prize, msg);
+        }
+    }, 2000);
+}
+function addFakeWinToFeed(username, prize, amount) {
+    const list = document.getElementById('feed-list');
+    const li = document.createElement('li');
+    li.textContent = '@' + username + ' выиграл ' + prize + ' (+' + amount + ' токенов) 🎉';
+    list.insertBefore(li, list.firstChild);
+    if (list.children.length > 10) list.removeChild(list.lastChild);
+}
+function addFakeLoseToFeed(username, prize, msg) {
+    const list = document.getElementById('feed-list');
+    const li = document.createElement('li');
+    li.textContent = '@' + username + ' ' + msg + ' в ' + prize + ' 😞';
+    list.insertBefore(li, list.firstChild);
+    if (list.children.length > 10) list.removeChild(list.lastChild);
+}
+
+function applyTheme(mode) {
+    document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
+    if (mode === 'light') document.body.classList.add('theme-light');
+    else if (mode === 'normal') document.body.classList.add('theme-normal');
+    else if (mode === 'hard') document.body.classList.add('theme-hard');
+    updateKeyColor(mode);
+}
+
+function updateKeyColor(mode) {
+    const keyDisplay = document.getElementById('key-display');
+    if (mode === 'light') keyDisplay.textContent = '🔑';
+    else if (mode === 'normal') keyDisplay.textContent = '🎟';
+    else if (mode === 'hard') keyDisplay.textContent = '🎫';
+}
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (isSpinning) return;
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentMode = btn.dataset.mode;
+        updateSpinCost();
+        applyTheme(currentMode);
+    });
+});
+
+function updateSpinCost() {
+    const costs = { light: 25, normal: 50, hard: 100 };
+    const cost = costs[currentMode];
+    document.getElementById('spin-cost').textContent = cost;
+    document.getElementById('spin-cost-label').textContent = cost + ' Токенов';
+}
+
 document.getElementById('deposit-btn').addEventListener('click', () => {
     const menu = document.getElementById('deposit-menu');
     menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
@@ -2166,6 +2176,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 });
 """)
 
+# ==================== МОНТИРУЕМ СТАТИКУ ====================
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/")
@@ -2182,7 +2193,7 @@ async def webhook(request: Request):
     await dp.feed_update(bot, update)
     return {"status": "ok"}
 
-# API модели
+# ==================== API МОДЕЛИ ====================
 class SpinRequest(BaseModel):
     user_id: int
     mode: str
@@ -2219,8 +2230,7 @@ class YookassaNotification(BaseModel):
     event: str
     object: dict
 
-# ==================== НОВЫЕ ЭНДПОИНТЫ ====================
-
+# ==================== ЭНДПОИНТЫ ====================
 @app.post("/api/register")
 async def register_user(data: RegisterRequest):
     user = get_user(data.user_id)
@@ -2237,7 +2247,6 @@ async def create_payment(data: PaymentRequest):
         raise HTTPException(404, "User not found")
     if data.amount not in PAYMENT_LINKS:
         raise HTTPException(400, "Invalid amount")
-
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     cur.execute("INSERT INTO orders (user_id, amount, status) VALUES (?, ?, 'pending')", 
@@ -2245,7 +2254,6 @@ async def create_payment(data: PaymentRequest):
     order_id = cur.lastrowid
     conn.commit()
     conn.close()
-
     payment_url = PAYMENT_LINKS[data.amount]
     return {"payment_url": payment_url, "order_id": order_id}
 
@@ -2256,7 +2264,6 @@ async def payment_callback(notification: YookassaNotification):
         amount = notification.object.get("amount", {}).get("value")
         if amount is None:
             return {"error": "No amount"}
-
         conn = sqlite3.connect(DB_NAME)
         cur = conn.cursor()
         cur.execute("SELECT id, user_id FROM orders WHERE amount = ? AND status = 'pending' ORDER BY id DESC LIMIT 1", 
@@ -2265,7 +2272,6 @@ async def payment_callback(notification: YookassaNotification):
         if not order:
             conn.close()
             return {"error": "Order not found"}
-
         order_id, user_id = order
         tokens = int(float(amount))
         update_balance(user_id, tokens, f"Пополнение через ЮKassa (заказ {order_id})")
@@ -2275,8 +2281,6 @@ async def payment_callback(notification: YookassaNotification):
         conn.close()
         return {"status": "ok"}
     return {"status": "ignored"}
-
-# ==================== ОСТАВШИЕСЯ ЭНДПОИНТЫ ====================
 
 @app.get("/api/user/{user_id}")
 async def api_get_user(user_id: int):
@@ -2304,7 +2308,6 @@ async def api_user_bets(user_id: int):
     bets = get_user_bets(user_id, 50)
     return bets
 
-# ==================== ИЗМЕНЁННЫЙ ЭНДПОИНТ /api/spin (добавлена задержка) ====================
 @app.post("/api/spin")
 async def api_spin(data: SpinRequest):
     user_id = data.user_id
@@ -2324,10 +2327,8 @@ async def api_spin(data: SpinRequest):
     else:
         message = "😞 К сожалению, вы проиграли. Попробуйте ещё раз!"
     new_balance = get_user(user_id)["balance"]
-    
-    # Задержка для анимации CS:GO
+    # задержка для синхронизации с клиентской анимацией
     await asyncio.sleep(3)
-    
     return {
         "win": win,
         "prize_name": prize_name if win else None,
@@ -2336,7 +2337,6 @@ async def api_spin(data: SpinRequest):
         "message": message
     }
 
-# ==================== ИЗМЕНЁННЫЙ ЭНДПОИНТ /api/slot_spin (шанс 50% + задержка) ====================
 @app.post("/api/slot_spin")
 async def api_slot_spin(data: SlotSpinRequest):
     user_id = data.user_id
@@ -2348,17 +2348,13 @@ async def api_slot_spin(data: SlotSpinRequest):
         raise HTTPException(status_code=404, detail="User not found")
     if user["balance"] < bet:
         raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    
     update_balance(user_id, -bet, f"Ставка в игровом автомате {bet} токенов")
     win, symbols, win_amount = get_slot_result(bet)
     if win:
         update_balance(user_id, win_amount, f"Выигрыш в игровом автомате {win_amount} токенов")
         add_win(user_id, f"🎰 {symbols[0]}{symbols[1]}{symbols[2]}", win_amount, "slot")
     new_balance = get_user(user_id)["balance"]
-    
-    # Задержка для длительной анимации
     await asyncio.sleep(3)
-    
     return {
         "win": win,
         "symbols": symbols,
@@ -2377,16 +2373,12 @@ async def rocket_start(data: RocketStartRequest):
         raise HTTPException(status_code=404, detail="User not found")
     if user["balance"] < bet:
         raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    
     update_balance(user_id, -bet, f"Ставка в ракетке {bet} токенов")
-    
-    # Генерация краша с логнормальным распределением
     crash_display = random.lognormvariate(0.8, 0.6)
     if crash_display < 1.0:
         crash_display = 1.0 + random.random() * 0.5
     elif crash_display > 30:
         crash_display = 30.0
-    
     global round_counter
     round_counter += 1
     round_id = round_counter
@@ -2398,7 +2390,6 @@ async def rocket_start(data: RocketStartRequest):
         "status": "active",
         "current_display": 0.0
     }
-    
     return {"round_id": round_id}
 
 @app.get("/api/rocket/status/{round_id}")
@@ -2406,7 +2397,6 @@ async def rocket_status(round_id: int):
     if round_id not in rocket_rounds:
         raise HTTPException(status_code=404, detail="Round not found")
     round_data = rocket_rounds[round_id]
-    
     if round_data["status"] == "crashed":
         return {
             "display_multiplier": round_data["crash_display"],
@@ -2419,7 +2409,6 @@ async def rocket_status(round_id: int):
             "crashed": False,
             "cashed_out": True
         }
-    
     elapsed = time.time() - round_data["start_time"]
     display_multiplier = elapsed * 0.3
     if display_multiplier >= round_data["crash_display"]:
@@ -2448,13 +2437,11 @@ async def rocket_cashout(data: RocketCashoutRequest):
         raise HTTPException(status_code=403, detail="Not your round")
     if round_data["status"] != "active":
         raise HTTPException(status_code=400, detail="Round already finished")
-    
     elapsed = time.time() - round_data["start_time"]
     display_multiplier = elapsed * 0.3
     if display_multiplier >= round_data["crash_display"]:
         round_data["status"] = "crashed"
         raise HTTPException(status_code=400, detail="Ракета уже упала")
-    
     real_multiplier = 1.0 + display_multiplier
     win_amount = int(round_data["bet"] * real_multiplier)
     update_balance(user_id, win_amount, f"Выигрыш в ракетке {win_amount} токенов")
@@ -2512,17 +2499,13 @@ async def activate_promo(data: PromoRequest):
     user = get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
     if code not in PROMOCODES:
         raise HTTPException(status_code=400, detail="Неверный промокод")
-    
     if is_promo_used(user_id, code):
         raise HTTPException(status_code=400, detail="Вы уже использовали этот промокод")
-    
     reward = PROMOCODES[code]
     update_balance(user_id, reward, f"Промокод {code}")
     use_promo(user_id, code)
-    
     new_balance = get_user(user_id)["balance"]
     return {
         "status": "success",
