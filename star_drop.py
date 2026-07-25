@@ -1604,8 +1604,8 @@ function applyTheme(mode) {
 function updateKeyColor(mode) {
     const keyDisplay = document.getElementById('key-display');
     if (mode === 'light') keyDisplay.textContent = '🔑';
-    else if (mode === 'normal') keyDisplay.textContent = '💗';
-    else if (mode === 'hard') keyDisplay.textContent = '🔴';
+    else if (mode === 'normal') keyDisplay.textContent = '🎟';
+    else if (mode === 'hard') keyDisplay.textContent = '🎫';
 }
 
 document.querySelectorAll('.mode-btn').forEach(btn => {
