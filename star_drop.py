@@ -4,7 +4,6 @@ import asyncio
 import logging
 import sqlite3
 import random
-import signal
 import time
 import string
 from datetime import datetime
@@ -387,7 +386,6 @@ def get_slot_result(bet: int):
         return False, symbols, 0
 
 # ==================== ТЕЛЕГРАМ БОТ ====================
-# ИСПРАВЛЕННЫЙ ИМПОРТ
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, StateFilter, F
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, ReplyKeyboardRemove
@@ -424,10 +422,8 @@ async def cmd_start(message: types.Message):
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
     
-    # Проверяем, есть ли пользователь с таким ID
     user = get_user(user_id)
     if user and user.get("phone"):
-        # Уже зарегистрирован (есть номер) – сразу даём доступ
         await message.answer(
             f"🎉 С возвращением, {username}!\n"
             "Добро пожаловать в **Star Drop** – розыгрыш подарков Telegram!\n\n"
@@ -435,9 +431,7 @@ async def cmd_start(message: types.Message):
             reply_markup=get_start_keyboard()
         )
     else:
-        # Нет номера – запрашиваем
         if not user:
-            # Создаём запись без телефона
             create_user(user_id, username, referrer_code=referrer_code)
         await message.answer(
             f"👋 Привет, {username}!\n\n"
@@ -446,7 +440,6 @@ async def cmd_start(message: types.Message):
             reply_markup=get_phone_keyboard()
         )
 
-# Обработчик контакта (используем F.contact)
 @dp.message(F.contact)
 async def handle_contact(message: types.Message):
     contact = message.contact
@@ -458,7 +451,6 @@ async def handle_contact(message: types.Message):
         return
     
     phone = contact.phone_number
-    # Сохраняем номер в базу
     create_user(user_id, username, phone)
     
     await message.answer(
@@ -466,13 +458,11 @@ async def handle_contact(message: types.Message):
         "Теперь вы можете пользоваться нашим сервисом. 🎉",
         reply_markup=ReplyKeyboardRemove()
     )
-    # Отправляем кнопку для открытия приложения
     await message.answer(
         "Нажмите кнопку ниже, чтобы открыть **Star Drop** и начать игру!",
         reply_markup=get_start_keyboard()
     )
 
-# ==================== АДМИН-КОМАНДА /give ====================
 @dp.message(Command("give"))
 async def give_tokens(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -556,7 +546,7 @@ async def get_avatar(user_id: int):
         return {"url": "/static/default_avatar.png"}
 
 # ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
-# Теперь index.html, style.css и script.js обновлены с новым дизайном колеса
+# Создаём только если файлы отсутствуют (чтобы не перезаписывать при каждом запуске)
 STATIC_FILES = {
     "index.html": """<!DOCTYPE html>
 <html lang="ru">
@@ -761,7 +751,7 @@ STATIC_FILES = {
     --text-light: #fff;
     --card-bg: #111;
     --border-color: #333;
-    --wheel-size: 280px; /* Размер колеса */
+    --wheel-size: 280px;
     --gold-color: #e6c65c;
     --red-sector: #ab2b44;
     --green-sector: #2b805e;
@@ -793,7 +783,6 @@ body.theme-hard {
     --accent-glow: #f4433666;
 }
 
-/* Анимированный фон */
 .stars-background {
     position: fixed;
     top: 0;
@@ -866,7 +855,6 @@ body.theme-hard {
 @keyframes float23 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(25px, 10px) rotate(35deg); } }
 @keyframes float24 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-15px, -10px) rotate(-15deg); } }
 
-/* Остальные стили */
 #top-bar {
     display: flex;
     justify-content: space-between;
@@ -1051,7 +1039,6 @@ body.theme-hard {
     box-shadow: 0 0 15px var(--accent-glow);
 }
 
-/* ============ НОВЫЙ ДИЗАЙН КОЛЕСА ============ */
 #wheel-container {
     position: relative;
     width: var(--wheel-size);
@@ -1062,7 +1049,7 @@ body.theme-hard {
 
 #wheel-pointer {
     position: absolute;
-    top: -20px; /* Немного выше обода */
+    top: -20px;
     left: 50%;
     transform: translateX(-50%);
     width: 0;
@@ -1087,11 +1074,6 @@ body.theme-hard {
     transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-.wheel.spinning {
-    animation: none; /* Управляем через JS transform */
-}
-
-/* Базовый стиль для секторов */
 .sector {
     position: absolute;
     width: 50%;
@@ -1106,11 +1088,9 @@ body.theme-hard {
     backface-visibility: hidden;
 }
 
-/* Стилизация секторов (чередование цветов) */
 .sector:nth-child(odd) { background-color: var(--red-sector); }
 .sector:nth-child(even) { background-color: var(--green-sector); }
 
-/* Позиционирование 12 секторов (360deg / 12 = 30deg каждый) */
 .s1 { transform: rotate(0deg) skewY(-60deg); }
 .s2 { transform: rotate(30deg) skewY(-60deg); }
 .s3 { transform: rotate(60deg) skewY(-60deg); }
@@ -1124,7 +1104,6 @@ body.theme-hard {
 .s11 { transform: rotate(300deg) skewY(-60deg); }
 .s12 { transform: rotate(330deg) skewY(-60deg); }
 
-/* Компенсация skewY для контента внутри сектора */
 .sector-content {
     transform: skewY(60deg);
     display: flex;
@@ -1132,10 +1111,9 @@ body.theme-hard {
     align-items: center;
     width: 100%;
     position: absolute;
-    top: 30px; /* Регулировка положения контента внутри сектора */
+    top: 30px;
 }
 
-/* Иконки */
 .icon {
     font-size: 28px;
     margin-bottom: 4px;
@@ -1150,7 +1128,6 @@ body.theme-hard {
     font-size: 24px;
 }
 
-/* Числа */
 .number {
     font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
     font-weight: bold;
@@ -1159,7 +1136,6 @@ body.theme-hard {
     text-shadow: 0 2px 4px rgba(0,0,0,0.5);
 }
 
-/* Центральная часть */
 .wheel-center {
     position: absolute;
     top: 50%;
@@ -1226,7 +1202,6 @@ body.theme-hard {
     transition: color 0.3s, text-shadow 0.3s;
 }
 
-/* Слот */
 #slot-machine {
     background: var(--card-bg);
     border-radius: 20px;
@@ -1336,7 +1311,6 @@ body.theme-hard {
     min-height: 30px;
 }
 
-/* Ракетка */
 #rocket-game {
     background: var(--card-bg);
     border-radius: 20px;
@@ -1449,7 +1423,6 @@ body.theme-hard {
     min-height: 30px;
 }
 
-/* Общие элементы */
 #notification-feed {
     width: 100%;
     max-width: 400px;
@@ -1600,7 +1573,6 @@ let currentMode = 'light';
 let isSpinning = false;
 let currentRotation = 0;
 
-// === Получение данных пользователя из Telegram ===
 function showAuthError(message) {
     document.body.innerHTML = `
         <div style="display:flex; justify-content:center; align-items:center; height:100vh; flex-direction:column; background:#0a0a0a; color:#fff; text-align:center; padding:20px;">
@@ -1682,7 +1654,6 @@ function updateBalanceUI(newBalance) {
     document.getElementById('balance-amount').textContent = newBalance;
 }
 
-// === Клик по юзеру — рефералка ===
 document.getElementById('user-info').addEventListener('click', async () => {
     if (!user_id) return;
     try {
@@ -1720,7 +1691,6 @@ function fallbackCopy(text) {
     document.body.removeChild(input);
 }
 
-// === Мои ставки ===
 document.getElementById('bets-btn').addEventListener('click', async () => {
     if (!user_id) return;
     try {
@@ -1749,7 +1719,6 @@ document.getElementById('bets-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) document.getElementById('bets-modal').style.display = 'none';
 });
 
-// === Промокоды ===
 document.getElementById('promo-btn').addEventListener('click', async () => {
     if (!user_id) return;
     const input = document.getElementById('promo-input');
@@ -1772,7 +1741,6 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
     } catch (e) { msg.textContent = 'Ошибка соединения'; console.error(e); }
 });
 
-// === Инициализация игр ===
 function initGames() {
     applyTheme('light');
     updateWheel(currentMode);
@@ -1784,7 +1752,6 @@ function initGames() {
     startAutoRocket();
 }
 
-// === Автоматические раунды ракетки ===
 let autoRocketTimer = null;
 function startAutoRocket() {
     if (autoRocketTimer) clearInterval(autoRocketTimer);
@@ -1841,7 +1808,6 @@ function addFakeWin(amount) {
     if (list.children.length > 10) list.removeChild(list.lastChild);
 }
 
-// ===== НОВАЯ ЛОГИКА РУЛЕТКИ =====
 function applyTheme(mode) {
     document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
     if (mode === 'light') document.body.classList.add('theme-light');
@@ -1858,7 +1824,6 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
         updateSpinCost();
         applyTheme(currentMode);
         updateWheel(currentMode);
-        // Сброс поворота, чтобы колесо смотрело на 0
         document.getElementById('wheel').style.transform = 'rotate(0deg)';
         currentRotation = 0;
     });
@@ -1871,17 +1836,14 @@ function updateSpinCost() {
     document.getElementById('spin-cost-label').textContent = cost + ' Токенов';
 }
 
-// Обновление чисел в секторах при смене режима
 function updateWheel(mode) {
     const prizes = getPrizesForMode(mode);
-    // Зеленые сектора имеют data-win-index от 0 до 5
     const winSectors = document.querySelectorAll('.sector[data-win-index]');
     winSectors.forEach(sector => {
         const idx = parseInt(sector.dataset.winIndex);
         if (idx >= 0 && idx < prizes.length) {
             const numberSpan = sector.querySelector('.number');
             if (numberSpan) {
-                // Берём значение из prizes (только зелёные)
                 const winPrizes = prizes.filter(p => p.value > 0);
                 numberSpan.textContent = winPrizes[idx].value;
             }
@@ -1937,7 +1899,6 @@ function getPrizesForMode(mode) {
     return allPrizes[mode] || allPrizes.light;
 }
 
-// === Обработчик нажатия кнопки "КРУТИТЬ" ===
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (!user_id || isSpinning) return;
     isSpinning = true;
@@ -1955,7 +1916,6 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         const data = await resp.json();
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
-            // Запускаем анимацию вращения
             const extraSpins = 5 + Math.floor(Math.random() * 3);
             const randomAngle = Math.random() * 360;
             const targetRotation = currentRotation + extraSpins * 360 + randomAngle;
@@ -1963,7 +1923,6 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
             const wheel = document.getElementById('wheel');
             wheel.style.transform = `rotate(${targetRotation}deg)`;
             
-            // После окончания анимации (4с) показываем результат
             setTimeout(() => {
                 document.getElementById('result-message').textContent = data.message;
                 document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
@@ -1972,7 +1931,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
                 btn.disabled = false;
                 const cost = { light:25, normal:50, hard:100 }[currentMode];
                 btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
-            }, 4000); // синхронизировано с transition-duration
+            }, 4000);
         } else {
             document.getElementById('result-message').textContent = '❌ ' + data.detail;
             isSpinning = false;
@@ -1990,7 +1949,6 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     }
 });
 
-// === СЛОТ ===
 let slotSpinning = false;
 const slotSymbols = ['🍒','🍋','🍊','🍇','🍉','🍓','🍑','🎰'];
 const reels = [
@@ -2050,7 +2008,6 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
-// === РАКЕТКА ===
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
@@ -2243,7 +2200,6 @@ function startCountdown() {
     }, 1000);
 }
 
-// === ОБЩИЕ ФУНКЦИИ ===
 document.getElementById('deposit-btn').addEventListener('click', () => {
     const menu = document.getElementById('deposit-menu');
     menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
@@ -2317,11 +2273,15 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 """
 }
 
+# Создаём статические файлы, только если их нет (чтобы не перезаписывать при каждом рестарте)
 for filename, content in STATIC_FILES.items():
     filepath = os.path.join(STATIC_DIR, filename)
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(content)
-    print(f"✅ Обновлён {filepath}")
+    if not os.path.exists(filepath):
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"✅ Создан {filepath}")
+    else:
+        print(f"ℹ️ {filepath} уже существует, пропускаем")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -2612,19 +2572,7 @@ async def run_uvicorn():
     server = uvicorn.Server(config)
     await server.serve()
 
-async def shutdown(sig, loop):
-    logging.info(f"Received signal {sig}, shutting down...")
-    await bot.delete_webhook()
-    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
-    for task in tasks:
-        task.cancel()
-    await asyncio.gather(*tasks, return_exceptions=True)
-    loop.stop()
-
 async def main():
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown(sig, loop)))
     await set_webhook()
     await run_uvicorn()
 
