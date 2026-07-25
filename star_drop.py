@@ -72,7 +72,6 @@ def get_next_spin_result(user_id: int, mode: str):
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
-    # Обновлённая таблица users с username и password
     cur.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -179,13 +178,11 @@ def create_user(username: str, password: str, telegram_id: int = None) -> Option
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     
-    # Проверяем, существует ли пользователь
     cur.execute("SELECT id FROM users WHERE username = ?", (username,))
     if cur.fetchone():
         conn.close()
         return None
     
-    # Создаём пользователя
     code = hashlib.md5(username.encode()).hexdigest()[:8]
     cur.execute(
         "INSERT INTO users (username, password, telegram_id, referral_code, balance) VALUES (?, ?, ?, ?, ?)",
@@ -497,7 +494,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=20">
+    <link rel="stylesheet" href="/static/style.css?v=21">
 </head>
 <body>
     <!-- ЭКРАН ВХОДА -->
@@ -573,7 +570,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
         <!-- РУЛЕТКА -->
         <div id="roulette-page">
             <div id="main-title">
-                <h1>РУЛЕТКА STAR DROP</h1>
+                <h1>⭐ STAR DROP</h1>
                 <p>Выбери режим и испытай удачу!</p>
             </div>
             <div id="mode-selector">
@@ -603,7 +600,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
         <!-- СЛОТ -->
         <div id="slot-page" style="display:none;">
             <div id="main-title">
-                <h1>ИГРОВОЙ АВТОМАТ 🎰</h1>
+                <h1>⭐ STAR DROP</h1>
                 <p>Дёрни рычаг и удвой ставку!</p>
             </div>
             <div id="slot-machine">
@@ -627,7 +624,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
         <!-- РАКЕТКА -->
         <div id="rocket-page" style="display:none;">
             <div id="main-title">
-                <h1>🚀 РАКЕТКА</h1>
+                <h1>⭐ STAR DROP</h1>
                 <p>Лови момент и умножай ставку до x100!</p>
             </div>
             <div id="rocket-game">
@@ -665,14 +662,16 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
         </div>
 
         <div id="bottom-nav">
-            <button class="nav-btn active" data-tab="roulette">Рулетка</button>
-            <button class="nav-btn" data-tab="slot">Барабан</button>
-            <button class="nav-btn" data-tab="rocket">Ракетка</button>
-            <button id="logout-btn" style="background:transparent; color:#888; border:none; font-size:14px; font-weight:600; padding:6px 20px; border-radius:20px; cursor:pointer;">🚪 Выход</button>
+            <div style="display:flex; gap:4px; flex:1; justify-content:center;">
+                <button class="nav-btn active" data-tab="roulette">Рулетка</button>
+                <button class="nav-btn" data-tab="slot">Барабан</button>
+                <button class="nav-btn" data-tab="rocket">Ракетка</button>
+            </div>
+            <button id="logout-btn" style="background:transparent; color:#888; border:none; font-size:13px; font-weight:600; padding:6px 12px; border-radius:20px; cursor:pointer; flex-shrink:0; margin-left:4px;">🚪Выход</button>
         </div>
     </div>
 
-    <script src="/static/script.js?v=20"></script>
+    <script src="/static/script.js?v=21"></script>
 </body>
 </html>""")
 
@@ -1297,8 +1296,9 @@ body.theme-hard {
     width: 100%;
     background: #111;
     display: flex;
-    justify-content: space-around;
-    padding: 10px 0;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
     border-top: 1px solid var(--border-color);
     z-index: 10;
 }
@@ -1308,7 +1308,7 @@ body.theme-hard {
     border: none;
     font-size: 14px;
     font-weight: 600;
-    padding: 6px 20px;
+    padding: 6px 12px;
     border-radius: 20px;
     cursor: pointer;
     transition: 0.2s;
@@ -1608,7 +1608,6 @@ function buildRouletteStrip() {
     const strip = document.getElementById('wheel-strip');
     strip.innerHTML = '';
     const symbols = ['❌', '🎫'];
-    // 400 слотов для долгого вращения
     for (let i = 0; i < 400; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
@@ -1683,7 +1682,6 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     document.getElementById('key-container').style.display = 'none';
     const wheelWrapper = document.getElementById('wheel-wrapper');
     wheelWrapper.style.display = 'flex';
-    // Пересоздаём полосу для свежести
     buildRouletteStrip();
 
     try {
@@ -2281,7 +2279,6 @@ class YookassaNotification(BaseModel):
 async def api_login(data: LoginRequest):
     user = login_user(data.username, data.password)
     if not user:
-        # Пробуем зарегистрировать нового пользователя
         new_user = create_user(data.username, data.password)
         if new_user:
             return {"id": new_user["id"], "username": new_user["username"], "balance": new_user["balance"], "telegram_id": new_user["telegram_id"]}
@@ -2432,7 +2429,6 @@ async def rocket_start(data: RocketStartRequest):
     if user["balance"] < bet:
         raise HTTPException(status_code=400, detail="Недостаточно токенов")
     update_balance(user_id, -bet, f"Ставка в ракетке {bet} токенов")
-    # КРАШ МОЖЕТ БЫТЬ ОТ 0.01 ДО 30.0
     crash_display = random.uniform(0.01, 30.0)
     global round_counter
     round_counter += 1
@@ -2465,7 +2461,6 @@ async def rocket_status(round_id: int):
             "cashed_out": True
         }
     elapsed = time.time() - round_data["start_time"]
-    # Очень медленный рост
     display_multiplier = elapsed * 0.06
     if display_multiplier >= round_data["crash_display"]:
         round_data["status"] = "crashed"
