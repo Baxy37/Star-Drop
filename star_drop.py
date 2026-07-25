@@ -86,6 +86,7 @@ round_counter = 0
 DB_NAME = "star_drop.db"
 WEBAPP_URL = "https://star-drop.onrender.com"
 REFERRAL_BONUS = 50
+START_BALANCE = 50  # Стартовый баланс
 
 # ==================== БАЗА ДАННЫХ ====================
 def init_db():
@@ -176,32 +177,47 @@ def create_user(user_id: int, username: str = None, phone: str = None, referrer_
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     code = hashlib.md5(str(user_id).encode()).hexdigest()[:8]
-    cur.execute(
-        "INSERT OR IGNORE INTO users (user_id, username, phone, referral_code) VALUES (?, ?, ?, ?)",
-        (user_id, username, phone, code)
-    )
-    if phone:
-        cur.execute("UPDATE users SET phone = ? WHERE user_id = ?", (phone, user_id))
-    if username:
-        cur.execute("UPDATE users SET username = ? WHERE user_id = ?", (username, user_id))
-    
-    if referrer_code:
+    # Проверяем, есть ли уже пользователь
+    cur.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
+    if cur.fetchone() is None:
+        # Новый пользователь – даём стартовый баланс
+        cur.execute(
+            "INSERT INTO users (user_id, username, phone, referral_code, balance) VALUES (?, ?, ?, ?, ?)",
+            (user_id, username, phone, code, START_BALANCE)
+        )
+        # Записываем транзакцию о стартовом бонусе
+        cur.execute(
+            "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
+            (user_id, "deposit", START_BALANCE, "Стартовый бонус 50 токенов")
+        )
+    else:
+        # Обновляем существующего
+        if phone:
+            cur.execute("UPDATE users SET phone = ? WHERE user_id = ?", (phone, user_id))
+        if username:
+            cur.execute("UPDATE users SET username = ? WHERE user_id = ?", (username, user_id))
+        # Если баланс ещё не установлен (может быть 0), устанавливаем стартовый?
+        # Но чтобы не обнулить существующий баланс, проверяем, если balance = 0 и phone нет, то даём стартовый?
+        # Лучше не трогать баланс, если пользователь уже существует.
+        pass
+
+    # Реферальная логика (если есть referrer_code и пользователь новый)
+    if referrer_code and not cur.execute("SELECT id FROM referrals WHERE referred_id = ?", (user_id,)).fetchone():
         cur.execute("SELECT user_id FROM users WHERE referral_code = ?", (referrer_code,))
         row = cur.fetchone()
         if row:
             referrer_id = row[0]
             if referrer_id != user_id:
-                cur.execute("SELECT id FROM referrals WHERE referred_id = ?", (user_id,))
-                if not cur.fetchone():
-                    cur.execute(
-                        "INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)",
-                        (referrer_id, user_id)
-                    )
-                    cur.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (REFERRAL_BONUS, referrer_id))
-                    cur.execute(
-                        "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
-                        (referrer_id, "deposit", REFERRAL_BONUS, f"Бонус за приглашение пользователя {user_id}")
-                    )
+                cur.execute(
+                    "INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)",
+                    (referrer_id, user_id)
+                )
+                cur.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (REFERRAL_BONUS, referrer_id))
+                cur.execute(
+                    "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
+                    (referrer_id, "deposit", REFERRAL_BONUS, f"Бонус за приглашение пользователя {user_id}")
+                )
+
     conn.commit()
     conn.close()
 
@@ -383,7 +399,7 @@ def get_slot_result(bet: int):
         return False, symbols, 0
 
 # ==================== ТЕЛЕГРАМ БОТ ====================
-from aiogram import Bot, Dispatcher, types, F  # <--- исправленный импорт
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command, StateFilter
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
@@ -421,6 +437,7 @@ async def cmd_start(message: types.Message):
     
     user = get_user(user_id)
     if user and user.get("phone"):
+        # Уже зарегистрирован с номером
         await message.answer(
             f"🎉 С возвращением, {username}!\n"
             "Добро пожаловать в **Star Drop** – розыгрыш подарков Telegram!\n\n"
@@ -428,8 +445,17 @@ async def cmd_start(message: types.Message):
             reply_markup=get_start_keyboard()
         )
     else:
+        # Нет номера – создаём запись (или обновляем) и просим номер
         if not user:
             create_user(user_id, username, referrer_code=referrer_code)
+        else:
+            # Если пользователь есть, но без номера, обновляем username
+            if username:
+                conn = sqlite3.connect(DB_NAME)
+                cur = conn.cursor()
+                cur.execute("UPDATE users SET username = ? WHERE user_id = ?", (username, user_id))
+                conn.commit()
+                conn.close()
         await message.answer(
             f"👋 Привет, {username}!\n\n"
             "Для доступа к нашему сервису необходимо поделиться номером телефона.\n"
@@ -448,10 +474,16 @@ async def handle_contact(message: types.Message):
         return
     
     phone = contact.phone_number
+    # Обновляем номер (если пользователь уже существует, обновим)
     create_user(user_id, username, phone)
     
+    # Убедимся, что у пользователя есть баланс (если создан только что, уже есть стартовый)
+    user = get_user(user_id)
+    balance = user['balance'] if user else 0
+    
     await message.answer(
-        "✅ Регистрация успешно завершена!\n\n"
+        f"✅ Регистрация успешно завершена!\n"
+        f"Ваш баланс: {balance} токенов 🎫\n\n"
         "Теперь вы можете пользоваться нашим сервисом. 🎉",
         reply_markup=ReplyKeyboardRemove()
     )
@@ -543,7 +575,7 @@ async def get_avatar(user_id: int):
         return {"url": "/static/default_avatar.png"}
 
 # ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
-# Создаём только если отсутствуют
+# Обновлённые статические файлы с исправленным колесом и улучшенной лентой выигрышей
 STATIC_FILES = {
     "index.html": """<!DOCTYPE html>
 <html lang="ru">
@@ -551,7 +583,7 @@ STATIC_FILES = {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=4">
+    <link rel="stylesheet" href="/static/style.css?v=5">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -634,6 +666,7 @@ STATIC_FILES = {
             <div id="wheel-container">
                 <div id="wheel-pointer">▼</div>
                 <div class="wheel" id="wheel">
+                    <!-- 12 секторов с чередованием красный/зелёный -->
                     <div class="sector s1" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
                     <div class="sector s2" data-win-index="0"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">10</span></div></div>
                     <div class="sector s3" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
@@ -728,7 +761,7 @@ STATIC_FILES = {
         </div>
     </div>
 
-    <script src="/static/script.js?v=4"></script>
+    <script src="/static/script.js?v=5"></script>
 </body>
 </html>""",
     "style.css": """* {
@@ -1068,6 +1101,7 @@ body.theme-hard {
     transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
+/* Сектора – исправленные размеры и позиционирование */
 .sector {
     position: absolute;
     width: 50%;
@@ -1082,9 +1116,11 @@ body.theme-hard {
     backface-visibility: hidden;
 }
 
+/* Чередование цветов */
 .sector:nth-child(odd) { background-color: var(--red-sector); }
 .sector:nth-child(even) { background-color: var(--green-sector); }
 
+/* Повороты для 12 секторов (каждый 30°) */
 .s1 { transform: rotate(0deg) skewY(-60deg); }
 .s2 { transform: rotate(30deg) skewY(-60deg); }
 .s3 { transform: rotate(60deg) skewY(-60deg); }
@@ -1098,6 +1134,7 @@ body.theme-hard {
 .s11 { transform: rotate(300deg) skewY(-60deg); }
 .s12 { transform: rotate(330deg) skewY(-60deg); }
 
+/* Контент внутри сектора – компенсируем skewY */
 .sector-content {
     transform: skewY(60deg);
     display: flex;
@@ -1105,7 +1142,9 @@ body.theme-hard {
     align-items: center;
     width: 100%;
     position: absolute;
-    top: 30px;
+    top: 25%;
+    left: 0;
+    text-align: center;
 }
 
 .icon {
@@ -1579,6 +1618,7 @@ function showAuthError(message) {
     throw new Error('Auth error');
 }
 
+// Получаем user_id из Telegram WebApp
 if (window.Telegram && window.Telegram.WebApp) {
     window.Telegram.WebApp.ready();
     const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
@@ -1595,6 +1635,7 @@ if (window.Telegram && window.Telegram.WebApp) {
         showAuthError('Не удалось получить данные пользователя из Telegram.');
     }
 } else {
+    // Fallback для локальной разработки
     const savedId = localStorage.getItem('starDrop_userId');
     if (savedId) {
         user_id = parseInt(savedId);
@@ -1648,6 +1689,7 @@ function updateBalanceUI(newBalance) {
     document.getElementById('balance-amount').textContent = newBalance;
 }
 
+// === Рефералка ===
 document.getElementById('user-info').addEventListener('click', async () => {
     if (!user_id) return;
     try {
@@ -1685,6 +1727,7 @@ function fallbackCopy(text) {
     document.body.removeChild(input);
 }
 
+// === Мои ставки ===
 document.getElementById('bets-btn').addEventListener('click', async () => {
     if (!user_id) return;
     try {
@@ -1713,6 +1756,7 @@ document.getElementById('bets-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) document.getElementById('bets-modal').style.display = 'none';
 });
 
+// === Промокоды ===
 document.getElementById('promo-btn').addEventListener('click', async () => {
     if (!user_id) return;
     const input = document.getElementById('promo-input');
@@ -1735,6 +1779,7 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
     } catch (e) { msg.textContent = 'Ошибка соединения'; console.error(e); }
 });
 
+// === Инициализация игр ===
 function initGames() {
     applyTheme('light');
     updateWheel(currentMode);
@@ -1744,8 +1789,32 @@ function initGames() {
     drawRocket(0, 'idle');
     document.getElementById('rocket-countdown').textContent = '0';
     startAutoRocket();
+    // Запускаем генерацию фейковых выигрышей в ленте
+    startFakeWins();
 }
 
+// === Генерация фейковых выигрышей для ленты ===
+function startFakeWins() {
+    setInterval(() => {
+        // Генерируем случайное событие выигрыша
+        const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 'player_' + (200000 + Math.floor(Math.random()*800000)), 'gamer_' + (300000 + Math.floor(Math.random()*700000)), 'winner_' + (400000 + Math.floor(Math.random()*600000))];
+        const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
+        const prizes = ['🎰 Слот', '🎡 Рулетка', '🚀 Ракетка', '🎁 Подарок'];
+        const prize = prizes[Math.floor(Math.random()*prizes.length)];
+        const amount = Math.floor(Math.random() * 150) + 10;
+        addFakeWinToFeed(username, prize, amount);
+    }, 3000); // каждые 3 секунды
+}
+
+function addFakeWinToFeed(username, prize, amount) {
+    const list = document.getElementById('feed-list');
+    const li = document.createElement('li');
+    li.textContent = '@' + username + ' выиграл ' + prize + ' (+' + amount + ' токенов)';
+    list.insertBefore(li, list.firstChild);
+    if (list.children.length > 10) list.removeChild(list.lastChild);
+}
+
+// === Автоматические раунды ракетки ===
 let autoRocketTimer = null;
 function startAutoRocket() {
     if (autoRocketTimer) clearInterval(autoRocketTimer);
@@ -1767,7 +1836,10 @@ function simulateRocketRound(bet) {
             clearInterval(interval);
             if (win) {
                 const winAmount = Math.floor(bet * crashMultiplier);
-                addFakeWin(winAmount);
+                // Добавляем в ленту через общую функцию
+                const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 'player_' + (200000 + Math.floor(Math.random()*800000)), 'gamer_' + (300000 + Math.floor(Math.random()*700000))];
+                const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
+                addFakeWinToFeed(username, '🚀 Ракетка', winAmount);
             }
             document.getElementById('rocket-multiplier').textContent = '0.00';
             document.getElementById('rocket-status').textContent = 'Ожидание';
@@ -1791,17 +1863,7 @@ function simulateRocketRound(bet) {
     }, 200);
 }
 
-function addFakeWin(amount) {
-    const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 'player_' + (200000 + Math.floor(Math.random()*800000)), 'gamer_' + (300000 + Math.floor(Math.random()*700000))];
-    const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
-    const prizeName = '🎰 Слот';
-    const list = document.getElementById('feed-list');
-    const li = document.createElement('li');
-    li.textContent = '@' + username + ' выиграл ' + prizeName + ' (+' + amount + ' токенов)';
-    list.insertBefore(li, list.firstChild);
-    if (list.children.length > 10) list.removeChild(list.lastChild);
-}
-
+// ===== НОВАЯ ЛОГИКА РУЛЕТКИ =====
 function applyTheme(mode) {
     document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
     if (mode === 'light') document.body.classList.add('theme-light');
@@ -1893,6 +1955,7 @@ function getPrizesForMode(mode) {
     return allPrizes[mode] || allPrizes.light;
 }
 
+// === Обработчик нажатия кнопки "КРУТИТЬ" ===
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (!user_id || isSpinning) return;
     isSpinning = true;
@@ -1920,7 +1983,11 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
             setTimeout(() => {
                 document.getElementById('result-message').textContent = data.message;
                 document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
-                if (data.win) fetchFeed();
+                if (data.win) {
+                    // Добавляем в ленту реальный выигрыш
+                    const username = document.getElementById('username').textContent.replace('@', '');
+                    addFakeWinToFeed(username, data.prize_name || 'Рулетка', data.prize_value || 0);
+                }
                 isSpinning = false;
                 btn.disabled = false;
                 const cost = { light:25, normal:50, hard:100 }[currentMode];
@@ -1943,6 +2010,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     }
 });
 
+// === СЛОТ ===
 let slotSpinning = false;
 const slotSymbols = ['🍒','🍋','🍊','🍇','🍉','🍓','🍑','🎰'];
 const reels = [
@@ -1984,11 +2052,12 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
             if (data.win) {
                 resultDiv.textContent = '🎉 ВЫИГРЫШ! +' + data.win_amount + ' токенов!';
                 resultDiv.style.color = '#4CAF50';
+                const username = document.getElementById('username').textContent.replace('@', '');
+                addFakeWinToFeed(username, '🎰 Слот', data.win_amount);
             } else {
                 resultDiv.textContent = '😞 Проигрыш. -' + bet + ' токенов';
                 resultDiv.style.color = '#f44336';
             }
-            if (data.win) fetchFeed();
         } else {
             document.getElementById('slot-result').textContent = '❌ ' + data.detail;
         }
@@ -2002,6 +2071,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
+// === РАКЕТКА ===
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
@@ -2172,7 +2242,9 @@ document.getElementById('rocket-cashout-btn').addEventListener('click', async ()
             if (rocketInterval) clearInterval(rocketInterval);
             if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
             updateBalanceUI(data.new_balance);
-            fetchFeed();
+            // Добавляем в ленту
+            const username = document.getElementById('username').textContent.replace('@', '');
+            addFakeWinToFeed(username, '🚀 Ракетка', data.win_amount);
             startCountdown();
         } else alert('❌ ' + data.detail);
     } catch (e) { alert('Ошибка соединения'); console.error(e); }
@@ -2194,6 +2266,7 @@ function startCountdown() {
     }, 1000);
 }
 
+// === ОБЩИЕ ФУНКЦИИ ===
 document.getElementById('deposit-btn').addEventListener('click', () => {
     const menu = document.getElementById('deposit-menu');
     menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
@@ -2216,21 +2289,15 @@ document.getElementById('close-deposit').addEventListener('click', () => {
     document.getElementById('deposit-menu').style.display = 'none';
 });
 
+// Реальная лента выигрышей (с сервера) – уже не нужна, используем фейковую
+// но для красоты оставим, но не будем конфликтовать
 async function fetchFeed() {
-    try {
-        const resp = await fetch('/api/recent_wins');
-        const wins = await resp.json();
-        const list = document.getElementById('feed-list');
-        list.innerHTML = '';
-        wins.forEach(w => {
-            const li = document.createElement('li');
-            li.textContent = '@' + w.username + ' выиграл ' + w.prize_name + ' (+' + w.prize_value + ' токенов)';
-            list.appendChild(li);
-        });
-    } catch (e) { console.error(e); }
+    // Можно загружать реальные выигрыши с сервера, но мы их не показываем, чтобы не мешать фейковым
+    // Просто игнорируем
 }
-fetchFeed();
-setInterval(fetchFeed, 5000);
+// Запускаем только фейковую ленту
+// fetchFeed();
+// setInterval(fetchFeed, 5000);
 
 document.getElementById('withdraw-btn').addEventListener('click', async () => {
     if (!user_id) return;
@@ -2564,11 +2631,8 @@ async def run_uvicorn():
     await server.serve()
 
 async def main():
-    # Запускаем веб-сервер в фоновой задаче
     server_task = asyncio.create_task(run_uvicorn())
-    # Параллельно устанавливаем вебхук
     await set_webhook()
-    # Ожидаем завершения сервера (он будет работать, пока не остановят)
     await server_task
 
 if __name__ == "__main__":
