@@ -384,7 +384,8 @@ def get_slot_result(bet: int):
 
 # ==================== ТЕЛЕГРАМ БОТ ====================
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command, StateFilter, F
+from aiogram.filters import Command, StateFilter
+from aiogram.filters.magic import F  # <--- исправленный импорт
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
