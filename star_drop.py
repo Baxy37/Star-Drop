@@ -12,7 +12,7 @@ import math
 
 # ==================== НАСТРОЙКИ ====================
 BOT_TOKEN = "8988678866:AAHIWxUB8zKBCoF21g7OVYEEWnwEF_MpLmI"
-ADMIN_ID = 8551946505  # Ваш ID
+ADMIN_ID = 8551946505
 
 PAYMENT_LINKS = {
     100: "https://yookassa.ru/my/i/amMy2QzHTXRI/l",
@@ -50,8 +50,7 @@ WEBAPP_URL = "https://star-drop.onrender.com"
 REFERRAL_BONUS = 50
 START_BALANCE = 50
 
-# ==================== ДЛЯ ЧЕРЕДОВАНИЯ РЕЗУЛЬТАТОВ ====================
-last_spin_result = {}  # user_id -> bool (True=win, False=lose)
+last_spin_result = {}
 
 def get_next_spin_result(user_id: int, mode: str):
     ranges = PRIZE_RANGES.get(mode, PRIZE_RANGES["light"])
@@ -70,7 +69,6 @@ def get_next_spin_result(user_id: int, mode: str):
         prize_name = "❌ Проигрыш"
     return win, prize_name, prize_value
 
-# ==================== БАЗА ДАННЫХ ====================
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -344,7 +342,6 @@ def use_promo(user_id: int, code: str):
 
 init_db()
 
-# ==================== ФУНКЦИЯ ДЛЯ СЛОТА (ШАНС 50%) ====================
 def get_slot_result(bet: int):
     chance = 50
     if random.randint(1, 100) <= chance:
@@ -364,7 +361,6 @@ def get_slot_result(bet: int):
                     symbols = random.choices(SLOT_SYMBOLS, k=3)
         return False, symbols, 0
 
-# ==================== ТЕЛЕГРАМ БОТ ====================
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, ReplyKeyboardRemove
@@ -400,7 +396,7 @@ async def cmd_start(message: types.Message):
     user = get_user(user_id)
     if user and user.get("phone"):
         await message.answer(
-            f"🎉 С возвращением, {username}!\n"
+            f"🎉 С возвращением!\n"
             f"Ваш баланс: {user['balance']} токенов 🎫\n\n"
             "Добро пожаловать в **Star Drop** – розыгрыш подарков Telegram!\n"
             "Нажми кнопку ниже, чтобы открыть наше мини-приложение и испытать удачу! 🍀",
@@ -408,7 +404,7 @@ async def cmd_start(message: types.Message):
         )
     else:
         await message.answer(
-            f"👋 Привет, {username}!\n\n"
+            f"👋 Привет!\n\n"
             "Для доступа к нашему сервису необходимо поделиться номером телефона.\n"
             "Нажмите кнопку ниже, чтобы отправить контакт.",
             reply_markup=get_phone_keyboard()
@@ -465,7 +461,6 @@ async def give_tokens(message: types.Message):
     except ValueError:
         await message.answer("ID и сумма должны быть числами.")
 
-# ==================== ВЕБ-СЕРВЕР (FASTAPI) ====================
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -489,7 +484,6 @@ AVATARS_DIR = os.path.join(STATIC_DIR, "avatars")
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(AVATARS_DIR, exist_ok=True)
 
-# ==================== ЭНДПОИНТ АВАТАРКИ ====================
 @app.get("/api/avatar/{user_id}")
 async def get_avatar(user_id: int):
     avatar_path = os.path.join(AVATARS_DIR, f"{user_id}.jpg")
@@ -515,8 +509,7 @@ async def get_avatar(user_id: int):
         logging.error(f"Avatar error: {e}")
         return {"url": "/static/default_avatar.png"}
 
-# ==================== СОЗДАНИЕ СТАТИЧЕСКИХ ФАЙЛОВ ====================
-# index.html (новая рулетка с полосой и стрелкой)
+# СОЗДАНИЕ СТАТИЧЕСКИХ ФАЙЛОВ
 with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     f.write("""<!DOCTYPE html>
 <html lang="ru">
@@ -524,7 +517,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=15">
+    <link rel="stylesheet" href="/static/style.css?v=17">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -545,7 +538,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                     <img id="avatar-img" src="" alt="avatar" style="width:100%; height:100%; object-fit:cover; display:none;">
                     <span id="avatar-placeholder" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; font-weight:bold; font-size:16px; color:#0a0a0a;">U</span>
                 </div>
-                <span id="username">@user</span>
+                <span id="username" style="display:none;"></span>
             </div>
             <div id="balance">
                 <span id="balance-amount">0</span> 🎫
@@ -584,7 +577,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
             </div>
         </div>
 
-        <!-- РУЛЕТКА (новая полоса) -->
+        <!-- РУЛЕТКА -->
         <div id="roulette-page">
             <div id="main-title">
                 <h1>РУЛЕТКА STAR DROP</h1>
@@ -596,7 +589,11 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                 <button class="mode-btn" data-mode="hard">Hard</button>
             </div>
 
-            <div id="wheel-wrapper">
+            <div id="key-container">
+                <div id="key-display">🔑</div>
+            </div>
+
+            <div id="wheel-wrapper" style="display:none;">
                 <div id="wheel-container">
                     <div id="wheel-strip"></div>
                     <div id="wheel-arrow">▼</div>
@@ -681,11 +678,11 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
         </div>
     </div>
 
-    <script src="/static/script.js?v=15"></script>
+    <script src="/static/script.js?v=17"></script>
 </body>
 </html>""")
 
-# style.css (включая стили для новой рулетки)
+# CSS
 with open(os.path.join(STATIC_DIR, "style.css"), "w", encoding="utf-8") as f:
     f.write("""* {
     margin: 0;
@@ -805,6 +802,7 @@ body.theme-hard {
 #top-bar {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     width: 100%;
     padding: 10px 0;
     border-bottom: 1px solid var(--border-color);
@@ -841,10 +839,7 @@ body.theme-hard {
     color: #0a0a0a;
 }
 #username {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--accent-color);
-    transition: color 0.3s;
+    display: none !important;
 }
 #balance {
     font-size: 18px;
@@ -950,6 +945,19 @@ body.theme-hard {
     background: var(--accent-color);
     color: #0a0a0a;
     box-shadow: 0 0 15px var(--accent-glow);
+}
+
+#key-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 10px 0 20px;
+}
+#key-display {
+    font-size: 80px;
+    color: var(--key-color);
+    text-shadow: 0 0 30px var(--accent-glow);
+    transition: color 0.3s, text-shadow 0.3s;
 }
 
 #spin-area {
@@ -1327,9 +1335,8 @@ body.theme-hard {
     color: #f44336;
 }
 
-/* ===== НОВАЯ РУЛЕТКА (ПОЛОСА + СТРЕЛКА) ===== */
 #wheel-wrapper {
-    display: flex;
+    display: none;
     justify-content: center;
     margin: 10px 0 5px;
 }
@@ -1389,7 +1396,7 @@ body.theme-hard {
 }
 """)
 
-# script.js (полностью обновлённый)
+# JavaScript
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
 let user_id = null;
@@ -1415,8 +1422,6 @@ if (window.Telegram && window.Telegram.WebApp) {
     if (tgUser && tgUser.id) {
         user_id = tgUser.id;
         localStorage.setItem('starDrop_userId', user_id);
-        const username = tgUser.username || tgUser.first_name || 'User';
-        document.getElementById('username').textContent = '@' + username;
         loadAvatar(user_id);
         const placeholder = document.getElementById('avatar-placeholder');
         const name = tgUser.first_name || 'U';
@@ -1425,7 +1430,6 @@ if (window.Telegram && window.Telegram.WebApp) {
         const saved = localStorage.getItem('starDrop_userId');
         if (saved) {
             user_id = parseInt(saved);
-            document.getElementById('username').textContent = '@user_' + user_id;
             document.getElementById('avatar-placeholder').textContent = 'U';
             console.warn('Гостевой режим: используем сохранённый ID');
         } else {
@@ -1436,7 +1440,6 @@ if (window.Telegram && window.Telegram.WebApp) {
     const savedId = localStorage.getItem('starDrop_userId');
     if (savedId) {
         user_id = parseInt(savedId);
-        document.getElementById('username').textContent = '@user_' + user_id;
         document.getElementById('avatar-placeholder').textContent = 'U';
         console.warn('Гостевой режим: используем сохранённый ID');
     } else {
@@ -1487,9 +1490,6 @@ async function fetchUserData() {
         const data = await resp.json();
         balance = data.balance;
         document.getElementById('balance-amount').textContent = balance;
-        if (data.username && data.username !== '') {
-            document.getElementById('username').textContent = '@' + data.username;
-        }
         localStorage.setItem('starDrop_userId', user_id);
     } catch (e) {
         console.error('Ошибка загрузки пользователя:', e);
@@ -1608,7 +1608,6 @@ function initGames() {
     buildRouletteStrip();
 }
 
-// ========== НОВАЯ РУЛЕТКА (ПОЛОСА) ==========
 function buildRouletteStrip() {
     const strip = document.getElementById('wheel-strip');
     strip.innerHTML = '';
@@ -1634,7 +1633,7 @@ function animateRouletteWheel(win) {
         const container = document.getElementById('wheel-container');
         const strip = document.getElementById('wheel-strip');
         const cells = strip.children;
-        const cellWidth = cells[0].offsetWidth + 6; // ширина + gap
+        const cellWidth = cells[0].offsetWidth + 6;
         const containerWidth = container.offsetWidth;
 
         const targetSymbol = win ? '🎫' : '❌';
@@ -1680,7 +1679,6 @@ function animateRouletteWheel(win) {
     });
 }
 
-// ========== ОБРАБОТЧИК РУЛЕТКИ ==========
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (!user_id || isSpinning) return;
     const cost = { light:25, normal:50, hard:100 }[currentMode];
@@ -1693,6 +1691,10 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     btn.disabled = true;
     btn.innerHTML = 'КРУТИТЬ <span>Загрузка...</span>';
     document.getElementById('result-message').textContent = '';
+
+    document.getElementById('key-container').style.display = 'none';
+    const wheelWrapper = document.getElementById('wheel-wrapper');
+    wheelWrapper.style.display = 'flex';
 
     try {
         const resp = await fetch('/api/spin', {
@@ -1707,8 +1709,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
             document.getElementById('result-message').textContent = data.message;
             document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
             if (data.win) {
-                const username = document.getElementById('username').textContent.replace('@', '');
-                addFakeWinToFeed(username, data.prize_name, data.prize_value);
+                addFakeWinToFeed('user_' + user_id, data.prize_name, data.prize_value);
             }
         } else {
             document.getElementById('result-message').textContent = '❌ ' + data.detail;
@@ -1723,7 +1724,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     btn.innerHTML = 'КРУТИТЬ <span>' + cost2 + ' Токенов</span>';
 });
 
-// ========== СЛОТ-МАШИНА ==========
+// СЛОТ-МАШИНА
 let slotSpinning = false;
 const slotSymbols = ['🍒','🍋','🍊','🍇','🍉','🍓','🍑','🎰'];
 const reels = [
@@ -1765,8 +1766,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
             if (data.win) {
                 resultDiv.textContent = '🎉 ВЫИГРЫШ! +' + data.win_amount + ' токенов!';
                 resultDiv.style.color = '#4CAF50';
-                const username = document.getElementById('username').textContent.replace('@', '');
-                addFakeWinToFeed(username, '🎰 Слот', data.win_amount);
+                addFakeWinToFeed('user_' + user_id, '🎰 Слот', data.win_amount);
             } else {
                 resultDiv.textContent = '😞 Проигрыш. -' + bet + ' токенов';
                 resultDiv.style.color = '#f44336';
@@ -1784,7 +1784,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
-// ========== РАКЕТКА ==========
+// РАКЕТКА
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
@@ -1966,8 +1966,7 @@ document.getElementById('rocket-cashout-btn').addEventListener('click', async ()
             if (rocketInterval) clearInterval(rocketInterval);
             if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
             updateBalanceUI(data.new_balance);
-            const username = document.getElementById('username').textContent.replace('@', '');
-            addFakeWinToFeed(username, '🚀 Ракетка', data.win_amount);
+            addFakeWinToFeed('user_' + user_id, '🚀 Ракетка', data.win_amount);
             startCountdown();
         } else alert('❌ ' + data.detail);
     } catch (e) { alert('Ошибка соединения'); console.error(e); }
@@ -2036,7 +2035,6 @@ function simulateRocketRound(bet) {
     }, 200);
 }
 
-// ========== ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ ==========
 function startFakeWins() {
     setInterval(() => {
         const isWin = Math.random() < 0.75;
@@ -2171,12 +2169,15 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
         document.getElementById('roulette-page').style.display = tab==='roulette' ? 'block' : 'none';
         document.getElementById('slot-page').style.display = tab==='slot' ? 'block' : 'none';
         document.getElementById('rocket-page').style.display = tab==='rocket' ? 'block' : 'none';
+        if (tab==='roulette') {
+            document.getElementById('key-container').style.display = 'flex';
+            document.getElementById('wheel-wrapper').style.display = 'none';
+        }
         if (tab==='rocket') fetchUserData();
     });
 });
 """)
 
-# ==================== МОНТИРУЕМ СТАТИКУ ====================
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/")
@@ -2193,7 +2194,7 @@ async def webhook(request: Request):
     await dp.feed_update(bot, update)
     return {"status": "ok"}
 
-# ==================== API МОДЕЛИ ====================
+# API МОДЕЛИ
 class SpinRequest(BaseModel):
     user_id: int
     mode: str
@@ -2230,7 +2231,7 @@ class YookassaNotification(BaseModel):
     event: str
     object: dict
 
-# ==================== ЭНДПОИНТЫ ====================
+# API ЭНДПОИНТЫ
 @app.post("/api/register")
 async def register_user(data: RegisterRequest):
     user = get_user(data.user_id)
@@ -2327,7 +2328,6 @@ async def api_spin(data: SpinRequest):
     else:
         message = "😞 К сожалению, вы проиграли. Попробуйте ещё раз!"
     new_balance = get_user(user_id)["balance"]
-    # задержка для синхронизации с клиентской анимацией
     await asyncio.sleep(3)
     return {
         "win": win,
@@ -2513,7 +2513,7 @@ async def activate_promo(data: PromoRequest):
         "new_balance": new_balance
     }
 
-# ==================== ЗАПУСК ====================
+# ЗАПУСК
 async def set_webhook():
     webhook_url = f"https://star-drop.onrender.com/webhook"
     await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
@@ -2536,3 +2536,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n🛑 Остановка сервисов...")
         sys.exit(0)
+    
