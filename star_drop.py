@@ -494,7 +494,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=23">
+    <link rel="stylesheet" href="/static/style.css?v=24">
 </head>
 <body>
     <!-- ЭКРАН ВХОДА -->
@@ -671,7 +671,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
         </div>
     </div>
 
-    <script src="/static/script.js?v=23"></script>
+    <script src="/static/script.js?v=24"></script>
 </body>
 </html>""")
 
@@ -1399,7 +1399,7 @@ body.theme-hard {
 }
 """)
 
-# JavaScript - ПОЛНАЯ ВЕРСИЯ
+# JavaScript
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
 let current_user = null;
@@ -1609,7 +1609,8 @@ function buildRouletteStrip() {
     const strip = document.getElementById('wheel-strip');
     strip.innerHTML = '';
     const symbols = ['❌', '🎫'];
-    for (let i = 0; i < 1000; i++) {
+    // 2000 слотов для полной уверенности
+    for (let i = 0; i < 2000; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
         cell.dataset.index = i;
@@ -1650,7 +1651,8 @@ function animateRouletteWheel(win) {
         if (targetIndex === -1) targetIndex = startRange;
 
         let targetOffset = targetIndex * cellWidth + cellWidth/2 - containerWidth/2;
-        const extraLoops = 15 + Math.floor(Math.random() * 10);
+        // Много оборотов для долгого вращения
+        const extraLoops = 20 + Math.floor(Math.random() * 10);
         const totalOffset = targetOffset + extraLoops * cells.length * cellWidth;
 
         strip.style.transform = `translateX(0px)`;
@@ -1790,7 +1792,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
-// ========== РАКЕТКА (ИСПРАВЛЕННАЯ) ==========
+// ========== РАКЕТКА ==========
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
@@ -2454,8 +2456,29 @@ async def rocket_start(data: RocketStartRequest):
     if user["balance"] < bet:
         raise HTTPException(status_code=400, detail="Недостаточно токенов")
     update_balance(user_id, -bet, f"Ставка в ракетке {bet} токенов")
-    # КРАШ ОТ 0.5 ДО 3.5 (РЕДКО ВЫШЕ)
-    crash_display = random.uniform(0.5, 3.5)
+    
+    # НОВАЯ ЛОГИКА ВЗРЫВА РАКЕТКИ
+    # От 0.00 до 1.00: 70% шанс взрыва (проигрыш)
+    # От 1.00 до 2.50: 90% шанс взрыва (редкий выигрыш)
+    crash_display = random.uniform(0.01, 2.50)
+    
+    # Если краш меньше 1.00, то 70% шанс что взорвётся именно там
+    if crash_display < 1.00:
+        if random.random() < 0.70:  # 70% шанс взрыва до 1.00
+            # Оставляем как есть
+            pass
+        else:
+            # 30% шанс что долетит дальше
+            crash_display = random.uniform(1.00, 2.50)
+    else:
+        # Если краш больше 1.00, то 90% шанс взрыва в этом диапазоне
+        if random.random() < 0.90:
+            # Оставляем как есть
+            pass
+        else:
+            # 10% шанс что долетит до максимума
+            crash_display = 2.50
+    
     global round_counter
     round_counter += 1
     round_id = round_counter
