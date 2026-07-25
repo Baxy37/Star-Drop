@@ -5,10 +5,8 @@ import logging
 import sqlite3
 import random
 import time
-import string
 from datetime import datetime
 from typing import Optional, List, Dict
-import json
 import hashlib
 
 # ==================== НАСТРОЙКИ ====================
@@ -30,7 +28,6 @@ SPIN_COSTS = {
     "hard": 100
 }
 
-# ========= ЧЕРЕДУЮЩИЕСЯ ПРИЗЫ (выигрыш, проигрыш, ...) =========
 PRIZES = {
     "light": [
         {"name": "❌", "value": 0},
@@ -397,6 +394,7 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+# Клавиатура для запроса контакта
 def get_phone_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="📱 Поделиться номером", request_contact=True)]],
@@ -404,6 +402,7 @@ def get_phone_keyboard():
         one_time_keyboard=True
     )
 
+# Клавиатура для открытия приложения
 def get_start_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="🎰 Открыть рулетку", web_app=WebAppInfo(url=WEBAPP_URL))]],
@@ -514,6 +513,7 @@ AVATARS_DIR = os.path.join(STATIC_DIR, "avatars")
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(AVATARS_DIR, exist_ok=True)
 
+# ==================== ЭНДПОИНТ ДЛЯ АВАТАРКИ ====================
 @app.get("/api/avatar/{user_id}")
 async def get_avatar(user_id: int):
     avatar_path = os.path.join(AVATARS_DIR, f"{user_id}.jpg")
@@ -542,6 +542,8 @@ async def get_avatar(user_id: int):
         logging.error(f"Avatar error: {e}")
         return {"url": "/static/default_avatar.png"}
 
+# ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
+# Создаём только если отсутствуют
 STATIC_FILES = {
     "index.html": """<!DOCTYPE html>
 <html lang="ru">
@@ -609,6 +611,7 @@ STATIC_FILES = {
             </div>
         </div>
 
+        <!-- РУЛЕТКА -->
         <div id="roulette-page">
             <div id="main-title">
                 <h1>РУЛЕТКА STAR DROP</h1>
@@ -654,6 +657,7 @@ STATIC_FILES = {
             <div id="result-message"></div>
         </div>
 
+        <!-- СЛОТ -->
         <div id="slot-page" style="display:none;">
             <div id="main-title">
                 <h1>ИГРОВОЙ АВТОМАТ 🎰</h1>
@@ -677,6 +681,7 @@ STATIC_FILES = {
             </div>
         </div>
 
+        <!-- РАКЕТКА -->
         <div id="rocket-page" style="display:none;">
             <div id="main-title">
                 <h1>🚀 РАКЕТКА</h1>
@@ -759,55 +764,327 @@ body {
     position: relative;
 }
 
-body.theme-light { --accent-color: #ffd700; --accent-glow: #ffd70066; }
-body.theme-normal { --accent-color: #2196F3; --accent-glow: #2196F366; }
-body.theme-hard { --accent-color: #f44336; --accent-glow: #f4433666; }
+body.theme-light {
+    --accent-color: #ffd700;
+    --accent-glow: #ffd70066;
+}
+body.theme-normal {
+    --accent-color: #2196F3;
+    --accent-glow: #2196F366;
+}
+body.theme-hard {
+    --accent-color: #f44336;
+    --accent-glow: #f4433666;
+}
 
 .stars-background {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1; overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -1;
+    overflow: hidden;
 }
+
 .stars-background span {
-    position: absolute; display: block; opacity: 0.5; color: var(--accent-color); text-shadow: 0 0 10px var(--accent-glow); font-size: 18px;
+    position: absolute;
+    display: block;
+    opacity: 0.5;
+    color: var(--accent-color);
+    text-shadow: 0 0 10px var(--accent-glow);
+    font-size: 18px;
+    animation: float var(--duration) ease-in-out infinite alternate;
+    animation-delay: var(--delay);
 }
+
+.stars-background span:nth-child(1) { left: 5%; top: 10%; --duration: 12s; --delay: 0s; animation: float1 12s ease-in-out infinite alternate; }
+.stars-background span:nth-child(2) { left: 15%; top: 20%; --duration: 15s; --delay: 2s; animation: float2 15s ease-in-out infinite alternate; }
+.stars-background span:nth-child(3) { left: 25%; top: 5%; --duration: 10s; --delay: 1s; animation: float3 10s ease-in-out infinite alternate; }
+.stars-background span:nth-child(4) { left: 35%; top: 40%; --duration: 18s; --delay: 3s; animation: float4 18s ease-in-out infinite alternate; }
+.stars-background span:nth-child(5) { left: 45%; top: 15%; --duration: 13s; --delay: 0.5s; animation: float5 13s ease-in-out infinite alternate; }
+.stars-background span:nth-child(6) { left: 55%; top: 30%; --duration: 11s; --delay: 4s; animation: float6 11s ease-in-out infinite alternate; }
+.stars-background span:nth-child(7) { left: 65%; top: 50%; --duration: 16s; --delay: 1.5s; animation: float7 16s ease-in-out infinite alternate; }
+.stars-background span:nth-child(8) { left: 75%; top: 8%; --duration: 14s; --delay: 2.5s; animation: float8 14s ease-in-out infinite alternate; }
+.stars-background span:nth-child(9) { left: 85%; top: 25%; --duration: 9s; --delay: 0.8s; animation: float9 9s ease-in-out infinite alternate; }
+.stars-background span:nth-child(10) { left: 92%; top: 60%; --duration: 17s; --delay: 3.5s; animation: float10 17s ease-in-out infinite alternate; }
+.stars-background span:nth-child(11) { left: 10%; top: 70%; --duration: 19s; --delay: 5s; animation: float11 19s ease-in-out infinite alternate; }
+.stars-background span:nth-child(12) { left: 40%; top: 80%; --duration: 12s; --delay: 1.2s; animation: float12 12s ease-in-out infinite alternate; }
+.stars-background span:nth-child(13) { left: 70%; top: 75%; --duration: 14s; --delay: 2.8s; animation: float13 14s ease-in-out infinite alternate; }
+.stars-background span:nth-child(14) { left: 20%; top: 90%; --duration: 11s; --delay: 4.5s; animation: float14 11s ease-in-out infinite alternate; }
+.stars-background span:nth-child(15) { left: 60%; top: 85%; --duration: 13s; --delay: 0.2s; animation: float15 13s ease-in-out infinite alternate; }
+.stars-background span:nth-child(16) { left: 80%; top: 95%; --duration: 16s; --delay: 3.8s; animation: float16 16s ease-in-out infinite alternate; }
+.stars-background span:nth-child(17) { left: 5%; top: 45%; --duration: 10s; --delay: 1.8s; animation: float17 10s ease-in-out infinite alternate; }
+.stars-background span:nth-child(18) { left: 50%; top: 10%; --duration: 15s; --delay: 4.2s; animation: float18 15s ease-in-out infinite alternate; }
+.stars-background span:nth-child(19) { left: 30%; top: 55%; --duration: 12s; --delay: 0.3s; animation: float19 12s ease-in-out infinite alternate; }
+.stars-background span:nth-child(20) { left: 90%; top: 35%; --duration: 14s; --delay: 2.2s; animation: float20 14s ease-in-out infinite alternate; }
+.stars-background span:nth-child(21) { left: 15%; top: 60%; --duration: 11s; --delay: 3.1s; animation: float21 11s ease-in-out infinite alternate; }
+.stars-background span:nth-child(22) { left: 75%; top: 70%; --duration: 13s; --delay: 0.7s; animation: float22 13s ease-in-out infinite alternate; }
+.stars-background span:nth-child(23) { left: 45%; top: 20%; --duration: 16s; --delay: 4.8s; animation: float23 16s ease-in-out infinite alternate; }
+.stars-background span:nth-child(24) { left: 60%; top: 45%; --duration: 10s; --delay: 1.3s; animation: float24 10s ease-in-out infinite alternate; }
+
+@keyframes float1 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(30px, -20px) rotate(30deg); } }
+@keyframes float2 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-20px, 40px) rotate(-20deg); } }
+@keyframes float3 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(40px, -10px) rotate(45deg); } }
+@keyframes float4 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-30px, -30px) rotate(-35deg); } }
+@keyframes float5 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(20px, 20px) rotate(25deg); } }
+@keyframes float6 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-40px, 10px) rotate(-40deg); } }
+@keyframes float7 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(25px, -35px) rotate(35deg); } }
+@keyframes float8 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-15px, 30px) rotate(-15deg); } }
+@keyframes float9 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(45px, -5px) rotate(50deg); } }
+@keyframes float10 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-25px, -25px) rotate(-25deg); } }
+@keyframes float11 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(10px, 50px) rotate(15deg); } }
+@keyframes float12 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-35px, -15px) rotate(-30deg); } }
+@keyframes float13 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(35px, 15px) rotate(40deg); } }
+@keyframes float14 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-10px, -40px) rotate(-10deg); } }
+@keyframes float15 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(50px, 5px) rotate(55deg); } }
+@keyframes float16 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-45px, -20px) rotate(-45deg); } }
+@keyframes float17 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(15px, -45px) rotate(20deg); } }
+@keyframes float18 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-20px, 35px) rotate(-20deg); } }
+@keyframes float19 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(30px, -30px) rotate(30deg); } }
+@keyframes float20 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-30px, 45px) rotate(-30deg); } }
+@keyframes float21 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(20px, -15px) rotate(25deg); } }
+@keyframes float22 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-40px, 25px) rotate(-40deg); } }
+@keyframes float23 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(25px, 10px) rotate(35deg); } }
+@keyframes float24 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-15px, -10px) rotate(-15deg); } }
+
 #top-bar {
-    display: flex; justify-content: space-between; width: 100%; padding: 10px 0; border-bottom: 1px solid var(--border-color); z-index: 2;
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-color);
+    z-index: 2;
 }
-#user-info { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-#avatar-container { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; background: var(--accent-color); flex-shrink: 0; }
-#avatar-img { width: 100%; height: 100%; object-fit: cover; display: none; }
-#avatar-placeholder { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-weight: bold; font-size: 16px; color: #0a0a0a; }
-#username { font-size: 18px; font-weight: 600; color: var(--accent-color); transition: color 0.3s; }
-#balance { font-size: 18px; display: flex; align-items: center; gap: 8px; color: var(--accent-color); }
-#balance-amount { font-weight: 700; }
+
+#user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+#avatar-container {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--accent-color);
+    flex-shrink: 0;
+}
+
+#avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+}
+
+#avatar-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    font-weight: bold;
+    font-size: 16px;
+    color: #0a0a0a;
+}
+
+#username {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent-color);
+    transition: color 0.3s;
+}
+
+#balance {
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent-color);
+    transition: color 0.3s;
+}
+
+#balance-amount {
+    font-weight: 700;
+}
+
 #deposit-btn, #bets-btn {
-    background: var(--accent-color); border: none; border-radius: 8px; padding: 4px 10px; font-weight: bold; color: #0a0a0a; cursor: pointer; font-size: 12px;
+    background: var(--accent-color);
+    border: none;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-weight: bold;
+    color: #0a0a0a;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.3s;
 }
-#deposit-btn { border-radius: 50%; width: 28px; height: 28px; font-size: 20px; padding: 0; }
+
+#deposit-btn {
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    font-size: 20px;
+    padding: 0;
+}
+
 #deposit-menu {
-    background: var(--card-bg); border: 1px solid var(--accent-color); border-radius: 12px; padding: 16px; margin: 10px 0; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; z-index: 10;
+    background: var(--card-bg);
+    border: 1px solid var(--accent-color);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 10px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    z-index: 10;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    transition: border-color 0.3s;
 }
-.deposit-option { background: var(--accent-color); color: #0a0a0a; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
-#close-deposit { background: transparent; color: var(--accent-color); border: none; font-size: 20px; cursor: pointer; }
-#main-title { text-align: center; margin: 20px 0 10px; z-index: 2; }
-#main-title h1 { font-size: 24px; font-weight: 900; color: var(--accent-color); letter-spacing: 2px; text-shadow: 0 0 10px var(--accent-glow); }
-#main-title p { color: #aaa; font-size: 14px; margin-top: 4px; }
-#prizes-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 15px 0; width: 100%; max-width: 400px; z-index: 2; }
-.prize-item { background: #1a1a1a; border: 1px solid var(--border-color); border-radius: 20px; padding: 6px 14px; font-size: 13px; color: #ccc; }
-#mode-selector { display: flex; gap: 12px; margin: 10px 0; z-index: 2; }
-.mode-btn { background: #222; color: #aaa; border: none; padding: 6px 18px; border-radius: 20px; font-weight: 600; cursor: pointer; font-size: 13px; }
-.mode-btn.active { background: var(--accent-color); color: #0a0a0a; box-shadow: 0 0 15px var(--accent-glow); }
-#wheel-container { position: relative; width: var(--wheel-size); height: var(--wheel-size); margin: 15px auto; z-index: 2; }
+
+.deposit-option {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.3s, filter 0.2s;
+}
+.deposit-option:hover { filter: brightness(1.1); }
+
+#close-deposit {
+    background: transparent;
+    color: var(--accent-color);
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    transition: color 0.3s;
+}
+
+#main-title {
+    text-align: center;
+    margin: 20px 0 10px;
+    z-index: 2;
+}
+
+#main-title h1 {
+    font-size: 24px;
+    font-weight: 900;
+    color: var(--accent-color);
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px var(--accent-glow);
+    transition: color 0.3s, text-shadow 0.3s;
+}
+
+#main-title p {
+    color: #aaa;
+    font-size: 14px;
+    margin-top: 4px;
+}
+
+#prizes-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 15px 0;
+    width: 100%;
+    max-width: 400px;
+    z-index: 2;
+}
+
+.prize-item {
+    background: #1a1a1a;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: #ccc;
+}
+
+#mode-selector {
+    display: flex;
+    gap: 12px;
+    margin: 10px 0;
+    z-index: 2;
+}
+
+.mode-btn {
+    background: #222;
+    color: #aaa;
+    border: none;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 13px;
+}
+.mode-btn.active {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    box-shadow: 0 0 15px var(--accent-glow);
+}
+
+#wheel-container {
+    position: relative;
+    width: var(--wheel-size);
+    height: var(--wheel-size);
+    margin: 15px auto;
+    z-index: 2;
+}
+
 #wheel-pointer {
-    position: absolute; top: -20px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 40px solid var(--gold-color); z-index: 10;
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    border-top: 40px solid var(--gold-color);
+    z-index: 10;
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5));
 }
+
 .wheel {
-    width: 100%; height: 100%; border-radius: 50%; position: relative; overflow: hidden; box-shadow: 0 0 0 15px var(--metal-rim), 0 0 30px 20px rgba(0, 0, 0, 0.3); background: #000; transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 
+        0 0 0 15px var(--metal-rim),
+        0 0 30px 20px rgba(0, 0, 0, 0.3);
+    background: #000;
+    transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
+
 .sector {
-    position: absolute; width: 50%; height: 50%; transform-origin: 100% 100%; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; box-sizing: border-box; padding-top: 10%; backface-visibility: hidden;
+    position: absolute;
+    width: 50%;
+    height: 50%;
+    transform-origin: 100% 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    box-sizing: border-box;
+    padding-top: 10%;
+    backface-visibility: hidden;
 }
+
 .sector:nth-child(odd) { background-color: var(--red-sector); }
 .sector:nth-child(even) { background-color: var(--green-sector); }
+
 .s1 { transform: rotate(0deg) skewY(-60deg); }
 .s2 { transform: rotate(30deg) skewY(-60deg); }
 .s3 { transform: rotate(60deg) skewY(-60deg); }
@@ -820,47 +1097,468 @@ body.theme-hard { --accent-color: #f44336; --accent-glow: #f4433666; }
 .s10 { transform: rotate(270deg) skewY(-60deg); }
 .s11 { transform: rotate(300deg) skewY(-60deg); }
 .s12 { transform: rotate(330deg) skewY(-60deg); }
-.sector-content { transform: skewY(60deg); display: flex; flex-direction: column; align-items: center; width: 100%; position: absolute; top: 30px; }
-.icon { font-size: 28px; margin-bottom: 4px; }
-.number { font-weight: bold; font-size: 22px; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+
+.sector-content {
+    transform: skewY(60deg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    position: absolute;
+    top: 30px;
+}
+
+.icon {
+    font-size: 28px;
+    margin-bottom: 4px;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+}
+.icon-cross {
+    color: #ff4d4d;
+    font-weight: bold;
+}
+.icon-gift {
+    color: #fff;
+    font-size: 24px;
+}
+
+.number {
+    font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+    font-weight: bold;
+    font-size: 22px;
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+
 .wheel-center {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 20%; height: 20%; background: radial-gradient(circle, #1a1d2a 40%, #000 70%); border-radius: 50%; border: 4px solid var(--gold-color); z-index: 5;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 20%;
+    height: 20%;
+    background: radial-gradient(circle, #1a1d2a 40%, #000 70%);
+    border-radius: 50%;
+    border: 4px solid var(--gold-color);
+    z-index: 5;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
 }
-#spin-area { display: flex; flex-direction: column; align-items: center; margin: 15px 0; z-index: 2; }
-#spin-info { font-size: 14px; color: #aaa; margin-bottom: 8px; }
+
+#spin-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 15px 0;
+    z-index: 2;
+}
+
+#spin-info {
+    font-size: 14px;
+    color: #aaa;
+    margin-bottom: 8px;
+}
+
 #spin-btn {
-    background: var(--accent-color); color: #0a0a0a; border: none; padding: 14px 40px; border-radius: 30px; font-weight: 700; font-size: 18px; cursor: pointer; box-shadow: 0 0 20px var(--accent-glow); display: flex; flex-direction: column; align-items: center; line-height: 1.2;
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 14px 40px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 0 20px var(--accent-glow);
+    transition: transform 0.1s, box-shadow 0.3s, background 0.3s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.2;
 }
-#spin-btn span { font-size: 14px; font-weight: 400; }
-#result-message { margin: 10px 0; font-size: 18px; font-weight: 600; min-height: 40px; text-align: center; z-index: 2; color: var(--accent-color); }
-#slot-machine, #rocket-game {
-    background: var(--card-bg); border-radius: 20px; padding: 20px; margin: 10px 0; border: 2px solid var(--accent-color); box-shadow: 0 0 30px var(--accent-glow); width: 100%; max-width: 400px;
+
+#spin-btn:active {
+    transform: scale(0.95);
 }
-#reels { display: flex; justify-content: center; gap: 15px; padding: 15px 0; }
-.reel { width: 70px; height: 80px; background: #222; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 48px; border: 2px solid var(--border-color); }
-#slot-controls, .bet-control, #rocket-bet-control { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 10px; width: 100%; }
-.bet-control label, #rocket-bet-control label { font-size: 14px; color: #ccc; }
-#bet-range, #rocket-bet-range { width: 80%; max-width: 250px; margin-top: 5px; accent-color: var(--accent-color); }
-#spin-slot-btn, #rocket-start-btn, #rocket-cashout-btn, #withdraw-btn, #promo-btn {
-    background: var(--accent-color); color: #0a0a0a; border: none; padding: 12px 30px; border-radius: 30px; font-weight: 700; font-size: 18px; cursor: pointer; box-shadow: 0 0 20px var(--accent-glow);
+
+#spin-btn span {
+    font-size: 14px;
+    font-weight: 400;
 }
-#slot-result, #rocket-result { margin-top: 15px; font-size: 18px; font-weight: 600; text-align: center; color: var(--accent-color); min-height: 30px; }
-#rocket-display { text-align: center; padding: 10px 0; }
-#rocket-multiplier { font-size: 48px; font-weight: 900; color: var(--accent-color); text-shadow: 0 0 20px var(--accent-glow); }
-#rocket-status { font-size: 16px; color: #aaa; margin-top: 5px; }
-#rocketCanvas { width: 100%; height: auto; background: #0a0a0a; border-radius: 12px; }
-#rocket-buttons { display: flex; justify-content: center; gap: 12px; margin: 15px 0; width: 100%; }
-#rocket-start-btn, #rocket-cashout-btn { flex: 1; max-width: 150px; }
-#rocket-timer { font-size: 14px; color: #aaa; text-align: center; }
-#notification-feed { width: 100%; max-width: 400px; background: var(--card-bg); border-radius: 12px; padding: 12px; margin: 20px 0; border: 1px solid var(--border-color); }
-#notification-feed h3 { color: var(--accent-color); margin-bottom: 8px; font-size: 16px; }
-#feed-list { list-style: none; max-height: 150px; overflow-y: auto; }
-#feed-list li { padding: 6px 0; border-bottom: 1px solid var(--border-color); font-size: 13px; color: #ddd; }
-#promo-area { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; margin: 10px 0; width: 100%; max-width: 400px; }
-#promo-input { flex: 1; min-width: 140px; padding: 8px 14px; border-radius: 20px; border: 1px solid var(--accent-color); background: #222; color: #fff; text-align: center; outline: none; }
-#bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #111; display: flex; justify-content: space-around; padding: 10px 0; border-top: 1px solid var(--border-color); z-index: 10; }
-.nav-btn { background: transparent; color: #888; border: none; font-size: 14px; font-weight: 600; padding: 6px 20px; border-radius: 20px; cursor: pointer; }
-.nav-btn.active { color: var(--accent-color); background: rgba(255,215,0,0.1); }
+
+#result-message {
+    margin: 10px 0;
+    font-size: 18px;
+    font-weight: 600;
+    min-height: 40px;
+    text-align: center;
+    z-index: 2;
+    color: var(--accent-color);
+    text-shadow: 0 0 10px var(--accent-glow);
+    transition: color 0.3s, text-shadow 0.3s;
+}
+
+#slot-machine {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 20px;
+    margin: 10px 0;
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 0 30px var(--accent-glow);
+    width: 100%;
+    max-width: 400px;
+}
+
+#reels {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    padding: 15px 0;
+}
+
+.reel {
+    width: 70px;
+    height: 80px;
+    background: #222;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    border: 2px solid var(--border-color);
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+    transition: transform 0.1s;
+}
+
+.reel.spinning {
+    animation: spin 0.2s steps(1) infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    25% { transform: rotate(90deg); }
+    50% { transform: rotate(180deg); }
+    75% { transform: rotate(270deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#slot-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.bet-control {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.bet-control label {
+    font-size: 14px;
+    color: #ccc;
+}
+
+#bet-range {
+    width: 80%;
+    max-width: 250px;
+    margin-top: 5px;
+    accent-color: var(--accent-color);
+}
+
+#slot-multiplier {
+    font-size: 14px;
+    color: #aaa;
+    margin-top: 4px;
+}
+
+#slot-multiplier b {
+    color: var(--accent-color);
+}
+
+#spin-slot-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 14px 30px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 0 20px var(--accent-glow);
+    transition: transform 0.1s, box-shadow 0.3s, background 0.3s;
+    width: 100%;
+    max-width: 280px;
+}
+
+#spin-slot-btn:active {
+    transform: scale(0.95);
+}
+
+#slot-result {
+    margin-top: 15px;
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--accent-color);
+    min-height: 30px;
+}
+
+#rocket-game {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 20px;
+    margin: 10px 0;
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 0 30px var(--accent-glow);
+    width: 100%;
+    max-width: 400px;
+}
+
+#rocket-display {
+    text-align: center;
+    padding: 10px 0;
+}
+
+#rocket-multiplier {
+    font-size: 48px;
+    font-weight: 900;
+    color: var(--accent-color);
+    text-shadow: 0 0 20px var(--accent-glow);
+    transition: color 0.3s;
+}
+
+#rocket-status {
+    font-size: 16px;
+    color: #aaa;
+    margin-top: 5px;
+}
+
+#rocket-canvas-container {
+    width: 100%;
+    text-align: center;
+}
+
+#rocketCanvas {
+    width: 100%;
+    height: auto;
+    background: #0a0a0a;
+    border-radius: 12px;
+}
+
+#rocket-bet-control {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 10px 0;
+}
+
+#rocket-bet-control label {
+    font-size: 14px;
+    color: #ccc;
+}
+
+#rocket-bet-range {
+    width: 80%;
+    max-width: 250px;
+    margin-top: 5px;
+    accent-color: var(--accent-color);
+}
+
+#rocket-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 15px 0;
+}
+
+#rocket-start-btn, #rocket-cashout-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 0 20px var(--accent-glow);
+    transition: transform 0.1s, box-shadow 0.3s, background 0.3s;
+    flex: 1;
+    max-width: 150px;
+}
+
+#rocket-start-btn:disabled, #rocket-cashout-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#rocket-start-btn:active, #rocket-cashout-btn:active {
+    transform: scale(0.95);
+}
+
+#rocket-timer {
+    font-size: 14px;
+    color: #aaa;
+    margin: 5px 0;
+    text-align: center;
+}
+
+#rocket-timer span {
+    color: var(--accent-color);
+}
+
+#rocket-result {
+    margin-top: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--accent-color);
+    min-height: 30px;
+}
+
+#notification-feed {
+    width: 100%;
+    max-width: 400px;
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 12px;
+    margin: 20px 0;
+    z-index: 2;
+    border: 1px solid var(--border-color);
+}
+
+#notification-feed h3 {
+    color: var(--accent-color);
+    margin-bottom: 8px;
+    font-size: 16px;
+    transition: color 0.3s;
+}
+
+#feed-list {
+    list-style: none;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+#feed-list li {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+    color: #ddd;
+}
+
+#withdraw-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 16px;
+    margin-top: 10px;
+    cursor: pointer;
+    box-shadow: 0 0 15px var(--accent-glow);
+    z-index: 2;
+    transition: background 0.3s, box-shadow 0.3s;
+}
+
+#promo-area {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0;
+    z-index: 2;
+    width: 100%;
+    max-width: 400px;
+}
+
+#promo-input {
+    flex: 1;
+    min-width: 140px;
+    padding: 8px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--accent-color);
+    background: #222;
+    color: #fff;
+    outline: none;
+    font-size: 14px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    text-align: center;
+}
+#promo-input:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 10px var(--accent-glow);
+}
+
+#promo-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.3s, box-shadow 0.3s;
+    box-shadow: 0 0 10px var(--accent-glow);
+}
+#promo-btn:active {
+    transform: scale(0.95);
+}
+
+#promo-message {
+    width: 100%;
+    font-size: 14px;
+    text-align: center;
+    min-height: 20px;
+    color: var(--accent-color);
+    transition: color 0.3s;
+}
+
+#bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: #111;
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0;
+    border-top: 1px solid var(--border-color);
+    z-index: 10;
+}
+
+.nav-btn {
+    background: transparent;
+    color: #888;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 6px 20px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.nav-btn.active {
+    color: var(--accent-color);
+    background: rgba(255,215,0,0.1);
+}
+
+#bets-modal ul li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+    color: #ddd;
+    font-size: 14px;
+}
+#bets-modal ul li span.positive {
+    color: #4CAF50;
+}
+#bets-modal ul li span.negative {
+    color: #f44336;
+}
 """,
     "script.js": """const BASE_URL = window.location.origin;
 let user_id = null;
@@ -874,6 +1572,7 @@ function showAuthError(message) {
         <div style="display:flex; justify-content:center; align-items:center; height:100vh; flex-direction:column; background:#0a0a0a; color:#fff; text-align:center; padding:20px;">
             <h1 style="color:var(--accent-color);">⛔ Ошибка авторизации</h1>
             <p style="color:#ccc; margin:20px 0;">${message}</p>
+            <p style="color:#888; font-size:14px;">Пожалуйста, откройте это приложение через бота Telegram.</p>
             <button onclick="window.location.href='https://t.me/StarDrop11_bot'" style="background:var(--accent-color); border:none; padding:12px 30px; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:10px;">Открыть бота</button>
         </div>
     `;
@@ -889,7 +1588,9 @@ if (window.Telegram && window.Telegram.WebApp) {
         const username = tgUser.username || tgUser.first_name || 'User';
         document.getElementById('username').textContent = '@' + username;
         loadAvatar(user_id);
-        document.getElementById('avatar-placeholder').textContent = (tgUser.first_name || 'U').charAt(0).toUpperCase();
+        const placeholder = document.getElementById('avatar-placeholder');
+        const name = tgUser.first_name || 'U';
+        placeholder.textContent = name.charAt(0).toUpperCase();
     } else {
         showAuthError('Не удалось получить данные пользователя из Telegram.');
     }
@@ -899,8 +1600,9 @@ if (window.Telegram && window.Telegram.WebApp) {
         user_id = parseInt(savedId);
         document.getElementById('username').textContent = '@user_' + user_id;
         document.getElementById('avatar-placeholder').textContent = 'U';
+        console.warn('Гостевой режим: используем сохранённый ID');
     } else {
-        showAuthError('Это приложение работает только в Telegram.');
+        showAuthError('Это приложение работает только в Telegram. Пожалуйста, откройте его через бота.');
     }
 }
 
@@ -914,21 +1616,31 @@ async function loadAvatar(userId) {
             img.style.display = 'block';
             document.getElementById('avatar-placeholder').style.display = 'none';
         }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+        console.error('Avatar load error:', e);
+    }
 }
 
-fetchUserData().then(() => initGames()).catch(() => initGames());
+fetchUserData().then(() => {
+    initGames();
+}).catch(() => {
+    initGames();
+});
 
 async function fetchUserData() {
     if (!user_id) return;
     try {
         const resp = await fetch(`/api/user/${user_id}`);
-        if (!resp.ok) throw new Error();
+        if (!resp.ok) throw new Error('User not found');
         const data = await resp.json();
         balance = data.balance;
         document.getElementById('balance-amount').textContent = balance;
-        if (data.username) document.getElementById('username').textContent = '@' + data.username;
-    } catch (e) { console.error(e); }
+        if (data.username && data.username !== '') {
+            document.getElementById('username').textContent = '@' + data.username;
+        }
+    } catch (e) {
+        console.error('Ошибка загрузки пользователя:', e);
+    }
 }
 
 function updateBalanceUI(newBalance) {
@@ -944,7 +1656,9 @@ document.getElementById('user-info').addEventListener('click', async () => {
         document.getElementById('ref-link').textContent = data.link;
         document.getElementById('ref-count').textContent = data.count;
         document.getElementById('referral-modal').style.display = 'flex';
-    } catch (e) { alert('Ошибка загрузки реферальной информации'); }
+    } catch (e) {
+        alert('Ошибка загрузки реферальной информации');
+    }
 });
 
 document.getElementById('close-ref-modal').addEventListener('click', () => {
@@ -952,8 +1666,24 @@ document.getElementById('close-ref-modal').addEventListener('click', () => {
 });
 
 document.getElementById('copy-ref-link').addEventListener('click', () => {
-    navigator.clipboard.writeText(document.getElementById('ref-link').textContent).then(() => alert('Ссылка скопирована!'));
+    const link = document.getElementById('ref-link').textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(() => alert('Ссылка скопирована!'))
+            .catch(() => fallbackCopy(link));
+    } else fallbackCopy(link);
 });
+
+function fallbackCopy(text) {
+    const input = document.createElement('input');
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    input.value = text;
+    document.body.appendChild(input);
+    input.select();
+    try { document.execCommand('copy'); alert('Ссылка скопирована!'); } 
+    catch (e) { alert('Не удалось скопировать, скопируйте вручную: ' + text); }
+    document.body.removeChild(input);
+}
 
 document.getElementById('bets-btn').addEventListener('click', async () => {
     if (!user_id) return;
@@ -965,17 +1695,22 @@ document.getElementById('bets-btn').addEventListener('click', async () => {
         if (bets.length === 0) list.innerHTML = '<li style="color:#aaa;">Ставок пока нет</li>';
         else bets.forEach(b => {
             const li = document.createElement('li');
-            let sign = b.amount > 0 ? '+' : '';
-            let cls = b.amount > 0 ? 'positive' : (b.amount < 0 ? 'negative' : '');
+            let sign = '', cls = '';
+            if (b.amount > 0) { sign = '+'; cls = 'positive'; }
+            else if (b.amount < 0) { sign = ''; cls = 'negative'; }
+            else { sign = '0'; cls = ''; }
             li.innerHTML = `<span class="${cls}">${sign}${b.amount}</span> ${b.description} <span style="color:#888;font-size:12px;">${new Date(b.created_at).toLocaleString()}</span>`;
             list.appendChild(li);
         });
         document.getElementById('bets-modal').style.display = 'flex';
-    } catch (e) { alert('Ошибка загрузки ставок'); }
+    } catch (e) { alert('Ошибка загрузки ставок'); console.error(e); }
 });
 
 document.getElementById('close-bets-modal').addEventListener('click', () => {
     document.getElementById('bets-modal').style.display = 'none';
+});
+document.getElementById('bets-modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) document.getElementById('bets-modal').style.display = 'none';
 });
 
 document.getElementById('promo-btn').addEventListener('click', async () => {
@@ -994,14 +1729,84 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
         if (resp.ok) {
             msg.textContent = '✅ ' + data.message;
             input.value = '';
-            updateBalanceUI(data.new_balance);
+            balance = data.new_balance;
+            document.getElementById('balance-amount').textContent = balance;
         } else msg.textContent = '❌ ' + data.detail;
-    } catch (e) { msg.textContent = 'Ошибка соединения'; }
+    } catch (e) { msg.textContent = 'Ошибка соединения'; console.error(e); }
 });
 
 function initGames() {
+    applyTheme('light');
+    updateWheel(currentMode);
     updateSpinCost();
-    document.getElementById('bet-display').textContent = document.getElementById('bet-range').value;
+    const initialBet = parseInt(document.getElementById('bet-range').value);
+    document.getElementById('bet-display').textContent = initialBet;
+    drawRocket(0, 'idle');
+    document.getElementById('rocket-countdown').textContent = '0';
+    startAutoRocket();
+}
+
+let autoRocketTimer = null;
+function startAutoRocket() {
+    if (autoRocketTimer) clearInterval(autoRocketTimer);
+    autoRocketTimer = setInterval(() => {
+        if (!rocketActive) {
+            const fakeBet = 500 + Math.floor(Math.random() * 500) * 10;
+            simulateRocketRound(fakeBet);
+        }
+    }, 10000 + Math.random() * 15000);
+}
+
+function simulateRocketRound(bet) {
+    const win = Math.random() < 0.35;
+    const crashMultiplier = win ? 1.1 + Math.random() * 2.0 : 0.5 + Math.random() * 0.5;
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += 0.02;
+        if (progress >= 1) {
+            clearInterval(interval);
+            if (win) {
+                const winAmount = Math.floor(bet * crashMultiplier);
+                addFakeWin(winAmount);
+            }
+            document.getElementById('rocket-multiplier').textContent = '0.00';
+            document.getElementById('rocket-status').textContent = 'Ожидание';
+            drawRocket(0, 'idle');
+            return;
+        }
+        const currentMultiplier = win ? 1 + progress * crashMultiplier : progress * 0.8;
+        document.getElementById('rocket-multiplier').textContent = currentMultiplier.toFixed(2);
+        if (win) {
+            document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
+            drawRocket(currentMultiplier, 'active');
+        } else {
+            if (progress > 0.6) {
+                document.getElementById('rocket-status').textContent = '💥 Упала!';
+                drawRocket(currentMultiplier, 'crashed');
+            } else {
+                document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
+                drawRocket(currentMultiplier, 'active');
+            }
+        }
+    }, 200);
+}
+
+function addFakeWin(amount) {
+    const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 'player_' + (200000 + Math.floor(Math.random()*800000)), 'gamer_' + (300000 + Math.floor(Math.random()*700000))];
+    const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
+    const prizeName = '🎰 Слот';
+    const list = document.getElementById('feed-list');
+    const li = document.createElement('li');
+    li.textContent = '@' + username + ' выиграл ' + prizeName + ' (+' + amount + ' токенов)';
+    list.insertBefore(li, list.firstChild);
+    if (list.children.length > 10) list.removeChild(list.lastChild);
+}
+
+function applyTheme(mode) {
+    document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
+    if (mode === 'light') document.body.classList.add('theme-light');
+    else if (mode === 'normal') document.body.classList.add('theme-normal');
+    else if (mode === 'hard') document.body.classList.add('theme-hard');
 }
 
 document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -1011,6 +1816,10 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
         btn.classList.add('active');
         currentMode = btn.dataset.mode;
         updateSpinCost();
+        applyTheme(currentMode);
+        updateWheel(currentMode);
+        document.getElementById('wheel').style.transform = 'rotate(0deg)';
+        currentRotation = 0;
     });
 });
 
@@ -1021,11 +1830,75 @@ function updateSpinCost() {
     document.getElementById('spin-cost-label').textContent = cost + ' Токенов';
 }
 
+function updateWheel(mode) {
+    const prizes = getPrizesForMode(mode);
+    const winSectors = document.querySelectorAll('.sector[data-win-index]');
+    winSectors.forEach(sector => {
+        const idx = parseInt(sector.dataset.winIndex);
+        if (idx >= 0 && idx < prizes.length) {
+            const numberSpan = sector.querySelector('.number');
+            if (numberSpan) {
+                const winPrizes = prizes.filter(p => p.value > 0);
+                numberSpan.textContent = winPrizes[idx].value;
+            }
+        }
+    });
+}
+
+function getPrizesForMode(mode) {
+    const allPrizes = {
+        light: [
+            { name: '❌', value: 0 },
+            { name: '🎁 10', value: 10 },
+            { name: '❌', value: 0 },
+            { name: '🎁 15', value: 15 },
+            { name: '❌', value: 0 },
+            { name: '🎁 20', value: 20 },
+            { name: '❌', value: 0 },
+            { name: '🎁 25', value: 25 },
+            { name: '❌', value: 0 },
+            { name: '🎁 30', value: 30 },
+            { name: '❌', value: 0 },
+            { name: '🎁 40', value: 40 }
+        ],
+        normal: [
+            { name: '❌', value: 0 },
+            { name: '🎁 50', value: 50 },
+            { name: '❌', value: 0 },
+            { name: '🎁 70', value: 70 },
+            { name: '❌', value: 0 },
+            { name: '🎁 100', value: 100 },
+            { name: '❌', value: 0 },
+            { name: '🎁 120', value: 120 },
+            { name: '❌', value: 0 },
+            { name: '🎁 150', value: 150 },
+            { name: '❌', value: 0 },
+            { name: '🎁 200', value: 200 }
+        ],
+        hard: [
+            { name: '❌', value: 0 },
+            { name: '🎁 300', value: 300 },
+            { name: '❌', value: 0 },
+            { name: '🎁 400', value: 400 },
+            { name: '❌', value: 0 },
+            { name: '🎁 500', value: 500 },
+            { name: '❌', value: 0 },
+            { name: '🎁 600', value: 600 },
+            { name: '❌', value: 0 },
+            { name: '🎁 800', value: 800 },
+            { name: '❌', value: 0 },
+            { name: '🎁 1000', value: 1000 }
+        ]
+    };
+    return allPrizes[mode] || allPrizes.light;
+}
+
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (!user_id || isSpinning) return;
     isSpinning = true;
     const btn = document.getElementById('spin-btn');
     btn.disabled = true;
+    btn.innerHTML = 'КРУТИТЬ <span>Загрузка...</span>';
     document.getElementById('result-message').textContent = '';
     
     try {
@@ -1037,30 +1910,327 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         const data = await resp.json();
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
-            const targetRotation = currentRotation + 1800 + Math.random() * 360;
+            const extraSpins = 5 + Math.floor(Math.random() * 3);
+            const randomAngle = Math.random() * 360;
+            const targetRotation = currentRotation + extraSpins * 360 + randomAngle;
             currentRotation = targetRotation;
-            document.getElementById('wheel').style.transform = `rotate(${targetRotation}deg)`;
+            const wheel = document.getElementById('wheel');
+            wheel.style.transform = `rotate(${targetRotation}deg)`;
             
             setTimeout(() => {
                 document.getElementById('result-message').textContent = data.message;
                 document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
+                if (data.win) fetchFeed();
                 isSpinning = false;
                 btn.disabled = false;
+                const cost = { light:25, normal:50, hard:100 }[currentMode];
+                btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
             }, 4000);
         } else {
             document.getElementById('result-message').textContent = '❌ ' + data.detail;
             isSpinning = false;
             btn.disabled = false;
+            const cost = { light:25, normal:50, hard:100 }[currentMode];
+            btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
         }
     } catch (e) {
+        document.getElementById('result-message').textContent = 'Ошибка соединения';
+        console.error(e);
         isSpinning = false;
         btn.disabled = false;
+        const cost = { light:25, normal:50, hard:100 }[currentMode];
+        btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
     }
 });
 
+let slotSpinning = false;
+const slotSymbols = ['🍒','🍋','🍊','🍇','🍉','🍓','🍑','🎰'];
+const reels = [
+    document.getElementById('reel1'),
+    document.getElementById('reel2'),
+    document.getElementById('reel3')
+];
 document.getElementById('bet-range').addEventListener('input', function() {
     document.getElementById('bet-display').textContent = this.value;
 });
+document.getElementById('spin-slot-btn').addEventListener('click', async () => {
+    if (!user_id || slotSpinning) return;
+    const bet = parseInt(document.getElementById('bet-range').value);
+    if (isNaN(bet) || bet<20 || bet>100) { alert('Ставка от 20 до 100'); return; }
+    if (balance < bet) { alert('Недостаточно токенов!'); return; }
+    slotSpinning = true;
+    const btn = document.getElementById('spin-slot-btn');
+    btn.disabled = true;
+    btn.textContent = '🎰 Крутим...';
+    let interval = setInterval(() => {
+        reels.forEach(reel => {
+            reel.textContent = slotSymbols[Math.floor(Math.random()*slotSymbols.length)];
+        });
+    }, 100);
+    try {
+        const resp = await fetch('/api/slot_spin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id, bet })
+        });
+        const data = await resp.json();
+        clearInterval(interval);
+        if (resp.ok) {
+            reels[0].textContent = data.symbols[0];
+            reels[1].textContent = data.symbols[1];
+            reels[2].textContent = data.symbols[2];
+            updateBalanceUI(data.new_balance);
+            const resultDiv = document.getElementById('slot-result');
+            if (data.win) {
+                resultDiv.textContent = '🎉 ВЫИГРЫШ! +' + data.win_amount + ' токенов!';
+                resultDiv.style.color = '#4CAF50';
+            } else {
+                resultDiv.textContent = '😞 Проигрыш. -' + bet + ' токенов';
+                resultDiv.style.color = '#f44336';
+            }
+            if (data.win) fetchFeed();
+        } else {
+            document.getElementById('slot-result').textContent = '❌ ' + data.detail;
+        }
+    } catch (e) {
+        clearInterval(interval);
+        document.getElementById('slot-result').textContent = 'Ошибка соединения';
+        console.error(e);
+    }
+    slotSpinning = false;
+    btn.disabled = false;
+    btn.textContent = 'Дёрнуть рычаг 🎰';
+});
+
+let rocketInterval = null, rocketRoundId = null, rocketActive = false;
+let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
+const rocketCanvas = document.getElementById('rocketCanvas');
+const rctx = rocketCanvas.getContext('2d');
+let rocketX = 30, rocketY = 160;
+let rocketSpeed = 2.5;
+let rocketTrail = [];
+let isCrashed = false;
+let falling = false;
+let fallY = 0;
+let explosionX = 0, explosionY = 0;
+
+function drawRocket(multiplier, status) {
+    rctx.clearRect(0,0,rocketCanvas.width,rocketCanvas.height);
+    if (rocketTrail.length > 1 && status !== 'crashed' && status !== 'idle') {
+        rctx.beginPath();
+        rctx.moveTo(rocketTrail[0].x, rocketTrail[0].y);
+        for (let i=1; i<rocketTrail.length; i++) {
+            rctx.lineTo(rocketTrail[i].x, rocketTrail[i].y);
+        }
+        rctx.strokeStyle = 'rgba(255,215,0,0.4)';
+        rctx.lineWidth = 2;
+        rctx.stroke();
+    }
+    if (status === 'crashed') {
+        rctx.font = '50px sans-serif';
+        rctx.textAlign = 'center';
+        rctx.fillText('💥', explosionX, explosionY);
+        if (falling) {
+            rctx.font = '30px sans-serif';
+            rctx.fillText('🚀', rocketX, fallY);
+        }
+        return;
+    }
+    if (status === 'idle') {
+        rctx.font = '30px sans-serif';
+        rctx.textAlign = 'center';
+        rctx.fillText('🚀', rocketX, rocketY);
+        return;
+    }
+    rctx.font = '30px sans-serif';
+    rctx.textAlign = 'center';
+    rctx.fillText('🚀', rocketX, rocketY);
+    rctx.fillStyle = '#ffd700';
+    rctx.font = '14px sans-serif';
+    rctx.fillText(multiplier.toFixed(2)+'x', rocketX, rocketY-30);
+}
+
+document.getElementById('rocket-bet-range').addEventListener('input', function() {
+    document.getElementById('rocket-bet-display').textContent = this.value;
+});
+
+document.getElementById('rocket-start-btn').addEventListener('click', async () => {
+    if (!user_id || rocketActive) return;
+    const bet = parseInt(document.getElementById('rocket-bet-range').value);
+    if (isNaN(bet) || bet<500 || bet>5000) { alert('Ставка от 500 до 5000'); return; }
+    if (balance < bet) { alert('Недостаточно токенов!'); return; }
+    try {
+        const resp = await fetch('/api/rocket/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id, bet })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            rocketRoundId = data.round_id;
+            rocketActive = true;
+            isCrashed = false;
+            falling = false;
+            document.getElementById('rocket-start-btn').disabled = true;
+            document.getElementById('rocket-cashout-btn').disabled = false;
+            document.getElementById('rocket-result').textContent = '';
+            document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
+            rocketX = 30;
+            rocketY = 160;
+            rocketTrail = [{x:rocketX, y:rocketY}];
+            if (rocketInterval) clearInterval(rocketInterval);
+            rocketInterval = setInterval(updateRocketStatus, 150);
+            if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
+            animateRocket();
+        } else alert('❌ ' + data.detail);
+    } catch (e) { alert('Ошибка соединения'); console.error(e); }
+});
+
+function animateRocket() {
+    if (!rocketActive && !falling) return;
+    if (isCrashed && !falling) {
+        falling = true;
+        fallY = rocketY;
+        explosionX = rocketX;
+        explosionY = rocketY - 20;
+    }
+    if (falling) {
+        fallY += 3;
+        if (fallY > rocketCanvas.height + 50) {
+            falling = false;
+            isCrashed = false;
+            drawRocket(0, 'idle');
+            return;
+        }
+        drawRocket(0, 'crashed');
+        rocketAnimationFrame = requestAnimationFrame(animateRocket);
+        return;
+    }
+    if (!rocketActive) return;
+    rocketX += rocketSpeed * 0.8;
+    rocketY -= rocketSpeed * 0.6;
+    if (rocketX > rocketCanvas.width - 20) rocketX = rocketCanvas.width - 20;
+    if (rocketY < 20) rocketY = 20;
+    rocketTrail.push({x:rocketX, y:rocketY});
+    if (rocketTrail.length > 100) rocketTrail.shift();
+    drawRocket(parseFloat(document.getElementById('rocket-multiplier').textContent) || 0, 'active');
+    rocketAnimationFrame = requestAnimationFrame(animateRocket);
+}
+
+async function updateRocketStatus() {
+    if (!rocketRoundId) return;
+    try {
+        const resp = await fetch(`/api/rocket/status/${rocketRoundId}`);
+        const data = await resp.json();
+        if (resp.ok) {
+            const display = data.display_multiplier;
+            document.getElementById('rocket-multiplier').textContent = display.toFixed(2);
+            if (data.crashed) {
+                document.getElementById('rocket-status').textContent = '💥 Упала!';
+                document.getElementById('rocket-cashout-btn').disabled = true;
+                document.getElementById('rocket-start-btn').disabled = false;
+                rocketActive = false;
+                isCrashed = true;
+                if (rocketInterval) clearInterval(rocketInterval);
+                animateRocket();
+                document.getElementById('rocket-result').textContent = '😞 Ракета упала. Ставка проиграна.';
+                document.getElementById('rocket-result').style.color = '#f44336';
+                fetchUserData();
+                startCountdown();
+            } else if (data.cashed_out) {
+                document.getElementById('rocket-status').textContent = '💰 Выведено!';
+                document.getElementById('rocket-cashout-btn').disabled = true;
+                document.getElementById('rocket-start-btn').disabled = false;
+                rocketActive = false;
+                if (rocketInterval) clearInterval(rocketInterval);
+                if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
+                fetchUserData();
+                startCountdown();
+            } else {
+                drawRocket(display, 'active');
+            }
+        } else console.error('Status error:', data);
+    } catch (e) { console.error(e); }
+}
+
+document.getElementById('rocket-cashout-btn').addEventListener('click', async () => {
+    if (!user_id || !rocketRoundId || !rocketActive) return;
+    try {
+        const resp = await fetch('/api/rocket/cashout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ round_id: rocketRoundId, user_id })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            document.getElementById('rocket-result').textContent = '🎉 Вы выиграли ' + data.win_amount + ' токенов!';
+            document.getElementById('rocket-result').style.color = '#4CAF50';
+            document.getElementById('rocket-status').textContent = '💰 Выведено!';
+            document.getElementById('rocket-cashout-btn').disabled = true;
+            document.getElementById('rocket-start-btn').disabled = false;
+            rocketActive = false;
+            if (rocketInterval) clearInterval(rocketInterval);
+            if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
+            updateBalanceUI(data.new_balance);
+            fetchFeed();
+            startCountdown();
+        } else alert('❌ ' + data.detail);
+    } catch (e) { alert('Ошибка соединения'); console.error(e); }
+});
+
+function startCountdown() {
+    rocketCountdown = 5;
+    document.getElementById('rocket-countdown').textContent = rocketCountdown;
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+        rocketCountdown--;
+        document.getElementById('rocket-countdown').textContent = rocketCountdown;
+        if (rocketCountdown <= 0) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+            document.getElementById('rocket-countdown').textContent = '0';
+            document.getElementById('rocket-start-btn').click();
+        }
+    }, 1000);
+}
+
+document.getElementById('deposit-btn').addEventListener('click', () => {
+    const menu = document.getElementById('deposit-menu');
+    menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+});
+
+document.querySelectorAll('.deposit-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const amount = btn.dataset.amount;
+        const links = {
+            100: 'https://yookassa.ru/my/i/amMy2QzHTXRI/l',
+            200: 'https://yookassa.ru/my/i/amMzHkXK55Uk/l',
+            500: 'https://yookassa.ru/my/i/amMzSdZUSmIm/l',
+            1000: 'https://yookassa.ru/my/i/amMzbZDBr9y2/l'
+        };
+        if (links[amount]) window.open(links[amount], '_blank');
+    });
+});
+
+document.getElementById('close-deposit').addEventListener('click', () => {
+    document.getElementById('deposit-menu').style.display = 'none';
+});
+
+async function fetchFeed() {
+    try {
+        const resp = await fetch('/api/recent_wins');
+        const wins = await resp.json();
+        const list = document.getElementById('feed-list');
+        list.innerHTML = '';
+        wins.forEach(w => {
+            const li = document.createElement('li');
+            li.textContent = '@' + w.username + ' выиграл ' + w.prize_name + ' (+' + w.prize_value + ' токенов)';
+            list.appendChild(li);
+        });
+    } catch (e) { console.error(e); }
+}
+fetchFeed();
+setInterval(fetchFeed, 5000);
 
 document.getElementById('withdraw-btn').addEventListener('click', async () => {
     if (!user_id) return;
@@ -1076,9 +2246,11 @@ document.getElementById('withdraw-btn').addEventListener('click', async () => {
             body: JSON.stringify({ user_id, amount: parseInt(amount) })
         });
         const data = await resp.json();
-        if (resp.ok) alert('✅ Заявка на вывод отправлена!');
-        else alert('❌ ' + data.detail);
-    } catch (e) { alert('Ошибка соединения'); }
+        if (resp.ok) {
+            alert('✅ Заявка на вывод отправлена!');
+            fetchUserData();
+        } else alert('❌ ' + data.detail);
+    } catch (e) { alert('Ошибка соединения'); console.error(e); }
 });
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -1089,21 +2261,28 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
         document.getElementById('roulette-page').style.display = tab==='roulette' ? 'block' : 'none';
         document.getElementById('slot-page').style.display = tab==='slot' ? 'block' : 'none';
         document.getElementById('rocket-page').style.display = tab==='rocket' ? 'block' : 'none';
+        if (tab==='rocket') fetchUserData();
     });
 });
 """
 }
 
+# Создаём статические файлы только при отсутствии
 for filename, content in STATIC_FILES.items():
     filepath = os.path.join(STATIC_DIR, filename)
     if not os.path.exists(filepath):
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(content)
+        print(f"✅ Создан {filepath}")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/")
 async def root():
+    return RedirectResponse(url="/static/index.html")
+
+@app.head("/")
+async def root_head():
     return RedirectResponse(url="/static/index.html")
 
 @app.post("/webhook")
@@ -1112,6 +2291,7 @@ async def webhook(request: Request):
     await dp.feed_update(bot, update)
     return {"status": "ok"}
 
+# API модели
 class SpinRequest(BaseModel):
     user_id: int
     mode: str
@@ -1148,7 +2328,8 @@ async def api_user_bets(user_id: int):
     user = get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return get_user_bets(user_id, 50)
+    bets = get_user_bets(user_id, 50)
+    return bets
 
 @app.post("/api/spin")
 async def api_spin(data: SpinRequest):
@@ -1156,7 +2337,9 @@ async def api_spin(data: SpinRequest):
     mode = data.mode
     cost = SPIN_COSTS.get(mode, 25)
     user = get_user(user_id)
-    if not user or user["balance"] < cost:
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < cost:
         raise HTTPException(status_code=400, detail="Недостаточно токенов")
     update_balance(user_id, -cost, f"Спин в режиме {mode}")
     win, prize_name, prize_value = get_spin_result(mode)
@@ -1165,41 +2348,232 @@ async def api_spin(data: SpinRequest):
         add_win(user_id, prize_name, prize_value, mode)
         message = f"🎉 Вы выиграли {prize_name} (+{prize_value} токенов)!"
     else:
-        message = "😞 К сожалению, вы проиграли."
-    return {"win": win, "prize_name": prize_name if win else None, "prize_value": prize_value if win else 0, "new_balance": get_user(user_id)["balance"], "message": message}
+        message = "😞 К сожалению, вы проиграли. Попробуйте ещё раз!"
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "win": win,
+        "prize_name": prize_name if win else None,
+        "prize_value": prize_value if win else 0,
+        "new_balance": new_balance,
+        "message": message
+    }
 
 @app.post("/api/slot_spin")
 async def api_slot_spin(data: SlotSpinRequest):
     user_id = data.user_id
     bet = data.bet
+    if bet < 20 or bet > 100:
+        raise HTTPException(status_code=400, detail="Ставка должна быть от 20 до 100 токенов")
     user = get_user(user_id)
-    if not user or user["balance"] < bet:
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < bet:
         raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    update_balance(user_id, -bet, f"Ставка {bet}")
+    
+    update_balance(user_id, -bet, f"Ставка в игровом автомате {bet} токенов")
     win, symbols, win_amount = get_slot_result(bet)
     if win:
-        update_balance(user_id, win_amount, f"Выигрыш {win_amount}")
-        add_win(user_id, f"🎰 {symbols[0]}", win_amount, "slot")
-    return {"win": win, "symbols": symbols, "win_amount": win_amount, "new_balance": get_user(user_id)["balance"]}
+        update_balance(user_id, win_amount, f"Выигрыш в игровом автомате {win_amount} токенов")
+        add_win(user_id, f"🎰 {symbols[0]}{symbols[1]}{symbols[2]}", win_amount, "slot")
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "win": win,
+        "symbols": symbols,
+        "win_amount": win_amount if win else 0,
+        "new_balance": new_balance
+    }
+
+@app.post("/api/rocket/start")
+async def rocket_start(data: RocketStartRequest):
+    user_id = data.user_id
+    bet = data.bet
+    if bet < 500 or bet > 5000:
+        raise HTTPException(status_code=400, detail="Ставка должна быть от 500 до 5000 токенов")
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < bet:
+        raise HTTPException(status_code=400, detail="Недостаточно токенов")
+    
+    update_balance(user_id, -bet, f"Ставка в ракетке {bet} токенов")
+    
+    if random.random() < 0.05:
+        crash_display = 0.7 + random.random() * 98.3
+    else:
+        crash_display = random.random() * 0.7
+    
+    global round_counter
+    round_counter += 1
+    round_id = round_counter
+    rocket_rounds[round_id] = {
+        "user_id": user_id,
+        "bet": bet,
+        "crash_display": crash_display,
+        "start_time": time.time(),
+        "status": "active",
+        "current_display": 0.0
+    }
+    
+    return {"round_id": round_id}
+
+@app.get("/api/rocket/status/{round_id}")
+async def rocket_status(round_id: int):
+    if round_id not in rocket_rounds:
+        raise HTTPException(status_code=404, detail="Round not found")
+    round_data = rocket_rounds[round_id]
+    
+    if round_data["status"] == "crashed":
+        return {
+            "display_multiplier": round_data["crash_display"],
+            "crashed": True,
+            "cashed_out": False
+        }
+    if round_data["status"] == "cashed_out":
+        return {
+            "display_multiplier": round_data["current_display"],
+            "crashed": False,
+            "cashed_out": True
+        }
+    
+    elapsed = time.time() - round_data["start_time"]
+    display_multiplier = elapsed * 0.3
+    if display_multiplier >= round_data["crash_display"]:
+        round_data["status"] = "crashed"
+        return {
+            "display_multiplier": round_data["crash_display"],
+            "crashed": True,
+            "cashed_out": False
+        }
+    else:
+        round_data["current_display"] = display_multiplier
+        return {
+            "display_multiplier": display_multiplier,
+            "crashed": False,
+            "cashed_out": False
+        }
+
+@app.post("/api/rocket/cashout")
+async def rocket_cashout(data: RocketCashoutRequest):
+    round_id = data.round_id
+    user_id = data.user_id
+    if round_id not in rocket_rounds:
+        raise HTTPException(status_code=404, detail="Round not found")
+    round_data = rocket_rounds[round_id]
+    if round_data["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Not your round")
+    if round_data["status"] != "active":
+        raise HTTPException(status_code=400, detail="Round already finished")
+    
+    elapsed = time.time() - round_data["start_time"]
+    display_multiplier = elapsed * 0.3
+    if display_multiplier >= round_data["crash_display"]:
+        round_data["status"] = "crashed"
+        raise HTTPException(status_code=400, detail="Ракета уже упала")
+    
+    real_multiplier = 1.0 + display_multiplier
+    win_amount = int(round_data["bet"] * real_multiplier)
+    update_balance(user_id, win_amount, f"Выигрыш в ракетке {win_amount} токенов")
+    add_win(user_id, f"🚀 x{real_multiplier:.2f}", win_amount, "rocket")
+    round_data["status"] = "cashed_out"
+    round_data["current_display"] = display_multiplier
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "win_amount": win_amount,
+        "new_balance": new_balance,
+        "multiplier": real_multiplier
+    }
 
 @app.post("/api/withdraw")
 async def api_withdraw(data: WithdrawRequest):
-    user = get_user(data.user_id)
-    if not user or user["balance"] < data.amount or data.amount < 500:
-        raise HTTPException(status_code=400, detail="Неверная сумма или недостаточно средств")
-    create_withdraw_request(data.user_id, data.amount)
-    return {"status": "success"}
+    user_id = data.user_id
+    amount = data.amount
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < amount:
+        raise HTTPException(status_code=400, detail="Недостаточно токенов")
+    if amount < 500:
+        raise HTTPException(status_code=400, detail="Минимальная сумма вывода – 500 токенов")
+    create_withdraw_request(user_id, amount)
+    return {"status": "success", "message": "Заявка на вывод отправлена администратору"}
+
+@app.get("/api/leaderboard")
+async def api_leaderboard():
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10")
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 @app.get("/api/recent_wins")
 async def api_recent_wins():
-    return get_internal_recent_wins() if 'get_internal_recent_wins' in globals() else get_recent_wins()
+    return get_recent_wins(limit=10)
+
+@app.get("/api/prizes/{mode}")
+async def api_get_prizes(mode: str):
+    if mode not in SPIN_COSTS:
+        raise HTTPException(status_code=400, detail="Invalid mode")
+    return get_prizes_for_mode(mode)
 
 @app.get("/api/referral/{user_id}")
-async def api_referral(user_id: int):
+async def api_get_referral(user_id: int):
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     info = get_referral_info(user_id)
-    return {"link": get_referral_link(user_id), "count": info["count"]}
+    link = get_referral_link(user_id)
+    return {"code": info["code"], "count": info["count"], "link": link}
 
-# ==================== ЗАПУСК ПРИЛОЖЕНИЯ ДЛЯ RENDER ====================
-if __name__ == "__main__":
+@app.post("/api/activate_promo")
+async def activate_promo(data: PromoRequest):
+    user_id = data.user_id
+    code = data.code.lower().strip()
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if code not in PROMOCODES:
+        raise HTTPException(status_code=400, detail="Неверный промокод")
+    
+    if is_promo_used(user_id, code):
+        raise HTTPException(status_code=400, detail="Вы уже использовали этот промокод")
+    
+    reward = PROMOCODES[code]
+    update_balance(user_id, reward, f"Промокод {code}")
+    use_promo(user_id, code)
+    
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "status": "success",
+        "message": f"Промокод активирован! Вы получили +{reward} токенов",
+        "new_balance": new_balance
+    }
+
+# ==================== ЗАПУСК ====================
+async def set_webhook():
+    webhook_url = f"https://star-drop.onrender.com/webhook"
+    await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+    logging.info(f"Webhook установлен на {webhook_url}")
+
+async def run_uvicorn():
     port = int(os.environ.get("PORT", 10000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
+
+async def main():
+    # Запускаем веб-сервер в фоновой задаче
+    server_task = asyncio.create_task(run_uvicorn())
+    # Параллельно устанавливаем вебхук
+    await set_webhook()
+    # Ожидаем завершения сервера (он будет работать, пока не остановят)
+    await server_task
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n🛑 Остановка сервисов...")
+        sys.exit(0)
