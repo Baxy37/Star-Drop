@@ -1436,8 +1436,8 @@ function updateKeyColor(mode) {
     const keyDisplay = document.getElementById('key-display');
     // Меняем эмодзи в зависимости от режима
     if (mode === 'light') keyDisplay.textContent = '🔑';
-    else if (mode === 'normal') keyDisplay.textContent = '💗';
-    else if (mode === 'hard') keyDisplay.textContent = '🔴';
+    else if (mode === 'normal') keyDisplay.textContent = '🎟️';
+    else if (mode === 'hard') keyDisplay.textContent = '🎫';
 }
 
 document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -1680,7 +1680,7 @@ async def api_get_user(user_id: int):
     user = get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user["balance"] == 0:
+    if user["balance"] == 50:
         conn = sqlite3.connect(DB_NAME)
         cur = conn.cursor()
         cur.execute("UPDATE users SET balance = ? WHERE user_id = ?", (START_BALANCE, user_id))
