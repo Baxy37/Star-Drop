@@ -508,9 +508,7 @@ async def api_gift_battle(data: GiftBattleRequest):
         raise HTTPException(status_code=404, detail="User not found")
     if user["balance"] < gift["cost"]:
         raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    # Списываем стоимость
     update_balance(user_id, -gift["cost"], f"Отправка подарка {gift['name']}")
-    # Записываем выигрыш (как победу)
     add_win(user_id, f"{gift['emoji']} {gift['name']}", gift["cost"], "gift_battle")
     new_balance = get_user(user_id)["balance"]
     return {
@@ -778,7 +776,7 @@ async def activate_promo(data: PromoRequest):
         "new_balance": new_balance
     }
 
-# ==================== СТАТИЧЕСКИЕ ФАЙЛЫ (обновлённые с битвой) ====================
+# ==================== СТАТИЧЕСКИЕ ФАЙЛЫ (обновлённые) ====================
 static_files = {
     "index.html": """<!DOCTYPE html>
 <html lang="ru">
@@ -786,7 +784,7 @@ static_files = {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=7">
+    <link rel="stylesheet" href="/static/style.css?v=8">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -866,21 +864,78 @@ static_files = {
                 <button class="mode-btn" data-mode="hard">Hard</button>
             </div>
             <div id="wheel-container">
-                <div id="wheel-pointer">▼</div>
-                <div class="wheel" id="wheel">
-                    <div class="sector s1" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
-                    <div class="sector s2" data-win-index="0"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">10</span></div></div>
-                    <div class="sector s3" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
-                    <div class="sector s4" data-win-index="1"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">15</span></div></div>
-                    <div class="sector s5" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
-                    <div class="sector s6" data-win-index="2"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">20</span></div></div>
-                    <div class="sector s7" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
-                    <div class="sector s8" data-win-index="3"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">25</span></div></div>
-                    <div class="sector s9" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
-                    <div class="sector s10" data-win-index="4"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">30</span></div></div>
-                    <div class="sector s11" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
-                    <div class="sector s12" data-win-index="5"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">40</span></div></div>
-                    <div class="wheel-center"></div>
+                <div class="wheel-wrapper">
+                    <div id="wheel-pointer">▼</div>
+                    <div class="wheel" id="wheel">
+                        <!-- 12 секторов -->
+                        <div class="sector s1" data-win-index="-1">
+                            <div class="sector-content">
+                                <span class="icon icon-cross">✕</span>
+                            </div>
+                        </div>
+                        <div class="sector s2" data-win-index="0">
+                            <div class="sector-content">
+                                <span class="icon icon-gift">🎁</span>
+                                <span class="number">10</span>
+                            </div>
+                        </div>
+                        <div class="sector s3" data-win-index="-1">
+                            <div class="sector-content">
+                                <span class="icon icon-cross">✕</span>
+                            </div>
+                        </div>
+                        <div class="sector s4" data-win-index="1">
+                            <div class="sector-content">
+                                <span class="icon icon-gift">🎁</span>
+                                <span class="number">15</span>
+                            </div>
+                        </div>
+                        <div class="sector s5" data-win-index="-1">
+                            <div class="sector-content">
+                                <span class="icon icon-cross">✕</span>
+                            </div>
+                        </div>
+                        <div class="sector s6" data-win-index="2">
+                            <div class="sector-content">
+                                <span class="icon icon-gift">🎁</span>
+                                <span class="number">20</span>
+                            </div>
+                        </div>
+                        <div class="sector s7" data-win-index="-1">
+                            <div class="sector-content">
+                                <span class="icon icon-cross">✕</span>
+                            </div>
+                        </div>
+                        <div class="sector s8" data-win-index="3">
+                            <div class="sector-content">
+                                <span class="icon icon-gift">🎁</span>
+                                <span class="number">25</span>
+                            </div>
+                        </div>
+                        <div class="sector s9" data-win-index="-1">
+                            <div class="sector-content">
+                                <span class="icon icon-cross">✕</span>
+                            </div>
+                        </div>
+                        <div class="sector s10" data-win-index="4">
+                            <div class="sector-content">
+                                <span class="icon icon-gift">🎁</span>
+                                <span class="number">30</span>
+                            </div>
+                        </div>
+                        <div class="sector s11" data-win-index="-1">
+                            <div class="sector-content">
+                                <span class="icon icon-cross">✕</span>
+                            </div>
+                        </div>
+                        <div class="sector s12" data-win-index="5">
+                            <div class="sector-content">
+                                <span class="icon icon-gift">🎁</span>
+                                <span class="number">40</span>
+                            </div>
+                        </div>
+                        <div class="wheel-center"></div>
+                    </div>
                 </div>
             </div>
             <div id="spin-area">
@@ -979,7 +1034,7 @@ static_files = {
         </div>
     </div>
 
-    <script src="/static/script.js?v=7"></script>
+    <script src="/static/script.js?v=8"></script>
 </body>
 </html>""",
     "style.css": """* {
@@ -1258,36 +1313,57 @@ body.theme-hard {
     box-shadow: 0 0 15px var(--accent-glow);
 }
 
+/* ===== КОЛЕСО (обновлённое) ===== */
 #wheel-container {
     position: relative;
     width: var(--wheel-size);
     height: var(--wheel-size);
-    margin: 15px auto;
+    margin: 20px auto;
     z-index: 2;
 }
-#wheel-pointer {
-    position: absolute;
-    top: -20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 15px solid transparent;
-    border-right: 15px solid transparent;
-    border-top: 40px solid var(--gold-color);
-    z-index: 10;
-    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5));
+
+.wheel-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    padding: 14px;
+    background: radial-gradient(circle at 30% 30%, #f0e68c, #b8860b);
+    box-shadow: 
+        0 0 40px rgba(255, 215, 0, 0.6),
+        inset 0 0 30px rgba(0, 0, 0, 0.5);
+    box-sizing: border-box;
 }
+
+.wheel-wrapper::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    right: -8px;
+    bottom: -8px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #ffd700, #b8860b);
+    z-index: -1;
+    filter: blur(12px);
+    opacity: 0.5;
+}
+
 .wheel {
     width: 100%;
     height: 100%;
     border-radius: 50%;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 0 0 15px var(--metal-rim), 0 0 30px 20px rgba(0,0,0,0.3);
-    background: #000;
+    background: #1a1a1a;
     transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
+    will-change: transform;
+    box-shadow: 
+        inset 0 0 60px rgba(0, 0, 0, 0.8),
+        0 0 50px rgba(255, 215, 0, 0.3);
 }
+
+/* Сектора */
 .sector {
     position: absolute;
     width: 50%;
@@ -1298,23 +1374,19 @@ body.theme-hard {
     justify-content: flex-start;
     align-items: center;
     box-sizing: border-box;
-    padding-top: 10%;
+    padding-top: 8%;
     backface-visibility: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 -6px 12px rgba(0, 0, 0, 0.4);
 }
-.sector:nth-child(odd) { background-color: var(--red-sector); }
-.sector:nth-child(even) { background-color: var(--green-sector); }
-.s1 { transform: rotate(0deg) skewY(-60deg); }
-.s2 { transform: rotate(30deg) skewY(-60deg); }
-.s3 { transform: rotate(60deg) skewY(-60deg); }
-.s4 { transform: rotate(90deg) skewY(-60deg); }
-.s5 { transform: rotate(120deg) skewY(-60deg); }
-.s6 { transform: rotate(150deg) skewY(-60deg); }
-.s7 { transform: rotate(180deg) skewY(-60deg); }
-.s8 { transform: rotate(210deg) skewY(-60deg); }
-.s9 { transform: rotate(240deg) skewY(-60deg); }
-.s10 { transform: rotate(270deg) skewY(-60deg); }
-.s11 { transform: rotate(300deg) skewY(-60deg); }
-.s12 { transform: rotate(330deg) skewY(-60deg); }
+
+.sector:nth-child(odd) {
+    background: linear-gradient(145deg, #ab2b44, #8b1a2b);
+}
+.sector:nth-child(even) {
+    background: linear-gradient(145deg, #2b805e, #1a5a3e);
+}
+
 .sector-content {
     transform: skewY(60deg);
     display: flex;
@@ -1322,40 +1394,136 @@ body.theme-hard {
     align-items: center;
     width: 100%;
     position: absolute;
-    top: 30px;
+    top: 12%;
+    pointer-events: none;
 }
+
 .icon {
-    font-size: 28px;
-    margin-bottom: 4px;
-    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+    font-size: 34px;
+    margin-bottom: 2px;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+    line-height: 1;
 }
+
 .icon-cross {
     color: #ff4d4d;
-    font-weight: bold;
+    font-size: 38px;
+    font-weight: 900;
+    text-shadow: 0 0 12px #ff4d4d88;
 }
 .icon-gift {
     color: #fff;
-    font-size: 24px;
+    font-size: 32px;
 }
+
 .number {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    font-weight: bold;
+    font-weight: 900;
     font-size: 22px;
     color: #fff;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+    background: rgba(0, 0, 0, 0.55);
+    padding: 2px 14px;
+    border-radius: 30px;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
+
+/* Проигрышные сектора – скрываем цифры */
+.sector .icon-cross ~ .number {
+    display: none;
+}
+
+/* Указатель */
+#wheel-pointer {
+    position: absolute;
+    top: -26px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 20px solid transparent;
+    border-right: 20px solid transparent;
+    border-top: 48px solid #ffd700;
+    z-index: 20;
+    filter: drop-shadow(0 8px 16px rgba(255, 215, 0, 0.8));
+    transition: filter 0.3s;
+}
+
+#wheel-pointer::after {
+    content: '';
+    position: absolute;
+    top: -50px;
+    left: -12px;
+    width: 24px;
+    height: 14px;
+    background: linear-gradient(180deg, #ffd700, #b8860b);
+    border-radius: 50% 50% 0 0;
+    clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+/* Центральная кнопка */
 .wheel-center {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 20%;
-    height: 20%;
-    background: radial-gradient(circle, #1a1d2a 40%, #000 70%);
+    width: 24%;
+    height: 24%;
+    background: radial-gradient(circle at 30% 30%, #f0e68c, #b8860b 80%, #8b6508);
     border-radius: 50%;
-    border: 4px solid var(--gold-color);
-    z-index: 5;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+    border: 5px solid #ffd700;
+    box-shadow: 
+        inset 0 -8px 16px rgba(0, 0, 0, 0.6),
+        inset 0 8px 16px rgba(255, 215, 0, 0.4),
+        0 0 40px rgba(255, 215, 0, 0.5);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 20px;
+    color: #1a1a1a;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
+    cursor: default;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.wheel-center:active {
+    transform: translate(-50%, -50%) scale(0.95);
+    box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.8);
+}
+
+/* Декоративные огоньки */
+.wheel-wrapper::after {
+    content: '';
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    right: -10px;
+    bottom: -10px;
+    border-radius: 50%;
+    background: repeating-conic-gradient(
+        from 0deg,
+        #ffd700 0deg 4deg,
+        transparent 4deg 10deg
+    );
+    opacity: 0.15;
+    z-index: -1;
+    animation: glowPulse 2.5s ease-in-out infinite alternate;
+}
+
+@keyframes glowPulse {
+    0% { opacity: 0.1; }
+    100% { opacity: 0.35; }
+}
+
+/* Мобильная адаптация */
+@media (max-width: 480px) {
+    .icon { font-size: 28px; }
+    .number { font-size: 18px; padding: 1px 10px; }
+    #wheel-pointer { border-left-width: 16px; border-right-width: 16px; border-top-width: 38px; top: -22px; }
+    .wheel-center { font-size: 16px; border-width: 4px; }
 }
 
 #spin-area {
@@ -2453,10 +2621,8 @@ document.getElementById('battle-send-btn').addEventListener('click', async () =>
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
             document.getElementById('battle-status').textContent = '🎉 ' + data.message;
-            // Запускаем анимацию битвы
             startBattleAnimation(data.gift);
             fetchFeed();
-            // Сбрасываем выбор
             document.querySelectorAll('.battle-gift-card').forEach(c => c.classList.remove('selected'));
             selectedGiftId = null;
             btn.style.display = 'none';
@@ -2495,7 +2661,6 @@ function startBattleAnimation(gift) {
         ctx.fillText('⚔️', 150, y - 10);
         ctx.fillText('🎁', x2, y);
 
-        // Искры
         for (let i = 0; i < 8; i++) {
             const angle = t * 8 + i * 1.2;
             const r = 30 + 15 * Math.sin(t * 6 + i);
@@ -2506,7 +2671,7 @@ function startBattleAnimation(gift) {
         }
 
         frame++;
-        if (frame < 120) { // 2 секунды анимации
+        if (frame < 120) {
             battleAnimationId = requestAnimationFrame(animate);
         } else {
             document.getElementById('battle-animation').style.display = 'none';
