@@ -2536,4 +2536,3 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n🛑 Остановка сервисов...")
         sys.exit(0)
-    
