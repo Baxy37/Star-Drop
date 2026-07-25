@@ -537,14 +537,871 @@ async def get_avatar(user_id: int):
         return {"url": "/static/default_avatar.png"}
 
 # ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
-# Для краткости я оставлю существующие STATIC_FILES без изменений,
-# но заменю script.js на новую версию с изменённой ракеткой.
-# Поскольку полный код статики очень длинный, я создам отдельную функцию,
-# которая перезапишет только script.js, а остальные файлы оставим как есть.
-# Но для удобства я приведу здесь только изменённый script.js,
-# а остальные статические файлы (index.html, style.css) остаются прежними.
+# Полный код статики (index.html, style.css, script.js) встроен в код ниже.
+# Чтобы не раздувать ответ, я создам файлы на диске при запуске.
+# Но мы уже делали это ранее. Для краткости я оставлю создание только script.js,
+# а остальные файлы (index.html и style.css) будут записаны из переменных.
 
-NEW_SCRIPT = """const BASE_URL = window.location.origin;
+# Эти переменные уже были в коде ранее. Я просто перезапишу script.js новой версией.
+# Для полноты я включу полный набор статических файлов.
+
+# (Здесь должен быть полный словарь STATIC_FILES, но я опущу его, так как он уже был в предыдущем ответе,
+# а пользователь просит код одним блоком, поэтому я включу его полностью позже.
+# Вместо этого я просто создам файлы на диске с нужным содержимым.
+# Поскольку код очень длинный, я создам их прямо здесь.
+
+# Создаём директорию static, если её нет
+os.makedirs(STATIC_DIR, exist_ok=True)
+
+# index.html
+with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
+    f.write("""<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Star Drop</title>
+    <link rel="stylesheet" href="/static/style.css?v=13">
+</head>
+<body class="theme-light">
+    <div class="stars-background">
+        <span>⭐</span><span>✨</span><span>🌟</span><span>💫</span>
+        <span>🎁</span><span>🧸</span><span>💎</span><span>🧢</span>
+        <span>🚀</span><span>💍</span><span>🧁</span><span>🎈</span>
+        <span>👑</span><span>🛸</span><span>💎</span><span>🎁</span>
+        <span>🎰</span><span>💵</span><span>⌚</span><span>👟</span>
+        <span>📱</span><span>💻</span><span>🖥️</span><span>⌨️</span>
+        <span>🕹️</span><span>🎮</span><span>🏆</span><span>🎖️</span>
+        <span>💎</span><span>👑</span><span>🚀</span><span>🛸</span>
+    </div>
+
+    <div id="app-content" style="width:100%; max-width:400px;">
+        <div id="top-bar">
+            <div id="user-info" style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                <div id="avatar-container" style="width:32px; height:32px; border-radius:50%; overflow:hidden; background:var(--accent-color);">
+                    <img id="avatar-img" src="" alt="avatar" style="width:100%; height:100%; object-fit:cover; display:none;">
+                    <span id="avatar-placeholder" style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; font-weight:bold; font-size:16px; color:#0a0a0a;">U</span>
+                </div>
+                <span id="username">@user</span>
+            </div>
+            <div id="balance">
+                <span id="balance-amount">0</span> 🎫
+                <button id="deposit-btn">+</button>
+                <button id="bets-btn">Мои ставки</button>
+            </div>
+        </div>
+
+        <div id="deposit-menu" style="display: none;">
+            <div style="width:100%; text-align:center; margin-bottom:10px; font-weight:bold; color:var(--accent-color);">Пополнить баланс</div>
+            <button class="deposit-option" data-amount="100">100₽</button>
+            <button class="deposit-option" data-amount="200">200₽</button>
+            <button class="deposit-option" data-amount="500">500₽</button>
+            <button class="deposit-option" data-amount="1000">1000₽</button>
+            <button id="close-deposit">✖</button>
+        </div>
+
+        <div id="referral-modal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
+            <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:300px; width:90%; text-align:center; border:1px solid var(--accent-color);">
+                <h3 style="color:var(--accent-color); margin-bottom:10px;">Реферальная система</h3>
+                <p style="color:#ccc; font-size:14px;">Приведи друга и получи <b>+50 токенов</b> на баланс!</p>
+                <p style="color:#fff; word-break:break-all; background:#222; padding:10px; border-radius:6px; margin:10px 0;" id="ref-link">Загрузка...</p>
+                <button id="copy-ref-link" style="background:var(--accent-color); border:none; padding:8px 20px; border-radius:6px; font-weight:bold; cursor:pointer;">Копировать ссылку</button>
+                <br><br>
+                <span style="color:#aaa;">Приглашено друзей: <b id="ref-count">0</b></span>
+                <br><br>
+                <button id="close-ref-modal" style="background:#333; border:none; color:#fff; padding:8px 20px; border-radius:6px; cursor:pointer;">Закрыть</button>
+            </div>
+        </div>
+
+        <div id="bets-modal" style="display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); justify-content:center; align-items:center; z-index:1000;">
+            <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:400px; width:90%; max-height:80%; overflow-y:auto; border:1px solid var(--accent-color);">
+                <h3 style="color:var(--accent-color); margin-bottom:10px;">Мои ставки</h3>
+                <ul id="bets-list" style="list-style:none; padding:0; margin:0;"></ul>
+                <button id="close-bets-modal" style="background:#333; border:none; color:#fff; padding:8px 20px; border-radius:6px; margin-top:10px; cursor:pointer;">Закрыть</button>
+            </div>
+        </div>
+
+        <!-- НОВАЯ РУЛЕТКА С КЛЮЧОМ -->
+        <div id="roulette-page">
+            <div id="main-title">
+                <h1>РУЛЕТКА STAR DROP</h1>
+                <p>Выбери режим и испытай удачу!</p>
+            </div>
+            <div id="mode-selector">
+                <button class="mode-btn active" data-mode="light">Low</button>
+                <button class="mode-btn" data-mode="normal">Normal</button>
+                <button class="mode-btn" data-mode="hard">Hard</button>
+            </div>
+
+            <!-- Центральный блок с ключом -->
+            <div id="key-container">
+                <div id="key-display">🔑</div>
+            </div>
+
+            <div id="spin-area">
+                <div id="spin-info">1 спин = <span id="spin-cost">25</span> монет</div>
+                <button id="spin-btn">КРУТИТЬ <span id="spin-cost-label">25 Токенов</span></button>
+            </div>
+            <div id="result-message"></div>
+        </div>
+
+        <!-- СЛОТ -->
+        <div id="slot-page" style="display:none;">
+            <div id="main-title">
+                <h1>ИГРОВОЙ АВТОМАТ 🎰</h1>
+                <p>Дёрни рычаг и удвой ставку!</p>
+            </div>
+            <div id="slot-machine">
+                <div id="reels">
+                    <div class="reel" id="reel1">🍒</div>
+                    <div class="reel" id="reel2">🍋</div>
+                    <div class="reel" id="reel3">🍊</div>
+                </div>
+                <div id="slot-controls">
+                    <div class="bet-control">
+                        <label>Ставка: <span id="bet-display">20</span> токенов</label>
+                        <input type="range" id="bet-range" min="20" max="100" step="10" value="20">
+                        <div id="slot-multiplier">При выигрыше: <b>x2</b> от ставки</div>
+                    </div>
+                    <button id="spin-slot-btn">Дёрнуть рычаг 🎰</button>
+                </div>
+                <div id="slot-result"></div>
+            </div>
+        </div>
+
+        <!-- РАКЕТКА -->
+        <div id="rocket-page" style="display:none;">
+            <div id="main-title">
+                <h1>🚀 РАКЕТКА</h1>
+                <p>Лови момент и умножай ставку до x100!</p>
+            </div>
+            <div id="rocket-game">
+                <div id="rocket-display">
+                    <div id="rocket-multiplier">0.00</div>
+                    <div id="rocket-status">Ожидание</div>
+                </div>
+                <div id="rocket-canvas-container">
+                    <canvas id="rocketCanvas" width="300" height="200"></canvas>
+                </div>
+                <div id="rocket-bet-control">
+                    <label>Ставка: <span id="rocket-bet-display">500</span> токенов</label>
+                    <input type="range" id="rocket-bet-range" min="100" max="1000" step="10" value="500">
+                </div>
+                <div id="rocket-buttons">
+                    <button id="rocket-start-btn">🚀 Старт</button>
+                    <button id="rocket-cashout-btn" disabled>💰 Стоп</button>
+                </div>
+                <div id="rocket-timer">Следующий взлёт через: <span id="rocket-countdown">5</span>с</div>
+                <div id="rocket-result"></div>
+            </div>
+        </div>
+
+        <div id="notification-feed">
+            <h3>Последние события</h3>
+            <ul id="feed-list"></ul>
+        </div>
+
+        <button id="withdraw-btn">Вывести токены</button>
+
+        <div id="promo-area">
+            <input type="text" id="promo-input" placeholder="Введите промокод" maxlength="20">
+            <button id="promo-btn">Активировать</button>
+            <div id="promo-message" style="color: var(--accent-color); font-size: 14px; margin-top: 5px; text-align:center;"></div>
+        </div>
+
+        <div id="bottom-nav">
+            <button class="nav-btn active" data-tab="roulette">Рулетка</button>
+            <button class="nav-btn" data-tab="slot">Барабан</button>
+            <button class="nav-btn" data-tab="rocket">Ракетка</button>
+        </div>
+    </div>
+
+    <script src="/static/script.js?v=13"></script>
+</body>
+</html>""")
+
+# style.css
+with open(os.path.join(STATIC_DIR, "style.css"), "w", encoding="utf-8") as f:
+    f.write("""* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+:root {
+    --accent-color: #ffd700;
+    --accent-glow: #ffd70066;
+    --bg-dark: #0a0a0a;
+    --text-light: #fff;
+    --card-bg: #111;
+    --border-color: #333;
+    --key-color: #ffd700;
+}
+
+body {
+    background: var(--bg-dark);
+    color: var(--text-light);
+    padding: 16px 16px 70px 16px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+    position: relative;
+}
+
+body.theme-light {
+    --accent-color: #ffd700;
+    --accent-glow: #ffd70066;
+    --key-color: #ffd700;
+}
+body.theme-normal {
+    --accent-color: #ff69b4;
+    --accent-glow: #ff69b466;
+    --key-color: #ff69b4;
+}
+body.theme-hard {
+    --accent-color: #ff1744;
+    --accent-glow: #ff174466;
+    --key-color: #ff1744;
+}
+
+.stars-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -1;
+    overflow: hidden;
+}
+.stars-background span {
+    position: absolute;
+    display: block;
+    opacity: 0.5;
+    color: var(--accent-color);
+    text-shadow: 0 0 10px var(--accent-glow);
+    font-size: 18px;
+    animation: float var(--duration) ease-in-out infinite alternate;
+    animation-delay: var(--delay);
+}
+.stars-background span:nth-child(1) { left: 5%; top: 10%; --duration: 12s; --delay: 0s; animation: float1 12s ease-in-out infinite alternate; }
+.stars-background span:nth-child(2) { left: 15%; top: 20%; --duration: 15s; --delay: 2s; animation: float2 15s ease-in-out infinite alternate; }
+.stars-background span:nth-child(3) { left: 25%; top: 5%; --duration: 10s; --delay: 1s; animation: float3 10s ease-in-out infinite alternate; }
+.stars-background span:nth-child(4) { left: 35%; top: 40%; --duration: 18s; --delay: 3s; animation: float4 18s ease-in-out infinite alternate; }
+.stars-background span:nth-child(5) { left: 45%; top: 15%; --duration: 13s; --delay: 0.5s; animation: float5 13s ease-in-out infinite alternate; }
+.stars-background span:nth-child(6) { left: 55%; top: 30%; --duration: 11s; --delay: 4s; animation: float6 11s ease-in-out infinite alternate; }
+.stars-background span:nth-child(7) { left: 65%; top: 50%; --duration: 16s; --delay: 1.5s; animation: float7 16s ease-in-out infinite alternate; }
+.stars-background span:nth-child(8) { left: 75%; top: 8%; --duration: 14s; --delay: 2.5s; animation: float8 14s ease-in-out infinite alternate; }
+.stars-background span:nth-child(9) { left: 85%; top: 25%; --duration: 9s; --delay: 0.8s; animation: float9 9s ease-in-out infinite alternate; }
+.stars-background span:nth-child(10) { left: 92%; top: 60%; --duration: 17s; --delay: 3.5s; animation: float10 17s ease-in-out infinite alternate; }
+.stars-background span:nth-child(11) { left: 10%; top: 70%; --duration: 19s; --delay: 5s; animation: float11 19s ease-in-out infinite alternate; }
+.stars-background span:nth-child(12) { left: 40%; top: 80%; --duration: 12s; --delay: 1.2s; animation: float12 12s ease-in-out infinite alternate; }
+.stars-background span:nth-child(13) { left: 70%; top: 75%; --duration: 14s; --delay: 2.8s; animation: float13 14s ease-in-out infinite alternate; }
+.stars-background span:nth-child(14) { left: 20%; top: 90%; --duration: 11s; --delay: 4.5s; animation: float14 11s ease-in-out infinite alternate; }
+.stars-background span:nth-child(15) { left: 60%; top: 85%; --duration: 13s; --delay: 0.2s; animation: float15 13s ease-in-out infinite alternate; }
+.stars-background span:nth-child(16) { left: 80%; top: 95%; --duration: 16s; --delay: 3.8s; animation: float16 16s ease-in-out infinite alternate; }
+.stars-background span:nth-child(17) { left: 5%; top: 45%; --duration: 10s; --delay: 1.8s; animation: float17 10s ease-in-out infinite alternate; }
+.stars-background span:nth-child(18) { left: 50%; top: 10%; --duration: 15s; --delay: 4.2s; animation: float18 15s ease-in-out infinite alternate; }
+.stars-background span:nth-child(19) { left: 30%; top: 55%; --duration: 12s; --delay: 0.3s; animation: float19 12s ease-in-out infinite alternate; }
+.stars-background span:nth-child(20) { left: 90%; top: 35%; --duration: 14s; --delay: 2.2s; animation: float20 14s ease-in-out infinite alternate; }
+.stars-background span:nth-child(21) { left: 15%; top: 60%; --duration: 11s; --delay: 3.1s; animation: float21 11s ease-in-out infinite alternate; }
+.stars-background span:nth-child(22) { left: 75%; top: 70%; --duration: 13s; --delay: 0.7s; animation: float22 13s ease-in-out infinite alternate; }
+.stars-background span:nth-child(23) { left: 45%; top: 20%; --duration: 16s; --delay: 4.8s; animation: float23 16s ease-in-out infinite alternate; }
+.stars-background span:nth-child(24) { left: 60%; top: 45%; --duration: 10s; --delay: 1.3s; animation: float24 10s ease-in-out infinite alternate; }
+
+@keyframes float1 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(30px, -20px) rotate(30deg); } }
+@keyframes float2 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-20px, 40px) rotate(-20deg); } }
+@keyframes float3 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(40px, -10px) rotate(45deg); } }
+@keyframes float4 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-30px, -30px) rotate(-35deg); } }
+@keyframes float5 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(20px, 20px) rotate(25deg); } }
+@keyframes float6 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-40px, 10px) rotate(-40deg); } }
+@keyframes float7 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(25px, -35px) rotate(35deg); } }
+@keyframes float8 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-15px, 30px) rotate(-15deg); } }
+@keyframes float9 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(45px, -5px) rotate(50deg); } }
+@keyframes float10 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-25px, -25px) rotate(-25deg); } }
+@keyframes float11 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(10px, 50px) rotate(15deg); } }
+@keyframes float12 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-35px, -15px) rotate(-30deg); } }
+@keyframes float13 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(35px, 15px) rotate(40deg); } }
+@keyframes float14 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-10px, -40px) rotate(-10deg); } }
+@keyframes float15 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(50px, 5px) rotate(55deg); } }
+@keyframes float16 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-45px, -20px) rotate(-45deg); } }
+@keyframes float17 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(15px, -45px) rotate(20deg); } }
+@keyframes float18 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-20px, 35px) rotate(-20deg); } }
+@keyframes float19 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(30px, -30px) rotate(30deg); } }
+@keyframes float20 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-30px, 45px) rotate(-30deg); } }
+@keyframes float21 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(20px, -15px) rotate(25deg); } }
+@keyframes float22 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-40px, 25px) rotate(-40deg); } }
+@keyframes float23 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(25px, 10px) rotate(35deg); } }
+@keyframes float24 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-15px, -10px) rotate(-15deg); } }
+
+#top-bar {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-color);
+    z-index: 2;
+}
+#user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+#avatar-container {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--accent-color);
+    flex-shrink: 0;
+}
+#avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: none;
+}
+#avatar-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    font-weight: bold;
+    font-size: 16px;
+    color: #0a0a0a;
+}
+#username {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent-color);
+    transition: color 0.3s;
+}
+#balance {
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent-color);
+    transition: color 0.3s;
+}
+#balance-amount {
+    font-weight: 700;
+}
+#deposit-btn, #bets-btn {
+    background: var(--accent-color);
+    border: none;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-weight: bold;
+    color: #0a0a0a;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.3s;
+}
+#deposit-btn {
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    font-size: 20px;
+    padding: 0;
+}
+#deposit-menu {
+    background: var(--card-bg);
+    border: 1px solid var(--accent-color);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 10px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    z-index: 10;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    transition: border-color 0.3s;
+}
+.deposit-option {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.3s, filter 0.2s;
+}
+.deposit-option:hover { filter: brightness(1.1); }
+#close-deposit {
+    background: transparent;
+    color: var(--accent-color);
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    transition: color 0.3s;
+}
+
+#main-title {
+    text-align: center;
+    margin: 20px 0 10px;
+    z-index: 2;
+}
+#main-title h1 {
+    font-size: 24px;
+    font-weight: 900;
+    color: var(--accent-color);
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px var(--accent-glow);
+    transition: color 0.3s, text-shadow 0.3s;
+}
+#main-title p {
+    color: #aaa;
+    font-size: 14px;
+    margin-top: 4px;
+}
+
+#mode-selector {
+    display: flex;
+    gap: 12px;
+    margin: 10px 0 20px;
+    justify-content: center;
+    z-index: 2;
+}
+.mode-btn {
+    background: #222;
+    color: #aaa;
+    border: none;
+    padding: 6px 18px;
+    border-radius: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 13px;
+}
+.mode-btn.active {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    box-shadow: 0 0 15px var(--accent-glow);
+}
+
+#key-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 10px 0 20px;
+}
+#key-display {
+    font-size: 80px;
+    color: var(--key-color);
+    text-shadow: 0 0 30px var(--accent-glow);
+    transition: color 0.3s, text-shadow 0.3s;
+}
+
+#slot-animation-container {
+    display: none;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+    background: #1a1a1a;
+    padding: 10px;
+    border-radius: 12px;
+    border: 2px solid var(--accent-color);
+}
+#slot-animation-container .anim-reel {
+    width: 60px;
+    height: 70px;
+    background: #222;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 40px;
+    border: 1px solid #444;
+}
+
+#spin-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 15px 0;
+    z-index: 2;
+}
+#spin-info {
+    font-size: 14px;
+    color: #aaa;
+    margin-bottom: 8px;
+}
+#spin-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 14px 40px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 0 20px var(--accent-glow);
+    transition: transform 0.1s, box-shadow 0.3s, background 0.3s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.2;
+}
+#spin-btn:active {
+    transform: scale(0.95);
+}
+#spin-btn span {
+    font-size: 14px;
+    font-weight: 400;
+}
+#result-message {
+    margin: 10px 0;
+    font-size: 18px;
+    font-weight: 600;
+    min-height: 40px;
+    text-align: center;
+    z-index: 2;
+    color: var(--accent-color);
+    text-shadow: 0 0 10px var(--accent-glow);
+    transition: color 0.3s, text-shadow 0.3s;
+}
+
+#slot-machine {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 20px;
+    margin: 10px 0;
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 0 30px var(--accent-glow);
+    width: 100%;
+    max-width: 400px;
+}
+#reels {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    padding: 15px 0;
+}
+.reel {
+    width: 70px;
+    height: 80px;
+    background: #222;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    border: 2px solid var(--border-color);
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+    transition: transform 0.1s;
+}
+.reel.spinning {
+    animation: spin 0.2s steps(1) infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    25% { transform: rotate(90deg); }
+    50% { transform: rotate(180deg); }
+    75% { transform: rotate(270deg); }
+    100% { transform: rotate(360deg); }
+}
+#slot-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+}
+.bet-control {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.bet-control label {
+    font-size: 14px;
+    color: #ccc;
+}
+#bet-range {
+    width: 80%;
+    max-width: 250px;
+    margin-top: 5px;
+    accent-color: var(--accent-color);
+}
+#slot-multiplier {
+    font-size: 14px;
+    color: #aaa;
+    margin-top: 4px;
+}
+#slot-multiplier b {
+    color: var(--accent-color);
+}
+#spin-slot-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 14px 30px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 0 20px var(--accent-glow);
+    transition: transform 0.1s, box-shadow 0.3s, background 0.3s;
+    width: 100%;
+    max-width: 280px;
+}
+#spin-slot-btn:active {
+    transform: scale(0.95);
+}
+#slot-result {
+    margin-top: 15px;
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--accent-color);
+    min-height: 30px;
+}
+
+#rocket-game {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 20px;
+    margin: 10px 0;
+    border: 2px solid var(--accent-color);
+    box-shadow: 0 0 30px var(--accent-glow);
+    width: 100%;
+    max-width: 400px;
+}
+#rocket-display {
+    text-align: center;
+    padding: 10px 0;
+}
+#rocket-multiplier {
+    font-size: 48px;
+    font-weight: 900;
+    color: var(--accent-color);
+    text-shadow: 0 0 20px var(--accent-glow);
+    transition: color 0.3s;
+}
+#rocket-status {
+    font-size: 16px;
+    color: #aaa;
+    margin-top: 5px;
+}
+#rocket-canvas-container {
+    width: 100%;
+    text-align: center;
+}
+#rocketCanvas {
+    width: 100%;
+    height: auto;
+    background: #0a0a0a;
+    border-radius: 12px;
+}
+#rocket-bet-control {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 10px 0;
+}
+#rocket-bet-control label {
+    font-size: 14px;
+    color: #ccc;
+}
+#rocket-bet-range {
+    width: 80%;
+    max-width: 250px;
+    margin-top: 5px;
+    accent-color: var(--accent-color);
+}
+#rocket-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin: 15px 0;
+}
+#rocket-start-btn, #rocket-cashout-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 0 20px var(--accent-glow);
+    transition: transform 0.1s, box-shadow 0.3s, background 0.3s;
+    flex: 1;
+    max-width: 150px;
+}
+#rocket-start-btn:disabled, #rocket-cashout-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+#rocket-start-btn:active, #rocket-cashout-btn:active {
+    transform: scale(0.95);
+}
+#rocket-timer {
+    font-size: 14px;
+    color: #aaa;
+    margin: 5px 0;
+    text-align: center;
+}
+#rocket-timer span {
+    color: var(--accent-color);
+}
+#rocket-result {
+    margin-top: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--accent-color);
+    min-height: 30px;
+}
+
+#notification-feed {
+    width: 100%;
+    max-width: 400px;
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 12px;
+    margin: 20px 0;
+    z-index: 2;
+    border: 1px solid var(--border-color);
+}
+#notification-feed h3 {
+    color: var(--accent-color);
+    margin-bottom: 8px;
+    font-size: 16px;
+    transition: color 0.3s;
+}
+#feed-list {
+    list-style: none;
+    max-height: 150px;
+    overflow-y: auto;
+}
+#feed-list li {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+    color: #ddd;
+}
+
+#withdraw-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 16px;
+    margin-top: 10px;
+    cursor: pointer;
+    box-shadow: 0 0 15px var(--accent-glow);
+    z-index: 2;
+    transition: background 0.3s, box-shadow 0.3s;
+}
+#promo-area {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0;
+    z-index: 2;
+    width: 100%;
+    max-width: 400px;
+}
+#promo-input {
+    flex: 1;
+    min-width: 140px;
+    padding: 8px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--accent-color);
+    background: #222;
+    color: #fff;
+    outline: none;
+    font-size: 14px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    text-align: center;
+}
+#promo-input:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 10px var(--accent-glow);
+}
+#promo-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.3s, box-shadow 0.3s;
+    box-shadow: 0 0 10px var(--accent-glow);
+}
+#promo-btn:active {
+    transform: scale(0.95);
+}
+#promo-message {
+    width: 100%;
+    font-size: 14px;
+    text-align: center;
+    min-height: 20px;
+    color: var(--accent-color);
+    transition: color 0.3s;
+}
+
+#bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: #111;
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0;
+    border-top: 1px solid var(--border-color);
+    z-index: 10;
+}
+.nav-btn {
+    background: transparent;
+    color: #888;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 6px 20px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.nav-btn.active {
+    color: var(--accent-color);
+    background: rgba(255,215,0,0.1);
+}
+
+#bets-modal ul li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+    color: #ddd;
+    font-size: 14px;
+}
+#bets-modal ul li span.positive {
+    color: #4CAF50;
+}
+#bets-modal ul li span.negative {
+    color: #f44336;
+}
+""")
+
+# script.js (исправленная версия с автоматической регистрацией и обновлённой ракеткой)
+with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
+    f.write("""const BASE_URL = window.location.origin;
 let user_id = null;
 let balance = 0;
 let currentMode = 'light';
@@ -562,7 +1419,6 @@ function showAuthError(message) {
     throw new Error('Auth error');
 }
 
-// Получение user_id
 if (window.Telegram && window.Telegram.WebApp) {
     window.Telegram.WebApp.ready();
     const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
@@ -613,7 +1469,6 @@ async function loadAvatar(userId) {
     }
 }
 
-// Улучшенная функция получения данных пользователя с автоматической регистрацией
 async function fetchUserData() {
     if (!user_id) {
         const saved = localStorage.getItem('starDrop_userId');
@@ -663,7 +1518,6 @@ function updateBalanceUI(newBalance) {
     document.getElementById('balance-amount').textContent = newBalance;
 }
 
-// ---- Рефералка ----
 document.getElementById('user-info').addEventListener('click', async () => {
     if (!user_id) return;
     try {
@@ -701,7 +1555,6 @@ function fallbackCopy(text) {
     document.body.removeChild(input);
 }
 
-// ---- Мои ставки ----
 document.getElementById('bets-btn').addEventListener('click', async () => {
     if (!user_id) return;
     try {
@@ -730,7 +1583,6 @@ document.getElementById('bets-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) document.getElementById('bets-modal').style.display = 'none';
 });
 
-// ---- Промокоды ----
 document.getElementById('promo-btn').addEventListener('click', async () => {
     if (!user_id) return;
     const input = document.getElementById('promo-input');
@@ -753,7 +1605,6 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
     } catch (e) { msg.textContent = 'Ошибка соединения'; console.error(e); }
 });
 
-// ---- Инициализация ----
 function initGames() {
     applyTheme('light');
     updateKeyColor('light');
@@ -766,7 +1617,6 @@ function initGames() {
     startFakeWins();
 }
 
-// ---- Лента событий ----
 function startFakeWins() {
     setInterval(() => {
         const isWin = Math.random() < 0.75;
@@ -802,7 +1652,6 @@ function addFakeLoseToFeed(username, prize, msg) {
     if (list.children.length > 10) list.removeChild(list.lastChild);
 }
 
-// ---- РУЛЕТКА С КЛЮЧОМ ----
 function applyTheme(mode) {
     document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
     if (mode === 'light') document.body.classList.add('theme-light');
@@ -947,7 +1796,6 @@ function animateSlots(win, prizeValue) {
     });
 }
 
-// ---- СЛОТ ----
 let slotSpinning = false;
 const slotSymbols = ['🍒','🍋','🍊','🍇','🍉','🍓','🍑','🎰'];
 const reels = [
@@ -1013,8 +1861,7 @@ let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
 const rctx = rocketCanvas.getContext('2d');
-let rocketX = 30, rocketY = 170; // левый нижний угол
-let rocketSpeed = 1.2; // базовая скорость
+let rocketX = 30, rocketY = 170;
 let rocketTrail = [];
 let isCrashed = false;
 let falling = false;
@@ -1050,7 +1897,6 @@ function drawRocket(multiplier, status) {
         rctx.fillText('🚀', rocketX, rocketY);
         return;
     }
-    // активный полёт
     rctx.font = '30px sans-serif';
     rctx.textAlign = 'center';
     rctx.fillText('🚀', rocketX, rocketY);
@@ -1118,21 +1964,17 @@ function animateRocket() {
     }
     if (!rocketActive) return;
     
-    // Новая траектория: движение из левого нижнего угла в правый верхний по синусоиде
     const elapsed = (Date.now() - startTime) / 1000;
-    const speedFactor = 1 + elapsed * 0.15; // ускорение
+    const speedFactor = 1 + elapsed * 0.15;
     const dx = 2.2 * speedFactor;
     const dy = 1.8 * speedFactor;
     rocketX += dx;
     rocketY -= dy;
-    // Ограничения
     if (rocketX > 280) rocketX = 280;
     if (rocketY < 20) rocketY = 20;
-    // Синусоидальное отклонение по Y
     const sinOffset = 15 * Math.sin(elapsed * 1.7 + 0.5);
-    let targetY = 170 - (rocketX - 30) * (150 / 250); // базовая линия от (30,170) до (280,20)
+    let targetY = 170 - (rocketX - 30) * (150 / 250);
     rocketY = targetY + sinOffset;
-    // Не даём выйти за границы
     if (rocketY < 10) rocketY = 10;
     if (rocketY > 190) rocketY = 190;
     
@@ -1173,7 +2015,7 @@ async function updateRocketStatus() {
                 fetchUserData();
                 startCountdown();
             } else {
-                // обновляем траекторию в зависимости от множителя? оставим как есть
+                // ничего не делаем, анимация уже идёт
             }
         } else console.error('Status error:', data);
     } catch (e) { console.error(e); }
@@ -1268,7 +2110,6 @@ function simulateRocketRound(bet) {
     }, 200);
 }
 
-// ---- Общие функции ----
 document.getElementById('deposit-btn').addEventListener('click', () => {
     const menu = document.getElementById('deposit-menu');
     menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
@@ -1282,450 +2123,4 @@ document.querySelectorAll('.deposit-option').forEach(btn => {
             return;
         }
         try {
-            const resp = await fetch('/api/create_payment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id, amount })
-            });
-            const data = await resp.json();
-            if (resp.ok) {
-                window.open(data.payment_url, '_blank');
-                localStorage.setItem('current_order', data.order_id);
-                alert('Ссылка на оплату открыта. После оплаты баланс обновится автоматически.');
-            } else {
-                alert('Ошибка: ' + data.detail);
-            }
-        } catch (e) {
-            alert('Ошибка соединения');
-            console.error(e);
-        }
-    });
-});
-
-document.getElementById('close-deposit').addEventListener('click', () => {
-    document.getElementById('deposit-menu').style.display = 'none';
-});
-
-document.getElementById('withdraw-btn').addEventListener('click', async () => {
-    if (!user_id) return;
-    const amount = prompt('Введите сумму вывода (минимум 500 токенов):');
-    if (!amount || isNaN(amount) || amount < 500) {
-        alert('Введите корректное число не менее 500');
-        return;
-    }
-    try {
-        const resp = await fetch('/api/withdraw', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id, amount: parseInt(amount) })
-        });
-        const data = await resp.json();
-        if (resp.ok) {
-            alert('✅ Заявка на вывод отправлена!');
-            fetchUserData();
-        } else alert('❌ ' + data.detail);
-    } catch (e) { alert('Ошибка соединения'); console.error(e); }
-});
-
-// ---- Навигация по вкладкам ----
-document.querySelectorAll('.nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const tab = btn.dataset.tab;
-        document.getElementById('roulette-page').style.display = tab==='roulette' ? 'block' : 'none';
-        document.getElementById('slot-page').style.display = tab==='slot' ? 'block' : 'none';
-        document.getElementById('rocket-page').style.display = tab==='rocket' ? 'block' : 'none';
-        if (tab==='rocket') fetchUserData();
-    });
-});
-"""
-
-# Перезаписываем только script.js
-with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
-    f.write(NEW_SCRIPT)
-
-# Остальные статические файлы (index.html, style.css) остаются без изменений,
-# но для полноты я перезапишу их из предыдущей версии (они уже были в коде).
-# Если нужно, можно добавить их сюда, но они уже существуют.
-
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-@app.get("/")
-async def root():
-    return RedirectResponse(url="/static/index.html")
-
-@app.head("/")
-async def root_head():
-    return RedirectResponse(url="/static/index.html")
-
-@app.post("/webhook")
-async def webhook(request: Request):
-    update = types.Update(**(await request.json()))
-    await dp.feed_update(bot, update)
-    return {"status": "ok"}
-
-# API модели
-class SpinRequest(BaseModel):
-    user_id: int
-    mode: str
-
-class WithdrawRequest(BaseModel):
-    user_id: int
-    amount: int
-
-class PromoRequest(BaseModel):
-    user_id: int
-    code: str
-
-class SlotSpinRequest(BaseModel):
-    user_id: int
-    bet: int
-
-class RocketStartRequest(BaseModel):
-    user_id: int
-    bet: int
-
-class RocketCashoutRequest(BaseModel):
-    round_id: int
-    user_id: int
-
-class PaymentRequest(BaseModel):
-    user_id: int
-    amount: int
-
-class RegisterRequest(BaseModel):
-    user_id: int
-    username: str = None
-
-class YookassaNotification(BaseModel):
-    event: str
-    object: dict
-
-# ==================== НОВЫЕ ЭНДПОИНТЫ ====================
-
-@app.post("/api/register")
-async def register_user(data: RegisterRequest):
-    user = get_user(data.user_id)
-    if user:
-        return {"balance": user["balance"]}
-    create_user(data.user_id, data.username)
-    new_user = get_user(data.user_id)
-    return {"balance": new_user["balance"]}
-
-@app.post("/api/create_payment")
-async def create_payment(data: PaymentRequest):
-    user = get_user(data.user_id)
-    if not user:
-        raise HTTPException(404, "User not found")
-    if data.amount not in PAYMENT_LINKS:
-        raise HTTPException(400, "Invalid amount")
-
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-    cur.execute("INSERT INTO orders (user_id, amount, status) VALUES (?, ?, 'pending')", 
-                (data.user_id, data.amount))
-    order_id = cur.lastrowid
-    conn.commit()
-    conn.close()
-
-    payment_url = PAYMENT_LINKS[data.amount]
-    return {"payment_url": payment_url, "order_id": order_id}
-
-@app.post("/api/payment_callback")
-async def payment_callback(notification: YookassaNotification):
-    if notification.event == "payment.succeeded":
-        payment_id = notification.object.get("id")
-        amount = notification.object.get("amount", {}).get("value")
-        if amount is None:
-            return {"error": "No amount"}
-
-        conn = sqlite3.connect(DB_NAME)
-        cur = conn.cursor()
-        cur.execute("SELECT id, user_id FROM orders WHERE amount = ? AND status = 'pending' ORDER BY id DESC LIMIT 1", 
-                    (int(float(amount)),))
-        order = cur.fetchone()
-        if not order:
-            conn.close()
-            return {"error": "Order not found"}
-
-        order_id, user_id = order
-        tokens = int(float(amount))
-        update_balance(user_id, tokens, f"Пополнение через ЮKassa (заказ {order_id})")
-        cur.execute("UPDATE orders SET status = 'paid', payment_id = ? WHERE id = ?", 
-                    (payment_id, order_id))
-        conn.commit()
-        conn.close()
-        return {"status": "ok"}
-    return {"status": "ignored"}
-
-# ==================== ОСТАВШИЕСЯ ЭНДПОИНТЫ ====================
-
-@app.get("/api/user/{user_id}")
-async def api_get_user(user_id: int):
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user["balance"] == 0:
-        conn = sqlite3.connect(DB_NAME)
-        cur = conn.cursor()
-        cur.execute("UPDATE users SET balance = ? WHERE user_id = ?", (START_BALANCE, user_id))
-        cur.execute(
-            "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
-            (user_id, "deposit", START_BALANCE, "Стартовый бонус 50 токенов (восстановлен через API)")
-        )
-        conn.commit()
-        conn.close()
-        user["balance"] = START_BALANCE
-    return {"balance": user["balance"], "username": user["username"]}
-
-@app.get("/api/user_bets/{user_id}")
-async def api_user_bets(user_id: int):
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    bets = get_user_bets(user_id, 50)
-    return bets
-
-@app.post("/api/spin")
-async def api_spin(data: SpinRequest):
-    user_id = data.user_id
-    mode = data.mode
-    cost = SPIN_COSTS.get(mode, 25)
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user["balance"] < cost:
-        raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    update_balance(user_id, -cost, f"Спин в режиме {mode}")
-    win, prize_name, prize_value = get_next_spin_result(user_id, mode)
-    if win:
-        update_balance(user_id, prize_value, f"Выигрыш: {prize_name}")
-        add_win(user_id, prize_name, prize_value, mode)
-        message = f"🎉 Вы выиграли {prize_name} (+{prize_value} токенов)!"
-    else:
-        message = "😞 К сожалению, вы проиграли. Попробуйте ещё раз!"
-    new_balance = get_user(user_id)["balance"]
-    return {
-        "win": win,
-        "prize_name": prize_name if win else None,
-        "prize_value": prize_value if win else 0,
-        "new_balance": new_balance,
-        "message": message
-    }
-
-@app.post("/api/slot_spin")
-async def api_slot_spin(data: SlotSpinRequest):
-    user_id = data.user_id
-    bet = data.bet
-    if bet < 20 or bet > 100:
-        raise HTTPException(status_code=400, detail="Ставка должна быть от 20 до 100 токенов")
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user["balance"] < bet:
-        raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    
-    update_balance(user_id, -bet, f"Ставка в игровом автомате {bet} токенов")
-    win, symbols, win_amount = get_slot_result(bet)
-    if win:
-        update_balance(user_id, win_amount, f"Выигрыш в игровом автомате {win_amount} токенов")
-        add_win(user_id, f"🎰 {symbols[0]}{symbols[1]}{symbols[2]}", win_amount, "slot")
-    new_balance = get_user(user_id)["balance"]
-    return {
-        "win": win,
-        "symbols": symbols,
-        "win_amount": win_amount if win else 0,
-        "new_balance": new_balance
-    }
-
-@app.post("/api/rocket/start")
-async def rocket_start(data: RocketStartRequest):
-    user_id = data.user_id
-    bet = data.bet
-    # Изменён диапазон ставки: 100-1000
-    if bet < 100 or bet > 1000:
-        raise HTTPException(status_code=400, detail="Ставка должна быть от 100 до 1000 токенов")
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user["balance"] < bet:
-        raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    
-    update_balance(user_id, -bet, f"Ставка в ракетке {bet} токенов")
-    
-    # Новая генерация краша: логнормальное распределение для большей непредсказуемости
-    # Среднее ~2.5, разброс до 20-30
-    crash_display = random.lognormvariate(0.8, 0.6)
-    # Ограничим разумными пределами
-    if crash_display < 1.0:
-        crash_display = 1.0 + random.random() * 0.5
-    elif crash_display > 30:
-        crash_display = 30.0
-    
-    global round_counter
-    round_counter += 1
-    round_id = round_counter
-    rocket_rounds[round_id] = {
-        "user_id": user_id,
-        "bet": bet,
-        "crash_display": crash_display,
-        "start_time": time.time(),
-        "status": "active",
-        "current_display": 0.0
-    }
-    
-    return {"round_id": round_id}
-
-@app.get("/api/rocket/status/{round_id}")
-async def rocket_status(round_id: int):
-    if round_id not in rocket_rounds:
-        raise HTTPException(status_code=404, detail="Round not found")
-    round_data = rocket_rounds[round_id]
-    
-    if round_data["status"] == "crashed":
-        return {
-            "display_multiplier": round_data["crash_display"],
-            "crashed": True,
-            "cashed_out": False
-        }
-    if round_data["status"] == "cashed_out":
-        return {
-            "display_multiplier": round_data["current_display"],
-            "crashed": False,
-            "cashed_out": True
-        }
-    
-    elapsed = time.time() - round_data["start_time"]
-    display_multiplier = elapsed * 0.3  # скорость роста
-    if display_multiplier >= round_data["crash_display"]:
-        round_data["status"] = "crashed"
-        return {
-            "display_multiplier": round_data["crash_display"],
-            "crashed": True,
-            "cashed_out": False
-        }
-    else:
-        round_data["current_display"] = display_multiplier
-        return {
-            "display_multiplier": display_multiplier,
-            "crashed": False,
-            "cashed_out": False
-        }
-
-@app.post("/api/rocket/cashout")
-async def rocket_cashout(data: RocketCashoutRequest):
-    round_id = data.round_id
-    user_id = data.user_id
-    if round_id not in rocket_rounds:
-        raise HTTPException(status_code=404, detail="Round not found")
-    round_data = rocket_rounds[round_id]
-    if round_data["user_id"] != user_id:
-        raise HTTPException(status_code=403, detail="Not your round")
-    if round_data["status"] != "active":
-        raise HTTPException(status_code=400, detail="Round already finished")
-    
-    elapsed = time.time() - round_data["start_time"]
-    display_multiplier = elapsed * 0.3
-    if display_multiplier >= round_data["crash_display"]:
-        round_data["status"] = "crashed"
-        raise HTTPException(status_code=400, detail="Ракета уже упала")
-    
-    real_multiplier = 1.0 + display_multiplier
-    win_amount = int(round_data["bet"] * real_multiplier)
-    update_balance(user_id, win_amount, f"Выигрыш в ракетке {win_amount} токенов")
-    add_win(user_id, f"🚀 x{real_multiplier:.2f}", win_amount, "rocket")
-    round_data["status"] = "cashed_out"
-    round_data["current_display"] = display_multiplier
-    new_balance = get_user(user_id)["balance"]
-    return {
-        "win_amount": win_amount,
-        "new_balance": new_balance,
-        "multiplier": real_multiplier
-    }
-
-@app.post("/api/withdraw")
-async def api_withdraw(data: WithdrawRequest):
-    user_id = data.user_id
-    amount = data.amount
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user["balance"] < amount:
-        raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    if amount < 500:
-        raise HTTPException(status_code=400, detail="Минимальная сумма вывода – 500 токенов")
-    create_withdraw_request(user_id, amount)
-    return {"status": "success", "message": "Заявка на вывод отправлена администратору"}
-
-@app.get("/api/leaderboard")
-async def api_leaderboard():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10")
-    rows = cur.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
-
-@app.get("/api/recent_wins")
-async def api_recent_wins():
-    return get_recent_wins(limit=10)
-
-@app.get("/api/referral/{user_id}")
-async def api_get_referral(user_id: int):
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    info = get_referral_info(user_id)
-    link = get_referral_link(user_id)
-    return {"code": info["code"], "count": info["count"], "link": link}
-
-@app.post("/api/activate_promo")
-async def activate_promo(data: PromoRequest):
-    user_id = data.user_id
-    code = data.code.lower().strip()
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    if code not in PROMOCODES:
-        raise HTTPException(status_code=400, detail="Неверный промокод")
-    
-    if is_promo_used(user_id, code):
-        raise HTTPException(status_code=400, detail="Вы уже использовали этот промокод")
-    
-    reward = PROMOCODES[code]
-    update_balance(user_id, reward, f"Промокод {code}")
-    use_promo(user_id, code)
-    
-    new_balance = get_user(user_id)["balance"]
-    return {
-        "status": "success",
-        "message": f"Промокод активирован! Вы получили +{reward} токенов",
-        "new_balance": new_balance
-    }
-
-# ==================== ЗАПУСК ====================
-async def set_webhook():
-    webhook_url = f"https://star-drop.onrender.com/webhook"
-    await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
-    logging.info(f"Webhook установлен на {webhook_url}")
-
-async def run_uvicorn():
-    port = int(os.environ.get("PORT", 10000))
-    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
-    server = uvicorn.Server(config)
-    await server.serve()
-
-async def main():
-    server_task = asyncio.create_task(run_uvicorn())
-    await set_webhook()
-    await server_task
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\n🛑 Остановка сервисов...")
-        sys.exit(0)
+            const resp = await fetch('/api/create_payment',
