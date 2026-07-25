@@ -31,7 +31,7 @@ SPIN_COSTS = {
 PRIZE_RANGES = {
     "light": {"min": 10, "max": 100, "win_chance": 40},
     "normal": {"min": 50, "max": 200, "win_chance": 45},
-    "hard": {"min": 10, "max": 500, "win_chance": 50}  # минимум 10, чтобы избежать нулевых выигрышей
+    "hard": {"min": 10, "max": 500, "win_chance": 50}
 }
 
 SLOT_SYMBOLS = ['🍒', '🍋', '🍊', '🍇', '🍉', '🍓', '🍑', '🎰']
@@ -55,10 +55,8 @@ last_spin_result = {}  # user_id -> bool (True=win, False=lose)
 def get_next_spin_result(user_id: int, mode: str):
     ranges = PRIZE_RANGES.get(mode, PRIZE_RANGES["light"])
     if user_id not in last_spin_result:
-        # Первый раз – случайно
         win = random.randint(1, 100) <= ranges["win_chance"]
     else:
-        # Чередуем
         win = not last_spin_result[user_id]
     last_spin_result[user_id] = win
 
@@ -540,6 +538,7 @@ async def get_avatar(user_id: int):
         return {"url": "/static/default_avatar.png"}
 
 # ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
+# Всегда перезаписываем, чтобы обновить CSS/JS
 STATIC_FILES = {
     "index.html": """<!DOCTYPE html>
 <html lang="ru">
@@ -547,7 +546,7 @@ STATIC_FILES = {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=11">
+    <link rel="stylesheet" href="/static/style.css?v=12">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -692,7 +691,7 @@ STATIC_FILES = {
         </div>
 
         <div id="notification-feed">
-            <h3>Последние выигрыши</h3>
+            <h3>Последние события</h3>
             <ul id="feed-list"></ul>
         </div>
 
@@ -711,7 +710,7 @@ STATIC_FILES = {
         </div>
     </div>
 
-    <script src="/static/script.js?v=11"></script>
+    <script src="/static/script.js?v=12"></script>
 </body>
 </html>""",
     "style.css": """* {
@@ -1628,25 +1627,48 @@ function initGames() {
     startIdleScroll();
 }
 
+// ---- ОБНОВЛЁННАЯ ЛЕНТА СОБЫТИЙ (выигрыши + редкие проигрыши) ----
 function startFakeWins() {
     setInterval(() => {
-        const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 'player_' + (200000 + Math.floor(Math.random()*800000)), 'gamer_' + (300000 + Math.floor(Math.random()*700000)), 'winner_' + (400000 + Math.floor(Math.random()*600000))];
+        // 75% – выигрыш, 25% – проигрыш
+        const isWin = Math.random() < 0.75;
+        const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 
+                           'player_' + (200000 + Math.floor(Math.random()*800000)), 
+                           'gamer_' + (300000 + Math.floor(Math.random()*700000)), 
+                           'winner_' + (400000 + Math.floor(Math.random()*600000))];
         const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
         const prizes = ['🎰 Слот', '🎡 Рулетка', '🚀 Ракетка', '🎁 Подарок'];
         const prize = prizes[Math.floor(Math.random()*prizes.length)];
         const amount = Math.floor(Math.random() * 150) + 10;
-        addFakeWinToFeed(username, prize, amount);
+        
+        if (isWin) {
+            addFakeWinToFeed(username, prize, amount);
+        } else {
+            // Проигрыш – разные формулировки
+            const loseMessages = ['проиграл', 'не повезло', 'удача отвернулась', 'мимо', 'сгорел'];
+            const msg = loseMessages[Math.floor(Math.random() * loseMessages.length)];
+            addFakeLoseToFeed(username, prize, msg);
+        }
     }, 2000);
 }
 
 function addFakeWinToFeed(username, prize, amount) {
     const list = document.getElementById('feed-list');
     const li = document.createElement('li');
-    li.textContent = '@' + username + ' выиграл ' + prize + ' (+' + amount + ' токенов)';
+    li.textContent = '@' + username + ' выиграл ' + prize + ' (+' + amount + ' токенов) 🎉';
     list.insertBefore(li, list.firstChild);
     if (list.children.length > 10) list.removeChild(list.lastChild);
 }
 
+function addFakeLoseToFeed(username, prize, msg) {
+    const list = document.getElementById('feed-list');
+    const li = document.createElement('li');
+    li.textContent = '@' + username + ' ' + msg + ' в ' + prize + ' 😞';
+    list.insertBefore(li, list.firstChild);
+    if (list.children.length > 10) list.removeChild(list.lastChild);
+}
+
+// ---- Остальные функции без изменений ----
 function startIdleScroll() {
     if (spinInterval) clearInterval(spinInterval);
     spinInterval = setInterval(() => {
@@ -1681,7 +1703,6 @@ function updateCase(mode) {
         div.textContent = item.name;
         track.appendChild(div);
     });
-    // Дублируем для бесконечности
     const clone = track.cloneNode(true);
     track.appendChild(clone);
     currentPosition = 0;
@@ -1697,11 +1718,11 @@ function generateCaseItems(mode, count) {
     const r = ranges[mode] || ranges.light;
     const items = [];
     for (let i = 0; i < count; i++) {
-        if (i % 2 === 0) { // чётные – выигрыш
+        if (i % 2 === 0) {
             let val = Math.floor(Math.random() * (r.max - r.min + 1)) + r.min;
             const icon = mode === 'light' ? '🏷️' : mode === 'normal' ? '🎟️' : '🎫';
             items.push({name: `${icon} ${val}`, value: val});
-        } else { // нечётные – проигрыш
+        } else {
             items.push({name: '❌', value: 0});
         }
     }
@@ -1790,7 +1811,6 @@ function animateSpin(win, prizeValue, prizeName) {
 
         let targetIndex = -1;
         if (win) {
-            // Ищем элемент с выигрышем (не ❌)
             for (let i = 0; i < items.length; i++) {
                 if (!items[i].textContent.includes('❌')) {
                     targetIndex = i;
@@ -1799,7 +1819,6 @@ function animateSpin(win, prizeValue, prizeName) {
             }
             if (targetIndex === -1) targetIndex = Math.floor(Math.random() * items.length);
         } else {
-            // Ищем элемент с проигрышем
             for (let i = 0; i < items.length; i++) {
                 if (items[i].textContent.includes('❌')) {
                     targetIndex = i;
@@ -1844,7 +1863,7 @@ function animateSpin(win, prizeValue, prizeName) {
     });
 }
 
-// ---- СЛОТ ----
+// ---- СЛОТ (без изменений) ----
 let slotSpinning = false;
 const slotSymbols = ['🍒','🍋','🍊','🍇','🍉','🍓','🍑','🎰'];
 const reels = [
@@ -1905,7 +1924,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
-// ---- РАКЕТКА ----
+// ---- РАКЕТКА (без изменений) ----
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
