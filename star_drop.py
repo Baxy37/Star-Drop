@@ -388,7 +388,7 @@ def get_slot_result(bet: int):
 
 # ==================== ТЕЛЕГРАМ БОТ ====================
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command, StateFilter, F  # <--- ИСПРАВЛЕНО: добавлен F
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -445,7 +445,7 @@ async def cmd_start(message: types.Message):
             reply_markup=get_phone_keyboard()
         )
 
-# Обработчик контакта
+# Обработчик контакта (используем F.contact)
 @dp.message(F.contact)
 async def handle_contact(message: types.Message):
     contact = message.contact
