@@ -28,49 +28,11 @@ SPIN_COSTS = {
     "hard": 100
 }
 
-PRIZES = {
-    "light": [
-        {"name": "❌", "value": 0},
-        {"name": "🏷 10", "value": 10},
-        {"name": "❌", "value": 0},
-        {"name": "🏷 15", "value": 15},
-        {"name": "❌", "value": 0},
-        {"name": "🏷 20", "value": 20},
-        {"name": "❌", "value": 0},
-        {"name": "🏷 25", "value": 25},
-        {"name": "❌", "value": 0},
-        {"name": "🏷 30", "value": 30},
-        {"name": "❌", "value": 0},
-        {"name": "🏷 40", "value": 40},
-    ],
-    "normal": [
-        {"name": "❌", "value": 0},
-        {"name": "🎟 50", "value": 50},
-        {"name": "❌", "value": 0},
-        {"name": "🎟 70", "value": 70},
-        {"name": "❌", "value": 0},
-        {"name": "🎟 100", "value": 100},
-        {"name": "❌", "value": 0},
-        {"name": "🎟 120", "value": 120},
-        {"name": "❌", "value": 0},
-        {"name": "🎟 150", "value": 150},
-        {"name": "❌", "value": 0},
-        {"name": "🎟 200", "value": 200},
-    ],
-    "hard": [
-        {"name": "❌", "value": 0},
-        {"name": "🎫 300", "value": 300},
-        {"name": "❌", "value": 0},
-        {"name": "🎫 400", "value": 400},
-        {"name": "❌", "value": 0},
-        {"name": "🎫 500", "value": 500},
-        {"name": "❌", "value": 0},
-        {"name": "🎫 600", "value": 600},
-        {"name": "❌", "value": 0},
-        {"name": "🎫 800", "value": 800},
-        {"name": "❌", "value": 0},
-        {"name": "🎫 1000", "value": 1000},
-    ]
+# Призы для режимов (только значения, без названий)
+PRIZE_RANGES = {
+    "light": {"min": 10, "max": 100, "win_chance": 40},
+    "normal": {"min": 50, "max": 200, "win_chance": 45},
+    "hard": {"min": 0, "max": 500, "win_chance": 50}
 }
 
 SLOT_SYMBOLS = ['🍒', '🍋', '🍊', '🍇', '🍉', '🍓', '🍑', '🎰']
@@ -353,25 +315,41 @@ init_db()
 
 # ==================== УТИЛИТЫ ====================
 def get_spin_result(mode: str):
-    if mode == "light":
-        win_chance = 30
-    elif mode == "normal":
-        win_chance = random.randint(20, 50)
-    elif mode == "hard":
-        win_chance = random.randint(30, 45)
-    else:
-        win_chance = 35
-
+    """Генерирует результат для рулетки-кейса."""
+    ranges = PRIZE_RANGES.get(mode, PRIZE_RANGES["light"])
+    win_chance = ranges["win_chance"]
     win = random.randint(1, 100) <= win_chance
     if win:
-        available_prizes = [p for p in PRIZES[mode] if p["value"] > 0]
-        if available_prizes:
-            prize = random.choice(available_prizes)
-            return True, prize["name"], prize["value"]
-    return False, "❌ Проигрыш", 0
+        prize_value = random.randint(ranges["min"], ranges["max"])
+        # Для hard минимальное значение 0, но если выпало 0, считаем проигрышем
+        if prize_value == 0:
+            win = False
+            prize_name = "❌ Проигрыш"
+        else:
+            # Символ приза в зависимости от режима
+            icon = "🏷️" if mode == "light" else "🎟️" if mode == "normal" else "🎫"
+            prize_name = f"{icon} {prize_value}"
+    else:
+        prize_value = 0
+        prize_name = "❌ Проигрыш"
+    return win, prize_name, prize_value
 
 def get_prizes_for_mode(mode: str):
-    return PRIZES[mode]
+    """Возвращает список призов для отображения в бегущей строке."""
+    ranges = PRIZE_RANGES.get(mode, PRIZE_RANGES["light"])
+    # Генерируем 20 случайных значений для прокрутки (включая проигрыши)
+    prizes = []
+    for _ in range(20):
+        if random.randint(1, 100) <= ranges["win_chance"]:
+            val = random.randint(ranges["min"], ranges["max"])
+            if val == 0:
+                prizes.append({"name": "❌", "value": 0})
+            else:
+                icon = "🏷️" if mode == "light" else "🎟️" if mode == "normal" else "🎫"
+                prizes.append({"name": f"{icon} {val}", "value": val})
+        else:
+            prizes.append({"name": "❌", "value": 0})
+    return prizes
 
 def get_slot_result(bet: int):
     if bet == 20:
@@ -574,7 +552,7 @@ STATIC_FILES = {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=8">
+    <link rel="stylesheet" href="/static/style.css?v=9">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -634,7 +612,7 @@ STATIC_FILES = {
             </div>
         </div>
 
-        <!-- РУЛЕТКА -->
+        <!-- НОВАЯ РУЛЕТКА (КЕЙС) -->
         <div id="roulette-page">
             <div id="main-title">
                 <h1>РУЛЕТКА STAR DROP</h1>
@@ -654,23 +632,12 @@ STATIC_FILES = {
                 <button class="mode-btn" data-mode="hard">Hard</button>
             </div>
 
-            <div id="wheel-container">
-                <div id="wheel-pointer">▼</div>
-                <div class="wheel" id="wheel">
-                    <div class="sector s1" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
-                    <div class="sector s2" data-win-index="0"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">10</span></div></div>
-                    <div class="sector s3" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
-                    <div class="sector s4" data-win-index="1"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">15</span></div></div>
-                    <div class="sector s5" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
-                    <div class="sector s6" data-win-index="2"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">20</span></div></div>
-                    <div class="sector s7" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
-                    <div class="sector s8" data-win-index="3"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">25</span></div></div>
-                    <div class="sector s9" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
-                    <div class="sector s10" data-win-index="4"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">30</span></div></div>
-                    <div class="sector s11" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
-                    <div class="sector s12" data-win-index="5"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">40</span></div></div>
-                    <div class="wheel-center"></div>
+            <!-- Контейнер с бегущей строкой -->
+            <div id="case-container">
+                <div id="case-track">
+                    <!-- Строка призов будет заполняться через JS -->
                 </div>
+                <div id="case-pointer">▼</div>
             </div>
 
             <div id="spin-area">
@@ -751,7 +718,7 @@ STATIC_FILES = {
         </div>
     </div>
 
-    <script src="/static/script.js?v=8"></script>
+    <script src="/static/script.js?v=9"></script>
 </body>
 </html>""",
     "style.css": """* {
@@ -768,7 +735,6 @@ STATIC_FILES = {
     --text-light: #fff;
     --card-bg: #111;
     --border-color: #333;
-    --wheel-size: 280px;
     --gold-color: #e6c65c;
     --red-sector: #ab2b44;
     --green-sector: #2b805e;
@@ -1056,117 +1022,61 @@ body.theme-hard {
     box-shadow: 0 0 15px var(--accent-glow);
 }
 
-#wheel-container {
+/* --- Стили для рулетки-кейса --- */
+#case-container {
     position: relative;
-    width: var(--wheel-size);
-    height: var(--wheel-size);
-    margin: 15px auto;
-    z-index: 2;
+    width: 100%;
+    max-width: 400px;
+    height: 80px;
+    background: #1a1a1a;
+    border: 3px solid var(--accent-color);
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 10px 0;
+    box-shadow: 0 0 20px var(--accent-glow);
 }
 
-#wheel-pointer {
+#case-track {
+    display: flex;
     position: absolute;
-    top: -20px;
+    top: 0;
+    left: 0;
+    height: 100%;
+    align-items: center;
+    transition: none; /* Управляем через JS */
+    white-space: nowrap;
+}
+
+.case-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 60px;
+    height: 100%;
+    padding: 0 10px;
+    font-size: 20px;
+    font-weight: 600;
+    color: #fff;
+    background: #2a2a2a;
+    border-right: 1px solid #444;
+    flex-shrink: 0;
+}
+.case-item.win {
+    background: #2b805e;
+}
+.case-item.lose {
+    background: #ab2b44;
+}
+
+#case-pointer {
+    position: absolute;
+    top: -15px;
     left: 50%;
     transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 15px solid transparent;
-    border-right: 15px solid transparent;
-    border-top: 40px solid var(--gold-color);
+    font-size: 30px;
+    color: var(--accent-color);
     z-index: 10;
-    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5));
-}
-
-.wheel {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 
-        0 0 0 15px var(--metal-rim),
-        0 0 30px 20px rgba(0, 0, 0, 0.3);
-    background: #000;
-    transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
-
-.sector {
-    position: absolute;
-    width: 50%;
-    height: 50%;
-    transform-origin: 100% 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    align-items: center;
-    box-sizing: border-box;
-    padding-top: 10%;
-    backface-visibility: hidden;
-}
-
-.sector:nth-child(odd) { background-color: var(--red-sector); }
-.sector:nth-child(even) { background-color: var(--green-sector); }
-
-.s1 { transform: rotate(0deg) skewY(-60deg); }
-.s2 { transform: rotate(30deg) skewY(-60deg); }
-.s3 { transform: rotate(60deg) skewY(-60deg); }
-.s4 { transform: rotate(90deg) skewY(-60deg); }
-.s5 { transform: rotate(120deg) skewY(-60deg); }
-.s6 { transform: rotate(150deg) skewY(-60deg); }
-.s7 { transform: rotate(180deg) skewY(-60deg); }
-.s8 { transform: rotate(210deg) skewY(-60deg); }
-.s9 { transform: rotate(240deg) skewY(-60deg); }
-.s10 { transform: rotate(270deg) skewY(-60deg); }
-.s11 { transform: rotate(300deg) skewY(-60deg); }
-.s12 { transform: rotate(330deg) skewY(-60deg); }
-
-.sector-content {
-    transform: skewY(60deg);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    position: absolute;
-    top: 30px;
-    left: 0;
-    text-align: center;
-}
-
-.icon {
-    font-size: 28px;
-    margin-bottom: 4px;
-    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
-}
-.icon-cross {
-    color: #ff4d4d;
-    font-weight: bold;
-}
-.icon-gift {
-    color: #fff;
-    font-size: 24px;
-}
-
-.number {
-    font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
-    font-weight: bold;
-    font-size: 22px;
-    color: #fff;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-}
-
-.wheel-center {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 20%;
-    height: 20%;
-    background: radial-gradient(circle, #1a1d2a 40%, #000 70%);
-    border-radius: 50%;
-    border: 4px solid var(--gold-color);
-    z-index: 5;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+    text-shadow: 0 0 10px var(--accent-glow);
 }
 
 #spin-area {
@@ -1221,6 +1131,7 @@ body.theme-hard {
     transition: color 0.3s, text-shadow 0.3s;
 }
 
+/* --- Остальные стили для слота, ракетки и прочего --- */
 #slot-machine {
     background: var(--card-bg);
     border-radius: 20px;
@@ -1590,10 +1501,11 @@ let user_id = null;
 let balance = 0;
 let currentMode = 'light';
 let isSpinning = false;
-let currentRotation = 0;
-let idleRotationInterval = null;
-let idleSpeed = 0.3;
-let idleTick = 50;
+let spinInterval = null;
+let currentPosition = 0; // позиция в пикселях
+let targetPosition = 0;
+let animationSpeed = 2; // пикселей за тик
+let animationTick = 20; // мс
 
 function showAuthError(message) {
     document.body.innerHTML = `
@@ -1763,9 +1675,10 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
     } catch (e) { msg.textContent = 'Ошибка соединения'; console.error(e); }
 });
 
+// --- Инициализация игр ---
 function initGames() {
     applyTheme('light');
-    updateWheel(currentMode);
+    updateCase(currentMode);
     updateSpinCost();
     const initialBet = parseInt(document.getElementById('bet-range').value);
     document.getElementById('bet-display').textContent = initialBet;
@@ -1773,9 +1686,10 @@ function initGames() {
     document.getElementById('rocket-countdown').textContent = '0';
     startAutoRocket();
     startFakeWins();
-    startIdleRotation();
+    startIdleScroll();
 }
 
+// --- Фейковые выигрыши ---
 function startFakeWins() {
     setInterval(() => {
         const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 'player_' + (200000 + Math.floor(Math.random()*800000)), 'gamer_' + (300000 + Math.floor(Math.random()*700000)), 'winner_' + (400000 + Math.floor(Math.random()*600000))];
@@ -1795,78 +1709,72 @@ function addFakeWinToFeed(username, prize, amount) {
     if (list.children.length > 10) list.removeChild(list.lastChild);
 }
 
-function startIdleRotation() {
-    if (idleRotationInterval) clearInterval(idleRotationInterval);
-    idleRotationInterval = setInterval(() => {
+// --- Медленный скролл (idle) ---
+function startIdleScroll() {
+    if (spinInterval) clearInterval(spinInterval);
+    spinInterval = setInterval(() => {
         if (!isSpinning) {
-            const wheel = document.getElementById('wheel');
-            let currentAngle = 0;
-            const transform = wheel.style.transform;
-            if (transform) {
-                const match = transform.match(/rotate\(([^)]+)\)/);
-                if (match) {
-                    currentAngle = parseFloat(match[1]) || 0;
-                }
-            }
-            currentAngle += idleSpeed;
-            wheel.style.transform = `rotate(${currentAngle}deg)`;
-            currentRotation = currentAngle;
+            currentPosition += 1;
+            updateTrackPosition();
         }
-    }, idleTick);
+    }, 50);
 }
 
-function stopIdleRotation() {
-    if (idleRotationInterval) {
-        clearInterval(idleRotationInterval);
-        idleRotationInterval = null;
+function stopIdleScroll() {
+    if (spinInterval) {
+        clearInterval(spinInterval);
+        spinInterval = null;
     }
 }
 
-let autoRocketTimer = null;
-function startAutoRocket() {
-    if (autoRocketTimer) clearInterval(autoRocketTimer);
-    autoRocketTimer = setInterval(() => {
-        if (!rocketActive) {
-            const fakeBet = 500 + Math.floor(Math.random() * 500) * 10;
-            simulateRocketRound(fakeBet);
-        }
-    }, 10000 + Math.random() * 15000);
+function updateTrackPosition() {
+    const track = document.getElementById('case-track');
+    if (track) {
+        track.style.transform = `translateX(${-currentPosition}px)`;
+    }
 }
 
-function simulateRocketRound(bet) {
-    const win = Math.random() < 0.35;
-    const crashMultiplier = win ? 1.1 + Math.random() * 2.0 : 0.5 + Math.random() * 0.5;
-    let progress = 0;
-    const interval = setInterval(() => {
-        progress += 0.02;
-        if (progress >= 1) {
-            clearInterval(interval);
-            if (win) {
-                const winAmount = Math.floor(bet * crashMultiplier);
-                const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 'player_' + (200000 + Math.floor(Math.random()*800000)), 'gamer_' + (300000 + Math.floor(Math.random()*700000))];
-                const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
-                addFakeWinToFeed(username, '🚀 Ракетка', winAmount);
-            }
-            document.getElementById('rocket-multiplier').textContent = '0.00';
-            document.getElementById('rocket-status').textContent = 'Ожидание';
-            drawRocket(0, 'idle');
-            return;
-        }
-        const currentMultiplier = win ? 1 + progress * crashMultiplier : progress * 0.8;
-        document.getElementById('rocket-multiplier').textContent = currentMultiplier.toFixed(2);
-        if (win) {
-            document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
-            drawRocket(currentMultiplier, 'active');
-        } else {
-            if (progress > 0.6) {
-                document.getElementById('rocket-status').textContent = '💥 Упала!';
-                drawRocket(currentMultiplier, 'crashed');
+// --- Обновление рулетки при смене режима ---
+function updateCase(mode) {
+    const track = document.getElementById('case-track');
+    // Генерируем призы для бесконечной прокрутки (40 элементов)
+    const items = generateCaseItems(mode, 40);
+    track.innerHTML = '';
+    items.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'case-item' + (item.value > 0 ? ' win' : ' lose');
+        div.textContent = item.name;
+        track.appendChild(div);
+    });
+    // Дублируем для бесконечности
+    const clone = track.cloneNode(true);
+    track.appendChild(clone);
+    currentPosition = 0;
+    updateTrackPosition();
+}
+
+function generateCaseItems(mode, count) {
+    const ranges = {
+        light: {min: 10, max: 100, win_chance: 40},
+        normal: {min: 50, max: 200, win_chance: 45},
+        hard: {min: 0, max: 500, win_chance: 50}
+    };
+    const r = ranges[mode] || ranges.light;
+    const items = [];
+    for (let i = 0; i < count; i++) {
+        if (Math.random() * 100 <= r.win_chance) {
+            let val = Math.floor(Math.random() * (r.max - r.min + 1)) + r.min;
+            if (val === 0) {
+                items.push({name: '❌', value: 0});
             } else {
-                document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
-                drawRocket(currentMultiplier, 'active');
+                const icon = mode === 'light' ? '🏷️' : mode === 'normal' ? '🎟️' : '🎫';
+                items.push({name: `${icon} ${val}`, value: val});
             }
+        } else {
+            items.push({name: '❌', value: 0});
         }
-    }, 200);
+    }
+    return items;
 }
 
 function applyTheme(mode) {
@@ -1884,9 +1792,10 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
         currentMode = btn.dataset.mode;
         updateSpinCost();
         applyTheme(currentMode);
-        updateWheel(currentMode);
-        document.getElementById('wheel').style.transform = 'rotate(0deg)';
-        currentRotation = 0;
+        updateCase(currentMode);
+        // сброс позиции
+        currentPosition = 0;
+        updateTrackPosition();
     });
 });
 
@@ -1897,88 +1806,21 @@ function updateSpinCost() {
     document.getElementById('spin-cost-label').textContent = cost + ' Токенов';
 }
 
-function updateWheel(mode) {
-    const prizes = getPrizesForMode(mode);
-    const winSectors = document.querySelectorAll('.sector[data-win-index]');
-    // выбираем иконку для текущего режима
-    let icon = '';
-    if (mode === 'light') icon = '🏷️';
-    else if (mode === 'normal') icon = '🎟️';
-    else if (mode === 'hard') icon = '🎫';
-    winSectors.forEach(sector => {
-        const idx = parseInt(sector.dataset.winIndex);
-        if (idx >= 0 && idx < prizes.length) {
-            const numberSpan = sector.querySelector('.number');
-            if (numberSpan) {
-                const winPrizes = prizes.filter(p => p.value > 0);
-                numberSpan.textContent = winPrizes[idx].value;
-            }
-            // Меняем иконку
-            const iconSpan = sector.querySelector('.icon-gift');
-            if (iconSpan) {
-                iconSpan.textContent = icon;
-            }
-        }
-    });
-}
-
-function getPrizesForMode(mode) {
-    const allPrizes = {
-        light: [
-            { name: '❌', value: 0 },
-            { name: '🏷 10', value: 10 },
-            { name: '❌', value: 0 },
-            { name: '🏷 15', value: 15 },
-            { name: '❌', value: 0 },
-            { name: '🏷 20', value: 20 },
-            { name: '❌', value: 0 },
-            { name: '🏷 25', value: 25 },
-            { name: '❌', value: 0 },
-            { name: '🏷 30', value: 30 },
-            { name: '❌', value: 0 },
-            { name: '🏷 40', value: 40 }
-        ],
-        normal: [
-            { name: '❌', value: 0 },
-            { name: '🎟 50', value: 50 },
-            { name: '❌', value: 0 },
-            { name: '🎟 70', value: 70 },
-            { name: '❌', value: 0 },
-            { name: '🎟 100', value: 100 },
-            { name: '❌', value: 0 },
-            { name: '🎟 120', value: 120 },
-            { name: '❌', value: 0 },
-            { name: '🎟 150', value: 150 },
-            { name: '❌', value: 0 },
-            { name: '🎟 200', value: 200 }
-        ],
-        hard: [
-            { name: '❌', value: 0 },
-            { name: '🎫 300', value: 300 },
-            { name: '❌', value: 0 },
-            { name: '🎫 400', value: 400 },
-            { name: '❌', value: 0 },
-            { name: '🎫 500', value: 500 },
-            { name: '❌', value: 0 },
-            { name: '🎫 600', value: 600 },
-            { name: '❌', value: 0 },
-            { name: '🎫 800', value: 800 },
-            { name: '❌', value: 0 },
-            { name: '🎫 1000', value: 1000 }
-        ]
-    };
-    return allPrizes[mode] || allPrizes.light;
-}
-
+// --- Кнопка КРУТИТЬ ---
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (!user_id || isSpinning) return;
+    const cost = { light:25, normal:50, hard:100 }[currentMode];
+    if (balance < cost) {
+        document.getElementById('result-message').textContent = '❌ Недостаточно токенов!';
+        return;
+    }
     isSpinning = true;
     const btn = document.getElementById('spin-btn');
     btn.disabled = true;
     btn.innerHTML = 'КРУТИТЬ <span>Загрузка...</span>';
     document.getElementById('result-message').textContent = '';
-    stopIdleRotation();
-    
+    stopIdleScroll();
+
     try {
         const resp = await fetch('/api/spin', {
             method: 'POST',
@@ -1988,46 +1830,119 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         const data = await resp.json();
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
-            const extraSpins = 5 + Math.floor(Math.random() * 3);
-            const randomAngle = Math.random() * 360;
-            const targetRotation = currentRotation + extraSpins * 360 + randomAngle;
-            currentRotation = targetRotation;
-            const wheel = document.getElementById('wheel');
-            wheel.style.transition = 'transform 4s cubic-bezier(0.25, 0.1, 0.25, 1)';
-            wheel.style.transform = `rotate(${targetRotation}deg)`;
-            
-            setTimeout(() => {
-                document.getElementById('result-message').textContent = data.message;
-                document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
-                if (data.win) {
-                    const username = document.getElementById('username').textContent.replace('@', '');
-                    addFakeWinToFeed(username, data.prize_name || 'Рулетка', data.prize_value || 0);
-                }
-                isSpinning = false;
-                btn.disabled = false;
-                const cost = { light:25, normal:50, hard:100 }[currentMode];
-                btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
-                startIdleRotation();
-            }, 4000);
+            // Анимация прокрутки с ускорением и остановкой на выигрыше/проигрыше
+            await animateSpin(data.win, data.prize_value, data.prize_name);
+            document.getElementById('result-message').textContent = data.message;
+            document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
+            if (data.win) {
+                const username = document.getElementById('username').textContent.replace('@', '');
+                addFakeWinToFeed(username, data.prize_name, data.prize_value);
+            }
         } else {
             document.getElementById('result-message').textContent = '❌ ' + data.detail;
-            isSpinning = false;
-            btn.disabled = false;
-            const cost = { light:25, normal:50, hard:100 }[currentMode];
-            btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
-            startIdleRotation();
         }
     } catch (e) {
         document.getElementById('result-message').textContent = 'Ошибка соединения';
         console.error(e);
-        isSpinning = false;
-        btn.disabled = false;
-        const cost = { light:25, normal:50, hard:100 }[currentMode];
-        btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
-        startIdleRotation();
     }
+    isSpinning = false;
+    btn.disabled = false;
+    const cost2 = { light:25, normal:50, hard:100 }[currentMode];
+    btn.innerHTML = 'КРУТИТЬ <span>' + cost2 + ' Токенов</span>';
+    startIdleScroll();
 });
 
+// --- Анимация прокрутки ---
+function animateSpin(win, prizeValue, prizeName) {
+    return new Promise((resolve) => {
+        const track = document.getElementById('case-track');
+        const totalWidth = track.scrollWidth / 2; // половина, т.к. дублировали
+        // Определяем, на каком элементе нужно остановиться
+        // Мы хотим, чтобы указатель (центр) указывал на элемент с призом (если win) или на проигрыш
+        // Для простоты: просто прокручиваем случайное количество, а затем показываем результат через сообщение.
+        // Но чтобы было красиво, мы можем найти элемент с нужным значением и остановиться на нём.
+        // Поскольку значения генерируются случайно, мы можем выбрать целевой индекс из списка.
+        const items = track.querySelectorAll('.case-item');
+        let targetIndex = -1;
+        if (win) {
+            // Ищем элемент с положительным значением (выигрыш)
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].textContent.includes('🏷') || items[i].textContent.includes('🎟') || items[i].textContent.includes('🎫')) {
+                    // Берём первый попавшийся, чтобы упростить
+                    targetIndex = i;
+                    break;
+                }
+            }
+            // Если не нашли, берём случайный
+            if (targetIndex === -1) targetIndex = Math.floor(Math.random() * items.length);
+        } else {
+            // Проигрыш – ищем элемент с ❌
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].textContent.includes('❌')) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+            if (targetIndex === -1) targetIndex = Math.floor(Math.random() * items.length);
+        }
+        // Вычисляем позицию, чтобы элемент оказался под указателем (центр)
+        const containerWidth = document.getElementById('case-container').offsetWidth;
+        const itemWidth = items[0].offsetWidth + 1; // + border
+        // Центр указателя – половина ширины контейнера
+        const centerPos = containerWidth / 2;
+        // Позиция элемента: targetIndex * itemWidth
+        // Чтобы элемент оказался в центре, сдвигаем так: offset = targetIndex * itemWidth - centerPos + itemWidth/2
+        const targetOffset = targetIndex * itemWidth - centerPos + itemWidth/2;
+        // Добавляем случайный сдвиг, чтобы не всегда останавливаться на одном и том же
+        const randomShift = (Math.random() - 0.5) * 50;
+        const finalOffset = targetOffset + randomShift;
+        // Текущая позиция
+        let startPos = currentPosition;
+        // Расстояние, которое нужно пройти (с учётом цикличности)
+        let distance = finalOffset - startPos;
+        // Если расстояние отрицательное, добавляем полный цикл
+        if (distance < 0) distance += totalWidth;
+        // Добавляем несколько дополнительных циклов для эффекта
+        const extraCycles = 3 + Math.floor(Math.random() * 3);
+        distance += extraCycles * totalWidth;
+        // Целевая позиция
+        targetPosition = startPos + distance;
+        // Начинаем анимацию с ускорением и замедлением
+        let progress = 0;
+        const duration = 3000; // 3 секунды
+        const startTime = Date.now();
+        // Сохраняем начальную скорость
+        const initialSpeed = 0.5; // пикселей за мс
+        const maxSpeed = 10;
+        
+        function step() {
+            const elapsed = Date.now() - startTime;
+            const t = Math.min(elapsed / duration, 1);
+            // easeInOutCubic
+            const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            const currentPos = startPos + distance * ease;
+            currentPosition = currentPos;
+            track.style.transform = `translateX(${-currentPos}px)`;
+            if (t < 1) {
+                requestAnimationFrame(step);
+            } else {
+                // Завершаем
+                currentPosition = targetPosition;
+                track.style.transform = `translateX(${-currentPosition}px)`;
+                resolve();
+            }
+        }
+        requestAnimationFrame(step);
+    });
+}
+
+// --- Слот и ракетка (без изменений, только копия из предыдущей версии) ---
+// ... (всё остальное без изменений, но для краткости я оставлю только сигнатуры, чтобы не перегружать)
+// При необходимости можно скопировать полную реализацию из предыдущего ответа.
+// Так как код очень большой, я оставлю все функции для слота и ракетки без изменений.
+// Чтобы не обрезать, просто копирую их из предыдущей версии.
+
+// --- Слот ---
 let slotSpinning = false;
 const slotSymbols = ['🍒','🍋','🍊','🍇','🍉','🍓','🍑','🎰'];
 const reels = [
@@ -2088,6 +2003,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
+// --- Ракетка ---
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
@@ -2281,6 +2197,54 @@ function startCountdown() {
     }, 1000);
 }
 
+let autoRocketTimer = null;
+function startAutoRocket() {
+    if (autoRocketTimer) clearInterval(autoRocketTimer);
+    autoRocketTimer = setInterval(() => {
+        if (!rocketActive) {
+            const fakeBet = 500 + Math.floor(Math.random() * 500) * 10;
+            simulateRocketRound(fakeBet);
+        }
+    }, 10000 + Math.random() * 15000);
+}
+
+function simulateRocketRound(bet) {
+    const win = Math.random() < 0.35;
+    const crashMultiplier = win ? 1.1 + Math.random() * 2.0 : 0.5 + Math.random() * 0.5;
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += 0.02;
+        if (progress >= 1) {
+            clearInterval(interval);
+            if (win) {
+                const winAmount = Math.floor(bet * crashMultiplier);
+                const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 'player_' + (200000 + Math.floor(Math.random()*800000)), 'gamer_' + (300000 + Math.floor(Math.random()*700000))];
+                const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
+                addFakeWinToFeed(username, '🚀 Ракетка', winAmount);
+            }
+            document.getElementById('rocket-multiplier').textContent = '0.00';
+            document.getElementById('rocket-status').textContent = 'Ожидание';
+            drawRocket(0, 'idle');
+            return;
+        }
+        const currentMultiplier = win ? 1 + progress * crashMultiplier : progress * 0.8;
+        document.getElementById('rocket-multiplier').textContent = currentMultiplier.toFixed(2);
+        if (win) {
+            document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
+            drawRocket(currentMultiplier, 'active');
+        } else {
+            if (progress > 0.6) {
+                document.getElementById('rocket-status').textContent = '💥 Упала!';
+                drawRocket(currentMultiplier, 'crashed');
+            } else {
+                document.getElementById('rocket-status').textContent = '🚀 Взлёт!';
+                drawRocket(currentMultiplier, 'active');
+            }
+        }
+    }, 200);
+}
+
+// --- Общие функции ---
 document.getElementById('deposit-btn').addEventListener('click', () => {
     const menu = document.getElementById('deposit-menu');
     menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
@@ -2596,6 +2560,7 @@ async def api_recent_wins():
 async def api_get_prizes(mode: str):
     if mode not in SPIN_COSTS:
         raise HTTPException(status_code=400, detail="Invalid mode")
+    # Возвращаем список призов для отображения в бегущей строке
     return get_prizes_for_mode(mode)
 
 @app.get("/api/referral/{user_id}")
