@@ -517,7 +517,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=17">
+    <link rel="stylesheet" href="/static/style.css?v=18">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -678,11 +678,11 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
         </div>
     </div>
 
-    <script src="/static/script.js?v=17"></script>
+    <script src="/static/script.js?v=18"></script>
 </body>
 </html>""")
 
-# CSS
+# CSS - добавляем стиль для большего количества ячеек
 with open(os.path.join(STATIC_DIR, "style.css"), "w", encoding="utf-8") as f:
     f.write("""* {
     margin: 0;
@@ -1396,7 +1396,7 @@ body.theme-hard {
 }
 """)
 
-# JavaScript
+# JavaScript - УВЕЛИЧЕННОЕ КОЛИЧЕСТВО СЛОТОВ
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
 let user_id = null;
@@ -1608,21 +1608,24 @@ function initGames() {
     buildRouletteStrip();
 }
 
+// ========== РУЛЕТКА С УВЕЛИЧЕННЫМ КОЛИЧЕСТВОМ СЛОТОВ ==========
 function buildRouletteStrip() {
     const strip = document.getElementById('wheel-strip');
     strip.innerHTML = '';
     const symbols = ['❌', '🎫'];
-    for (let i = 0; i < 30; i++) {
+    // Создаем 150 слотов с чередованием (75 пар)
+    for (let i = 0; i < 150; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
         cell.dataset.index = i;
         cell.textContent = symbols[i % 2];
         strip.appendChild(cell);
     }
-    for (let i = 0; i < 30; i++) {
+    // Дублируем еще раз для плавности (всего 300 слотов)
+    for (let i = 0; i < 150; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
-        cell.dataset.index = i + 30;
+        cell.dataset.index = i + 150;
         cell.textContent = symbols[i % 2];
         strip.appendChild(cell);
     }
@@ -1649,7 +1652,8 @@ function animateRouletteWheel(win) {
         if (targetIndex === -1) targetIndex = 0;
 
         let targetOffset = targetIndex * cellWidth + cellWidth/2 - containerWidth/2;
-        const extraLoops = 5 + Math.floor(Math.random() * 5);
+        // Больше оборотов для длительного вращения
+        const extraLoops = 8 + Math.floor(Math.random() * 6);
         const totalOffset = targetOffset + extraLoops * cells.length * cellWidth;
 
         strip.style.transform = `translateX(0px)`;
@@ -1784,7 +1788,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
-// РАКЕТКА
+// РАКЕТКА (полный код)
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
