@@ -86,7 +86,7 @@ round_counter = 0
 DB_NAME = "star_drop.db"
 WEBAPP_URL = "https://star-drop.onrender.com"
 REFERRAL_BONUS = 50
-START_BALANCE = 50  # Стартовый баланс
+START_BALANCE = 50
 
 # ==================== БАЗА ДАННЫХ ====================
 def init_db():
@@ -177,47 +177,49 @@ def create_user(user_id: int, username: str = None, phone: str = None, referrer_
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     code = hashlib.md5(str(user_id).encode()).hexdigest()[:8]
-    # Проверяем, есть ли уже пользователь
-    cur.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
-    if cur.fetchone() is None:
-        # Новый пользователь – даём стартовый баланс
+    
+    cur.execute("SELECT user_id, balance FROM users WHERE user_id = ?", (user_id,))
+    row = cur.fetchone()
+    
+    if row is None:
         cur.execute(
             "INSERT INTO users (user_id, username, phone, referral_code, balance) VALUES (?, ?, ?, ?, ?)",
             (user_id, username, phone, code, START_BALANCE)
         )
-        # Записываем транзакцию о стартовом бонусе
         cur.execute(
             "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
             (user_id, "deposit", START_BALANCE, "Стартовый бонус 50 токенов")
         )
     else:
-        # Обновляем существующего
         if phone:
             cur.execute("UPDATE users SET phone = ? WHERE user_id = ?", (phone, user_id))
         if username:
             cur.execute("UPDATE users SET username = ? WHERE user_id = ?", (username, user_id))
-        # Если баланс ещё не установлен (может быть 0), устанавливаем стартовый?
-        # Но чтобы не обнулить существующий баланс, проверяем, если balance = 0 и phone нет, то даём стартовый?
-        # Лучше не трогать баланс, если пользователь уже существует.
-        pass
-
-    # Реферальная логика (если есть referrer_code и пользователь новый)
-    if referrer_code and not cur.execute("SELECT id FROM referrals WHERE referred_id = ?", (user_id,)).fetchone():
+        if row[1] == 0:
+            cur.execute("UPDATE users SET balance = ? WHERE user_id = ?", (START_BALANCE, user_id))
+            cur.execute(
+                "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
+                (user_id, "deposit", START_BALANCE, "Стартовый бонус 50 токенов (восстановлен)")
+            )
+    
+    if referrer_code and row is None:
         cur.execute("SELECT user_id FROM users WHERE referral_code = ?", (referrer_code,))
-        row = cur.fetchone()
-        if row:
-            referrer_id = row[0]
+        ref_row = cur.fetchone()
+        if ref_row:
+            referrer_id = ref_row[0]
             if referrer_id != user_id:
-                cur.execute(
-                    "INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)",
-                    (referrer_id, user_id)
-                )
-                cur.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (REFERRAL_BONUS, referrer_id))
-                cur.execute(
-                    "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
-                    (referrer_id, "deposit", REFERRAL_BONUS, f"Бонус за приглашение пользователя {user_id}")
-                )
-
+                cur.execute("SELECT id FROM referrals WHERE referred_id = ?", (user_id,))
+                if not cur.fetchone():
+                    cur.execute(
+                        "INSERT INTO referrals (referrer_id, referred_id) VALUES (?, ?)",
+                        (referrer_id, user_id)
+                    )
+                    cur.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (REFERRAL_BONUS, referrer_id))
+                    cur.execute(
+                        "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
+                        (referrer_id, "deposit", REFERRAL_BONUS, f"Бонус за приглашение пользователя {user_id}")
+                    )
+    
     conn.commit()
     conn.close()
 
@@ -435,27 +437,18 @@ async def cmd_start(message: types.Message):
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
     
+    create_user(user_id, username, referrer_code=referrer_code)
+    
     user = get_user(user_id)
     if user and user.get("phone"):
-        # Уже зарегистрирован с номером
         await message.answer(
             f"🎉 С возвращением, {username}!\n"
-            "Добро пожаловать в **Star Drop** – розыгрыш подарков Telegram!\n\n"
+            f"Ваш баланс: {user['balance']} токенов 🎫\n\n"
+            "Добро пожаловать в **Star Drop** – розыгрыш подарков Telegram!\n"
             "Нажми кнопку ниже, чтобы открыть наше мини-приложение и испытать удачу! 🍀",
             reply_markup=get_start_keyboard()
         )
     else:
-        # Нет номера – создаём запись (или обновляем) и просим номер
-        if not user:
-            create_user(user_id, username, referrer_code=referrer_code)
-        else:
-            # Если пользователь есть, но без номера, обновляем username
-            if username:
-                conn = sqlite3.connect(DB_NAME)
-                cur = conn.cursor()
-                cur.execute("UPDATE users SET username = ? WHERE user_id = ?", (username, user_id))
-                conn.commit()
-                conn.close()
         await message.answer(
             f"👋 Привет, {username}!\n\n"
             "Для доступа к нашему сервису необходимо поделиться номером телефона.\n"
@@ -474,10 +467,8 @@ async def handle_contact(message: types.Message):
         return
     
     phone = contact.phone_number
-    # Обновляем номер (если пользователь уже существует, обновим)
     create_user(user_id, username, phone)
     
-    # Убедимся, что у пользователя есть баланс (если создан только что, уже есть стартовый)
     user = get_user(user_id)
     balance = user['balance'] if user else 0
     
@@ -575,7 +566,7 @@ async def get_avatar(user_id: int):
         return {"url": "/static/default_avatar.png"}
 
 # ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
-# Обновлённые статические файлы с исправленным колесом и улучшенной лентой выигрышей
+# Всегда перезаписываем, чтобы обновить CSS/JS
 STATIC_FILES = {
     "index.html": """<!DOCTYPE html>
 <html lang="ru">
@@ -583,7 +574,7 @@ STATIC_FILES = {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=5">
+    <link rel="stylesheet" href="/static/style.css?v=8">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -666,7 +657,6 @@ STATIC_FILES = {
             <div id="wheel-container">
                 <div id="wheel-pointer">▼</div>
                 <div class="wheel" id="wheel">
-                    <!-- 12 секторов с чередованием красный/зелёный -->
                     <div class="sector s1" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
                     <div class="sector s2" data-win-index="0"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">10</span></div></div>
                     <div class="sector s3" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
@@ -761,7 +751,7 @@ STATIC_FILES = {
         </div>
     </div>
 
-    <script src="/static/script.js?v=5"></script>
+    <script src="/static/script.js?v=8"></script>
 </body>
 </html>""",
     "style.css": """* {
@@ -1101,7 +1091,6 @@ body.theme-hard {
     transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-/* Сектора – исправленные размеры и позиционирование */
 .sector {
     position: absolute;
     width: 50%;
@@ -1116,11 +1105,9 @@ body.theme-hard {
     backface-visibility: hidden;
 }
 
-/* Чередование цветов */
 .sector:nth-child(odd) { background-color: var(--red-sector); }
 .sector:nth-child(even) { background-color: var(--green-sector); }
 
-/* Повороты для 12 секторов (каждый 30°) */
 .s1 { transform: rotate(0deg) skewY(-60deg); }
 .s2 { transform: rotate(30deg) skewY(-60deg); }
 .s3 { transform: rotate(60deg) skewY(-60deg); }
@@ -1134,7 +1121,6 @@ body.theme-hard {
 .s11 { transform: rotate(300deg) skewY(-60deg); }
 .s12 { transform: rotate(330deg) skewY(-60deg); }
 
-/* Контент внутри сектора – компенсируем skewY */
 .sector-content {
     transform: skewY(60deg);
     display: flex;
@@ -1142,7 +1128,7 @@ body.theme-hard {
     align-items: center;
     width: 100%;
     position: absolute;
-    top: 25%;
+    top: 30px;
     left: 0;
     text-align: center;
 }
@@ -1605,6 +1591,9 @@ let balance = 0;
 let currentMode = 'light';
 let isSpinning = false;
 let currentRotation = 0;
+let idleRotationInterval = null;
+let idleSpeed = 0.3;
+let idleTick = 50;
 
 function showAuthError(message) {
     document.body.innerHTML = `
@@ -1618,7 +1607,6 @@ function showAuthError(message) {
     throw new Error('Auth error');
 }
 
-// Получаем user_id из Telegram WebApp
 if (window.Telegram && window.Telegram.WebApp) {
     window.Telegram.WebApp.ready();
     const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
@@ -1635,7 +1623,6 @@ if (window.Telegram && window.Telegram.WebApp) {
         showAuthError('Не удалось получить данные пользователя из Telegram.');
     }
 } else {
-    // Fallback для локальной разработки
     const savedId = localStorage.getItem('starDrop_userId');
     if (savedId) {
         user_id = parseInt(savedId);
@@ -1689,7 +1676,6 @@ function updateBalanceUI(newBalance) {
     document.getElementById('balance-amount').textContent = newBalance;
 }
 
-// === Рефералка ===
 document.getElementById('user-info').addEventListener('click', async () => {
     if (!user_id) return;
     try {
@@ -1727,7 +1713,6 @@ function fallbackCopy(text) {
     document.body.removeChild(input);
 }
 
-// === Мои ставки ===
 document.getElementById('bets-btn').addEventListener('click', async () => {
     if (!user_id) return;
     try {
@@ -1756,7 +1741,6 @@ document.getElementById('bets-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) document.getElementById('bets-modal').style.display = 'none';
 });
 
-// === Промокоды ===
 document.getElementById('promo-btn').addEventListener('click', async () => {
     if (!user_id) return;
     const input = document.getElementById('promo-input');
@@ -1779,7 +1763,6 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
     } catch (e) { msg.textContent = 'Ошибка соединения'; console.error(e); }
 });
 
-// === Инициализация игр ===
 function initGames() {
     applyTheme('light');
     updateWheel(currentMode);
@@ -1789,21 +1772,19 @@ function initGames() {
     drawRocket(0, 'idle');
     document.getElementById('rocket-countdown').textContent = '0';
     startAutoRocket();
-    // Запускаем генерацию фейковых выигрышей в ленте
     startFakeWins();
+    startIdleRotation();
 }
 
-// === Генерация фейковых выигрышей для ленты ===
 function startFakeWins() {
     setInterval(() => {
-        // Генерируем случайное событие выигрыша
         const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 'player_' + (200000 + Math.floor(Math.random()*800000)), 'gamer_' + (300000 + Math.floor(Math.random()*700000)), 'winner_' + (400000 + Math.floor(Math.random()*600000))];
         const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
         const prizes = ['🎰 Слот', '🎡 Рулетка', '🚀 Ракетка', '🎁 Подарок'];
         const prize = prizes[Math.floor(Math.random()*prizes.length)];
         const amount = Math.floor(Math.random() * 150) + 10;
         addFakeWinToFeed(username, prize, amount);
-    }, 3000); // каждые 3 секунды
+    }, 2000);
 }
 
 function addFakeWinToFeed(username, prize, amount) {
@@ -1814,7 +1795,33 @@ function addFakeWinToFeed(username, prize, amount) {
     if (list.children.length > 10) list.removeChild(list.lastChild);
 }
 
-// === Автоматические раунды ракетки ===
+function startIdleRotation() {
+    if (idleRotationInterval) clearInterval(idleRotationInterval);
+    idleRotationInterval = setInterval(() => {
+        if (!isSpinning) {
+            const wheel = document.getElementById('wheel');
+            let currentAngle = 0;
+            const transform = wheel.style.transform;
+            if (transform) {
+                const match = transform.match(/rotate\(([^)]+)\)/);
+                if (match) {
+                    currentAngle = parseFloat(match[1]) || 0;
+                }
+            }
+            currentAngle += idleSpeed;
+            wheel.style.transform = `rotate(${currentAngle}deg)`;
+            currentRotation = currentAngle;
+        }
+    }, idleTick);
+}
+
+function stopIdleRotation() {
+    if (idleRotationInterval) {
+        clearInterval(idleRotationInterval);
+        idleRotationInterval = null;
+    }
+}
+
 let autoRocketTimer = null;
 function startAutoRocket() {
     if (autoRocketTimer) clearInterval(autoRocketTimer);
@@ -1836,7 +1843,6 @@ function simulateRocketRound(bet) {
             clearInterval(interval);
             if (win) {
                 const winAmount = Math.floor(bet * crashMultiplier);
-                // Добавляем в ленту через общую функцию
                 const fakeUsers = ['user_' + (100000 + Math.floor(Math.random()*900000)), 'player_' + (200000 + Math.floor(Math.random()*800000)), 'gamer_' + (300000 + Math.floor(Math.random()*700000))];
                 const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
                 addFakeWinToFeed(username, '🚀 Ракетка', winAmount);
@@ -1863,7 +1869,6 @@ function simulateRocketRound(bet) {
     }, 200);
 }
 
-// ===== НОВАЯ ЛОГИКА РУЛЕТКИ =====
 function applyTheme(mode) {
     document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
     if (mode === 'light') document.body.classList.add('theme-light');
@@ -1895,6 +1900,11 @@ function updateSpinCost() {
 function updateWheel(mode) {
     const prizes = getPrizesForMode(mode);
     const winSectors = document.querySelectorAll('.sector[data-win-index]');
+    // выбираем иконку для текущего режима
+    let icon = '';
+    if (mode === 'light') icon = '🏷️';
+    else if (mode === 'normal') icon = '🎟️';
+    else if (mode === 'hard') icon = '🎫';
     winSectors.forEach(sector => {
         const idx = parseInt(sector.dataset.winIndex);
         if (idx >= 0 && idx < prizes.length) {
@@ -1902,6 +1912,11 @@ function updateWheel(mode) {
             if (numberSpan) {
                 const winPrizes = prizes.filter(p => p.value > 0);
                 numberSpan.textContent = winPrizes[idx].value;
+            }
+            // Меняем иконку
+            const iconSpan = sector.querySelector('.icon-gift');
+            if (iconSpan) {
+                iconSpan.textContent = icon;
             }
         }
     });
@@ -1911,51 +1926,50 @@ function getPrizesForMode(mode) {
     const allPrizes = {
         light: [
             { name: '❌', value: 0 },
-            { name: '🎁 10', value: 10 },
+            { name: '🏷 10', value: 10 },
             { name: '❌', value: 0 },
-            { name: '🎁 15', value: 15 },
+            { name: '🏷 15', value: 15 },
             { name: '❌', value: 0 },
-            { name: '🎁 20', value: 20 },
+            { name: '🏷 20', value: 20 },
             { name: '❌', value: 0 },
-            { name: '🎁 25', value: 25 },
+            { name: '🏷 25', value: 25 },
             { name: '❌', value: 0 },
-            { name: '🎁 30', value: 30 },
+            { name: '🏷 30', value: 30 },
             { name: '❌', value: 0 },
-            { name: '🎁 40', value: 40 }
+            { name: '🏷 40', value: 40 }
         ],
         normal: [
             { name: '❌', value: 0 },
-            { name: '🎁 50', value: 50 },
+            { name: '🎟 50', value: 50 },
             { name: '❌', value: 0 },
-            { name: '🎁 70', value: 70 },
+            { name: '🎟 70', value: 70 },
             { name: '❌', value: 0 },
-            { name: '🎁 100', value: 100 },
+            { name: '🎟 100', value: 100 },
             { name: '❌', value: 0 },
-            { name: '🎁 120', value: 120 },
+            { name: '🎟 120', value: 120 },
             { name: '❌', value: 0 },
-            { name: '🎁 150', value: 150 },
+            { name: '🎟 150', value: 150 },
             { name: '❌', value: 0 },
-            { name: '🎁 200', value: 200 }
+            { name: '🎟 200', value: 200 }
         ],
         hard: [
             { name: '❌', value: 0 },
-            { name: '🎁 300', value: 300 },
+            { name: '🎫 300', value: 300 },
             { name: '❌', value: 0 },
-            { name: '🎁 400', value: 400 },
+            { name: '🎫 400', value: 400 },
             { name: '❌', value: 0 },
-            { name: '🎁 500', value: 500 },
+            { name: '🎫 500', value: 500 },
             { name: '❌', value: 0 },
-            { name: '🎁 600', value: 600 },
+            { name: '🎫 600', value: 600 },
             { name: '❌', value: 0 },
-            { name: '🎁 800', value: 800 },
+            { name: '🎫 800', value: 800 },
             { name: '❌', value: 0 },
-            { name: '🎁 1000', value: 1000 }
+            { name: '🎫 1000', value: 1000 }
         ]
     };
     return allPrizes[mode] || allPrizes.light;
 }
 
-// === Обработчик нажатия кнопки "КРУТИТЬ" ===
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (!user_id || isSpinning) return;
     isSpinning = true;
@@ -1963,6 +1977,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     btn.disabled = true;
     btn.innerHTML = 'КРУТИТЬ <span>Загрузка...</span>';
     document.getElementById('result-message').textContent = '';
+    stopIdleRotation();
     
     try {
         const resp = await fetch('/api/spin', {
@@ -1978,13 +1993,13 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
             const targetRotation = currentRotation + extraSpins * 360 + randomAngle;
             currentRotation = targetRotation;
             const wheel = document.getElementById('wheel');
+            wheel.style.transition = 'transform 4s cubic-bezier(0.25, 0.1, 0.25, 1)';
             wheel.style.transform = `rotate(${targetRotation}deg)`;
             
             setTimeout(() => {
                 document.getElementById('result-message').textContent = data.message;
                 document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
                 if (data.win) {
-                    // Добавляем в ленту реальный выигрыш
                     const username = document.getElementById('username').textContent.replace('@', '');
                     addFakeWinToFeed(username, data.prize_name || 'Рулетка', data.prize_value || 0);
                 }
@@ -1992,6 +2007,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
                 btn.disabled = false;
                 const cost = { light:25, normal:50, hard:100 }[currentMode];
                 btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
+                startIdleRotation();
             }, 4000);
         } else {
             document.getElementById('result-message').textContent = '❌ ' + data.detail;
@@ -1999,6 +2015,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
             btn.disabled = false;
             const cost = { light:25, normal:50, hard:100 }[currentMode];
             btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
+            startIdleRotation();
         }
     } catch (e) {
         document.getElementById('result-message').textContent = 'Ошибка соединения';
@@ -2007,10 +2024,10 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         btn.disabled = false;
         const cost = { light:25, normal:50, hard:100 }[currentMode];
         btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
+        startIdleRotation();
     }
 });
 
-// === СЛОТ ===
 let slotSpinning = false;
 const slotSymbols = ['🍒','🍋','🍊','🍇','🍉','🍓','🍑','🎰'];
 const reels = [
@@ -2071,7 +2088,6 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
-// === РАКЕТКА ===
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
@@ -2242,7 +2258,6 @@ document.getElementById('rocket-cashout-btn').addEventListener('click', async ()
             if (rocketInterval) clearInterval(rocketInterval);
             if (rocketAnimationFrame) cancelAnimationFrame(rocketAnimationFrame);
             updateBalanceUI(data.new_balance);
-            // Добавляем в ленту
             const username = document.getElementById('username').textContent.replace('@', '');
             addFakeWinToFeed(username, '🚀 Ракетка', data.win_amount);
             startCountdown();
@@ -2266,7 +2281,6 @@ function startCountdown() {
     }, 1000);
 }
 
-// === ОБЩИЕ ФУНКЦИИ ===
 document.getElementById('deposit-btn').addEventListener('click', () => {
     const menu = document.getElementById('deposit-menu');
     menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
@@ -2288,16 +2302,6 @@ document.querySelectorAll('.deposit-option').forEach(btn => {
 document.getElementById('close-deposit').addEventListener('click', () => {
     document.getElementById('deposit-menu').style.display = 'none';
 });
-
-// Реальная лента выигрышей (с сервера) – уже не нужна, используем фейковую
-// но для красоты оставим, но не будем конфликтовать
-async function fetchFeed() {
-    // Можно загружать реальные выигрыши с сервера, но мы их не показываем, чтобы не мешать фейковым
-    // Просто игнорируем
-}
-// Запускаем только фейковую ленту
-// fetchFeed();
-// setInterval(fetchFeed, 5000);
 
 document.getElementById('withdraw-btn').addEventListener('click', async () => {
     if (!user_id) return;
@@ -2334,13 +2338,12 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 """
 }
 
-# Создаём статические файлы только при отсутствии
+# Всегда перезаписываем статические файлы
 for filename, content in STATIC_FILES.items():
     filepath = os.path.join(STATIC_DIR, filename)
-    if not os.path.exists(filepath):
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(content)
-        print(f"✅ Создан {filepath}")
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"✅ Обновлён {filepath}")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -2388,6 +2391,17 @@ async def api_get_user(user_id: int):
     user = get_user(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] == 0:
+        conn = sqlite3.connect(DB_NAME)
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET balance = ? WHERE user_id = ?", (START_BALANCE, user_id))
+        cur.execute(
+            "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
+            (user_id, "deposit", START_BALANCE, "Стартовый бонус 50 токенов (восстановлен через API)")
+        )
+        conn.commit()
+        conn.close()
+        user["balance"] = START_BALANCE
     return {"balance": user["balance"], "username": user["username"]}
 
 @app.get("/api/user_bets/{user_id}")
