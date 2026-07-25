@@ -344,16 +344,10 @@ def use_promo(user_id: int, code: str):
 
 init_db()
 
+# ==================== ИЗМЕНЁННАЯ ФУНКЦИЯ ДЛЯ СЛОТА (ШАНС 50%) ====================
 def get_slot_result(bet: int):
-    if bet == 20:
-        chance = 10
-    elif 40 <= bet <= 70:
-        chance = 30
-    elif 71 <= bet <= 100:
-        chance = 15
-    else:
-        chance = 10
-
+    # Шанс выигрыша всегда 50%
+    chance = 50
     if random.randint(1, 100) <= chance:
         symbol = random.choice(SLOT_SYMBOLS)
         symbols = [symbol, symbol, symbol]
@@ -537,20 +531,6 @@ async def get_avatar(user_id: int):
         return {"url": "/static/default_avatar.png"}
 
 # ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
-# Полный код статики (index.html, style.css, script.js) встроен в код ниже.
-# Чтобы не раздувать ответ, я создам файлы на диске при запуске.
-# Но мы уже делали это ранее. Для краткости я оставлю создание только script.js,
-# а остальные файлы (index.html и style.css) будут записаны из переменных.
-
-# Эти переменные уже были в коде ранее. Я просто перезапишу script.js новой версией.
-# Для полноты я включу полный набор статических файлов.
-
-# (Здесь должен быть полный словарь STATIC_FILES, но я опущу его, так как он уже был в предыдущем ответе,
-# а пользователь просит код одним блоком, поэтому я включу его полностью позже.
-# Вместо этого я просто создам файлы на диске с нужным содержимым.
-# Поскольку код очень длинный, я создам их прямо здесь.
-
-# Создаём директорию static, если её нет
 os.makedirs(STATIC_DIR, exist_ok=True)
 
 # index.html
@@ -1397,9 +1377,12 @@ body.theme-hard {
 #bets-modal ul li span.negative {
     color: #f44336;
 }
+.csgo-cell {
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
 """)
 
-# script.js (исправленная версия с автоматической регистрацией и обновлённой ракеткой)
+# script.js (полностью обновлённый)
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
 let user_id = null;
@@ -1685,6 +1668,76 @@ function updateSpinCost() {
     document.getElementById('spin-cost-label').textContent = cost + ' Токенов';
 }
 
+// ========== НОВАЯ АНИМАЦИЯ ДЛЯ РУЛЕТКИ (CS:GO) ==========
+function animateCsgoUnboxing(win, prizeValue) {
+    return new Promise((resolve) => {
+        let container = document.getElementById('slot-animation-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'slot-animation-container';
+            container.style.display = 'flex';
+            container.style.flexWrap = 'nowrap';
+            container.style.overflow = 'hidden';
+            container.style.justifyContent = 'center';
+            container.style.alignItems = 'center';
+            container.style.gap = '4px';
+            container.style.margin = '10px 0';
+            container.style.padding = '10px';
+            container.style.background = '#1a1a1a';
+            container.style.borderRadius = '12px';
+            container.style.border = '2px solid var(--accent-color)';
+            const keyContainer = document.getElementById('key-container');
+            keyContainer.parentNode.insertBefore(container, keyContainer.nextSibling);
+        }
+        container.style.display = 'flex';
+        container.innerHTML = '';
+        
+        const cellsCount = 20;
+        const cells = [];
+        for (let i = 0; i < cellsCount; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'csgo-cell';
+            cell.style.width = '36px';
+            cell.style.height = '36px';
+            cell.style.background = '#222';
+            cell.style.borderRadius = '6px';
+            cell.style.display = 'flex';
+            cell.style.alignItems = 'center';
+            cell.style.justifyContent = 'center';
+            cell.style.fontSize = '22px';
+            cell.style.border = '1px solid #444';
+            cell.style.flexShrink = '0';
+            cell.textContent = '❌';
+            container.appendChild(cell);
+            cells.push(cell);
+        }
+
+        // Запускаем анимацию – быстро меняем все ячейки
+        let interval = setInterval(() => {
+            cells.forEach(cell => {
+                cell.textContent = Math.random() < 0.5 ? '❌' : '🎫';
+            });
+        }, 80);
+
+        // Через 3 секунды останавливаем и показываем результат
+        setTimeout(() => {
+            clearInterval(interval);
+            const symbol = win ? '🎫' : '❌';
+            cells.forEach(cell => {
+                cell.textContent = symbol;
+                cell.style.borderColor = win ? '#4CAF50' : '#f44336';
+                cell.style.boxShadow = win ? '0 0 10px #4CAF50' : '0 0 10px #f44336';
+            });
+            // Скрываем контейнер через 2 секунды
+            setTimeout(() => {
+                container.style.display = 'none';
+                resolve();
+            }, 2000);
+        }, 3000);
+    });
+}
+
+// ========== ОБРАБОТЧИК РУЛЕТКИ (СПИН) ==========
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (!user_id || isSpinning) return;
     const cost = { light:25, normal:50, hard:100 }[currentMode];
@@ -1707,7 +1760,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         const data = await resp.json();
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
-            await animateSlots(data.win, data.prize_value);
+            await animateCsgoUnboxing(data.win, data.prize_value);
             document.getElementById('result-message').textContent = data.message;
             document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
             if (data.win) {
@@ -1727,75 +1780,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     btn.innerHTML = 'КРУТИТЬ <span>' + cost2 + ' Токенов</span>';
 });
 
-function animateSlots(win, prizeValue) {
-    return new Promise((resolve) => {
-        let container = document.getElementById('slot-animation-container');
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'slot-animation-container';
-            container.style.display = 'flex';
-            container.style.justifyContent = 'center';
-            container.style.alignItems = 'center';
-            container.style.gap = '10px';
-            container.style.margin = '10px 0';
-            container.style.padding = '10px';
-            container.style.background = '#1a1a1a';
-            container.style.borderRadius = '12px';
-            container.style.border = '2px solid var(--accent-color)';
-            const keyContainer = document.getElementById('key-container');
-            keyContainer.parentNode.insertBefore(container, keyContainer.nextSibling);
-        }
-        container.style.display = 'flex';
-        container.innerHTML = '';
-        const symbols = ['🍒', '🍋', '🍊', '🍇', '🍉', '🍓', '🍑', '🎰'];
-        const reels = [];
-        for (let i = 0; i < 3; i++) {
-            const reel = document.createElement('div');
-            reel.className = 'anim-reel';
-            reel.style.width = '60px';
-            reel.style.height = '70px';
-            reel.style.background = '#222';
-            reel.style.borderRadius = '8px';
-            reel.style.display = 'flex';
-            reel.style.alignItems = 'center';
-            reel.style.justifyContent = 'center';
-            reel.style.fontSize = '40px';
-            reel.style.border = '1px solid #444';
-            reel.textContent = symbols[Math.floor(Math.random() * symbols.length)];
-            container.appendChild(reel);
-            reels.push(reel);
-        }
-        let count = 0;
-        const maxCount = 20;
-        const interval = setInterval(() => {
-            reels.forEach(reel => {
-                reel.textContent = symbols[Math.floor(Math.random() * symbols.length)];
-            });
-            count++;
-            if (count >= maxCount) {
-                clearInterval(interval);
-                if (win) {
-                    const winSymbol = '🎰';
-                    reels.forEach(reel => reel.textContent = winSymbol);
-                } else {
-                    const s1 = symbols[Math.floor(Math.random() * symbols.length)];
-                    let s2 = symbols[Math.floor(Math.random() * symbols.length)];
-                    while (s2 === s1) s2 = symbols[Math.floor(Math.random() * symbols.length)];
-                    let s3 = symbols[Math.floor(Math.random() * symbols.length)];
-                    while (s3 === s1 || s3 === s2) s3 = symbols[Math.floor(Math.random() * symbols.length)];
-                    reels[0].textContent = s1;
-                    reels[1].textContent = s2;
-                    reels[2].textContent = s3;
-                }
-                setTimeout(() => {
-                    container.style.display = 'none';
-                    resolve();
-                }, 1000);
-            }
-        }, 100);
-    });
-}
-
+// ========== СЛОТ-МАШИНА ==========
 let slotSpinning = false;
 const slotSymbols = ['🍒','🍋','🍊','🍇','🍉','🍓','🍑','🎰'];
 const reels = [
@@ -1856,7 +1841,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
-// ---- РАКЕТКА (ОБНОВЛЁННАЯ) ----
+// ========== РАКЕТКА ==========
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
@@ -2319,6 +2304,7 @@ async def api_user_bets(user_id: int):
     bets = get_user_bets(user_id, 50)
     return bets
 
+# ==================== ИЗМЕНЁННЫЙ ЭНДПОИНТ /api/spin (добавлена задержка) ====================
 @app.post("/api/spin")
 async def api_spin(data: SpinRequest):
     user_id = data.user_id
@@ -2338,6 +2324,10 @@ async def api_spin(data: SpinRequest):
     else:
         message = "😞 К сожалению, вы проиграли. Попробуйте ещё раз!"
     new_balance = get_user(user_id)["balance"]
+    
+    # Задержка для анимации CS:GO
+    await asyncio.sleep(3)
+    
     return {
         "win": win,
         "prize_name": prize_name if win else None,
@@ -2346,6 +2336,7 @@ async def api_spin(data: SpinRequest):
         "message": message
     }
 
+# ==================== ИЗМЕНЁННЫЙ ЭНДПОИНТ /api/slot_spin (шанс 50% + задержка) ====================
 @app.post("/api/slot_spin")
 async def api_slot_spin(data: SlotSpinRequest):
     user_id = data.user_id
@@ -2364,6 +2355,10 @@ async def api_slot_spin(data: SlotSpinRequest):
         update_balance(user_id, win_amount, f"Выигрыш в игровом автомате {win_amount} токенов")
         add_win(user_id, f"🎰 {symbols[0]}{symbols[1]}{symbols[2]}", win_amount, "slot")
     new_balance = get_user(user_id)["balance"]
+    
+    # Задержка для длительной анимации
+    await asyncio.sleep(3)
+    
     return {
         "win": win,
         "symbols": symbols,
