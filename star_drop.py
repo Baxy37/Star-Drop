@@ -27,6 +27,16 @@ PAYMENT_LINKS = {
     1000: "https://yookassa.ru/my/i/amMzbZDBr9y2/l"
 }
 
+# ==================== СПИСОК ПОДАРКОВ ДЛЯ БИТВЫ ====================
+GIFTS = [
+    {"id": 1, "name": "Роза", "emoji": "🌹", "cost": 10},
+    {"id": 2, "name": "Торт", "emoji": "🎂", "cost": 20},
+    {"id": 3, "name": "Сердце", "emoji": "❤️", "cost": 15},
+    {"id": 4, "name": "Звезда", "emoji": "⭐", "cost": 25},
+    {"id": 5, "name": "Алмаз", "emoji": "💎", "cost": 50},
+    {"id": 6, "name": "Бомба", "emoji": "💣", "cost": 30},
+]
+
 # ==================== ИМПОРТЫ ====================
 import uvicorn
 import aiofiles
@@ -126,14 +136,11 @@ def create_user(user_id: int, username: str = None, phone: str = None, referrer_
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     code = hashlib.md5(str(user_id).encode()).hexdigest()[:8]
-    # Вставляем пользователя с балансом по умолчанию 0
     cur.execute(
         "INSERT OR IGNORE INTO users (user_id, username, phone, referral_code) VALUES (?, ?, ?, ?)",
         (user_id, username, phone, code)
     )
-    # Если пользователь только что создан (баланс = 0), даём стартовый бонус
     cur.execute("UPDATE users SET balance = ? WHERE user_id = ? AND balance = 0", (START_BALANCE, user_id))
-    
     if phone:
         cur.execute("UPDATE users SET phone = ? WHERE user_id = ?", (phone, user_id))
     if username:
@@ -480,7 +487,40 @@ class RocketCashoutRequest(BaseModel):
     round_id: int
     user_id: int
 
-# ==================== ЭНДПОИНТЫ API ====================
+class GiftBattleRequest(BaseModel):
+    user_id: int
+    gift_id: int
+
+# ==================== НОВЫЙ ЭНДПОИНТ ДЛЯ БИТВЫ ====================
+@app.get("/api/gifts")
+async def api_get_gifts():
+    return GIFTS
+
+@app.post("/api/gift_battle")
+async def api_gift_battle(data: GiftBattleRequest):
+    user_id = data.user_id
+    gift_id = data.gift_id
+    gift = next((g for g in GIFTS if g["id"] == gift_id), None)
+    if not gift:
+        raise HTTPException(status_code=404, detail="Подарок не найден")
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < gift["cost"]:
+        raise HTTPException(status_code=400, detail="Недостаточно токенов")
+    # Списываем стоимость
+    update_balance(user_id, -gift["cost"], f"Отправка подарка {gift['name']}")
+    # Записываем выигрыш (как победу)
+    add_win(user_id, f"{gift['emoji']} {gift['name']}", gift["cost"], "gift_battle")
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "success": True,
+        "message": f"Вы отправили {gift['emoji']} {gift['name']}!",
+        "new_balance": new_balance,
+        "gift": gift
+    }
+
+# ==================== ОСТАЛЬНЫЕ ЭНДПОИНТЫ (без изменений) ====================
 @app.get("/api/avatar/{user_id}")
 async def get_avatar(user_id: int):
     avatar_path = os.path.join(AVATARS_DIR, f"{user_id}.jpg")
@@ -586,7 +626,6 @@ async def api_slot_spin(data: SlotSpinRequest):
 async def rocket_start(data: RocketStartRequest):
     user_id = data.user_id
     bet = data.bet
-    # Убираем жёсткие лимиты, проверяем только достаточность баланса
     if bet < 1:
         raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
     user = get_user(user_id)
@@ -594,7 +633,6 @@ async def rocket_start(data: RocketStartRequest):
         raise HTTPException(status_code=404, detail="User not found")
     if user["balance"] < bet:
         raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    
     update_balance(user_id, -bet, f"Ставка в ракетке {bet} токенов")
     if random.random() < 0.05:
         crash_display = 0.7 + random.random() * 98.3
@@ -740,7 +778,7 @@ async def activate_promo(data: PromoRequest):
         "new_balance": new_balance
     }
 
-# ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
+# ==================== СТАТИЧЕСКИЕ ФАЙЛЫ (обновлённые с битвой) ====================
 static_files = {
     "index.html": """<!DOCTYPE html>
 <html lang="ru">
@@ -748,7 +786,7 @@ static_files = {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=6">
+    <link rel="stylesheet" href="/static/style.css?v=7">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -876,7 +914,7 @@ static_files = {
             </div>
         </div>
 
-        <!-- РАКЕТКА (обновлённая) -->
+        <!-- РАКЕТКА -->
         <div id="rocket-page" style="display:none;">
             <div id="main-title">
                 <h1>🚀 РАКЕТКА</h1>
@@ -904,6 +942,22 @@ static_files = {
             </div>
         </div>
 
+        <!-- НОВАЯ ВКЛАДКА: БИТВА ПОДАРКОВ -->
+        <div id="battle-page" style="display:none;">
+            <div id="main-title">
+                <h1>⚔️ БИТВА ПОДАРКОВ</h1>
+                <p>Выбери подарок и отправь в бой!</p>
+            </div>
+            <div id="battle-gifts" style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:15px 0;">
+                <!-- Заполняется JS -->
+            </div>
+            <div id="battle-status" style="text-align:center; font-size:18px; min-height:40px; color:var(--accent-color);"></div>
+            <div id="battle-animation" style="display:none; text-align:center; margin:10px 0;">
+                <canvas id="battleCanvas" width="300" height="200" style="border-radius:12px; background:#0a0a0a;"></canvas>
+            </div>
+            <button id="battle-send-btn" style="display:none; background:var(--accent-color); color:#0a0a0a; border:none; padding:12px 30px; border-radius:30px; font-weight:700; font-size:18px; cursor:pointer; width:100%; max-width:280px; margin:10px auto; box-shadow:0 0 20px var(--accent-glow);">Отправить в битву</button>
+        </div>
+
         <div id="notification-feed">
             <h3>Последние выигрыши</h3>
             <ul id="feed-list"></ul>
@@ -921,10 +975,11 @@ static_files = {
             <button class="nav-btn active" data-tab="roulette">Рулетка</button>
             <button class="nav-btn" data-tab="slot">Барабан</button>
             <button class="nav-btn" data-tab="rocket">Ракетка</button>
+            <button class="nav-btn" data-tab="battle">⚔️ Битва</button>
         </div>
     </div>
 
-    <script src="/static/script.js?v=6"></script>
+    <script src="/static/script.js?v=7"></script>
 </body>
 </html>""",
     "style.css": """* {
@@ -1535,6 +1590,63 @@ body.theme-hard {
     min-height: 30px;
 }
 
+/* Битва подарков */
+#battle-gifts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+.battle-gift-card {
+    background: #1a1a1a;
+    border: 2px solid var(--border-color);
+    border-radius: 16px;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.battle-gift-card.selected {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 20px var(--accent-glow);
+}
+.battle-gift-card .emoji {
+    font-size: 36px;
+}
+.battle-gift-card .name {
+    font-size: 14px;
+    color: #ccc;
+}
+.battle-gift-card .cost {
+    font-size: 12px;
+    color: var(--accent-color);
+}
+#battle-send-btn {
+    background: var(--accent-color);
+    color: #0a0a0a;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 30px;
+    font-weight: 700;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 0 20px var(--accent-glow);
+    width: 100%;
+    max-width: 280px;
+    margin: 10px auto;
+}
+#battle-send-btn:active { transform: scale(0.95); }
+#battle-status {
+    min-height: 40px;
+    text-align: center;
+    font-weight: 600;
+}
+#battle-animation canvas {
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+    background: #0a0a0a;
+}
+
 #notification-feed {
     width: 100%;
     max-width: 400px;
@@ -1639,7 +1751,7 @@ body.theme-hard {
     border: none;
     font-size: 14px;
     font-weight: 600;
-    padding: 6px 20px;
+    padding: 6px 12px;
     border-radius: 20px;
     cursor: pointer;
 }
@@ -1662,6 +1774,10 @@ let balance = 0;
 let currentMode = 'light';
 let isSpinning = false;
 let currentRotation = 0;
+
+// === Битва подарков ===
+let selectedGiftId = null;
+let battleAnimationId = null;
 
 function showAuthError(message) {
     document.body.innerHTML = `
@@ -1877,6 +1993,7 @@ function initGames() {
     drawRocket(0, 'idle');
     document.getElementById('rocket-countdown').textContent = '0';
     startAutoRocket();
+    loadGifts(); // загружаем подарки для битвы
 }
 
 let autoRocketTimer = null;
@@ -2094,7 +2211,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = 'Дёрнуть рычаг 🎰';
 });
 
-// === РАКЕТКА (обновлённая) ===
+// === РАКЕТКА ===
 let rocketInterval = null, rocketRoundId = null, rocketActive = false;
 let rocketCountdown = 5, countdownInterval = null, rocketAnimationFrame = null;
 const rocketCanvas = document.getElementById('rocketCanvas');
@@ -2290,6 +2407,115 @@ function startCountdown() {
     }, 1000);
 }
 
+// === БИТВА ПОДАРКОВ ===
+async function loadGifts() {
+    try {
+        const resp = await fetch('/api/gifts');
+        const gifts = await resp.json();
+        const container = document.getElementById('battle-gifts');
+        container.innerHTML = '';
+        gifts.forEach(g => {
+            const card = document.createElement('div');
+            card.className = 'battle-gift-card';
+            card.dataset.id = g.id;
+            card.innerHTML = `
+                <div class="emoji">${g.emoji}</div>
+                <div class="name">${g.name}</div>
+                <div class="cost">⭐ ${g.cost}</div>
+            `;
+            card.addEventListener('click', () => {
+                document.querySelectorAll('.battle-gift-card').forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                selectedGiftId = g.id;
+                document.getElementById('battle-send-btn').style.display = 'block';
+                document.getElementById('battle-status').textContent = `Выбран: ${g.emoji} ${g.name} (${g.cost} токенов)`;
+            });
+            container.appendChild(card);
+        });
+    } catch (e) {
+        console.error('Ошибка загрузки подарков:', e);
+    }
+}
+
+document.getElementById('battle-send-btn').addEventListener('click', async () => {
+    if (!user_id || !selectedGiftId) return;
+    const btn = document.getElementById('battle-send-btn');
+    btn.disabled = true;
+    btn.textContent = 'Отправка...';
+    document.getElementById('battle-status').textContent = '⏳ Битва началась...';
+    try {
+        const resp = await fetch('/api/gift_battle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id, gift_id: selectedGiftId })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            updateBalanceUI(data.new_balance);
+            document.getElementById('battle-status').textContent = '🎉 ' + data.message;
+            // Запускаем анимацию битвы
+            startBattleAnimation(data.gift);
+            fetchFeed();
+            // Сбрасываем выбор
+            document.querySelectorAll('.battle-gift-card').forEach(c => c.classList.remove('selected'));
+            selectedGiftId = null;
+            btn.style.display = 'none';
+        } else {
+            document.getElementById('battle-status').textContent = '❌ ' + data.detail;
+        }
+    } catch (e) {
+        document.getElementById('battle-status').textContent = 'Ошибка соединения';
+        console.error(e);
+    }
+    btn.disabled = false;
+    btn.textContent = 'Отправить в битву';
+});
+
+function startBattleAnimation(gift) {
+    const canvas = document.getElementById('battleCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 300;
+    canvas.height = 200;
+    document.getElementById('battle-animation').style.display = 'block';
+    let frame = 0;
+
+    if (battleAnimationId) cancelAnimationFrame(battleAnimationId);
+
+    function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const t = frame / 60;
+        const x1 = 50 + 120 * (0.5 + 0.5 * Math.sin(t * 2.5));
+        const x2 = 250 - 120 * (0.5 + 0.5 * Math.sin(t * 2.5));
+        const y = 100 + 30 * Math.sin(t * 4);
+
+        ctx.font = '50px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(gift.emoji, x1, y);
+        ctx.fillText('⚔️', 150, y - 10);
+        ctx.fillText('🎁', x2, y);
+
+        // Искры
+        for (let i = 0; i < 8; i++) {
+            const angle = t * 8 + i * 1.2;
+            const r = 30 + 15 * Math.sin(t * 6 + i);
+            ctx.fillStyle = `hsl(${i * 45}, 100%, 60%)`;
+            ctx.beginPath();
+            ctx.arc(150 + r * Math.cos(angle), y + r * Math.sin(angle), 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        frame++;
+        if (frame < 120) { // 2 секунды анимации
+            battleAnimationId = requestAnimationFrame(animate);
+        } else {
+            document.getElementById('battle-animation').style.display = 'none';
+            battleAnimationId = null;
+        }
+    }
+    animate();
+}
+
 // === ОБЩИЕ ФУНКЦИИ ===
 document.getElementById('deposit-btn').addEventListener('click', () => {
     const menu = document.getElementById('deposit-menu');
@@ -2358,7 +2584,8 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
         document.getElementById('roulette-page').style.display = tab==='roulette' ? 'block' : 'none';
         document.getElementById('slot-page').style.display = tab==='slot' ? 'block' : 'none';
         document.getElementById('rocket-page').style.display = tab==='rocket' ? 'block' : 'none';
-        if (tab==='rocket') fetchUserData();
+        document.getElementById('battle-page').style.display = tab==='battle' ? 'block' : 'none';
+        if (tab==='rocket' || tab==='battle') fetchUserData();
     });
 });
 
