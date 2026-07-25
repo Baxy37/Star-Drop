@@ -6,19 +6,15 @@ import sqlite3
 import random
 import signal
 import time
-import hashlib
+import string
 from datetime import datetime
 from typing import Optional, List, Dict
+import json
+import hashlib
 
 # ==================== НАСТРОЙКИ ====================
 BOT_TOKEN = "8988678866:AAHIWxUB8zKBCoF21g7OVYEEWnwEF_MpLmI"
-ADMIN_ID = 8551946505
-WEBAPP_URL = "https://star-drop.onrender.com"
-RUB_TO_TOKEN = 1
-SPIN_COSTS = {"light": 25, "normal": 50, "hard": 100}
-REFERRAL_BONUS = 50
-DB_NAME = "star_drop.db"
-START_BALANCE = 50
+ADMIN_ID = 8551946505  # Ваш ID
 
 PAYMENT_LINKS = {
     100: "https://yookassa.ru/my/i/amMy2QzHTXRI/l",
@@ -27,30 +23,75 @@ PAYMENT_LINKS = {
     1000: "https://yookassa.ru/my/i/amMzbZDBr9y2/l"
 }
 
-# ==================== СПИСОК ПОДАРКОВ ДЛЯ БИТВЫ ====================
-GIFTS = [
-    {"id": 1, "name": "Роза", "emoji": "🌹", "cost": 10},
-    {"id": 2, "name": "Торт", "emoji": "🎂", "cost": 20},
-    {"id": 3, "name": "Сердце", "emoji": "❤️", "cost": 15},
-    {"id": 4, "name": "Звезда", "emoji": "⭐", "cost": 25},
-    {"id": 5, "name": "Алмаз", "emoji": "💎", "cost": 50},
-    {"id": 6, "name": "Бомба", "emoji": "💣", "cost": 30},
-]
+RUB_TO_TOKEN = 1
 
-# ==================== ИМПОРТЫ ====================
-import uvicorn
-import aiofiles
-import aiohttp
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
+SPIN_COSTS = {
+    "light": 25,
+    "normal": 50,
+    "hard": 100
+}
 
-# ==================== ИНИЦИАЛИЗАЦИЯ БАЗЫ ====================
+# ========= ЧЕРЕДУЮЩИЕСЯ ПРИЗЫ (выигрыш, проигрыш, ...) =========
+PRIZES = {
+    "light": [
+        {"name": "❌", "value": 0},
+        {"name": "🏷 10", "value": 10},
+        {"name": "❌", "value": 0},
+        {"name": "🏷 15", "value": 15},
+        {"name": "❌", "value": 0},
+        {"name": "🏷 20", "value": 20},
+        {"name": "❌", "value": 0},
+        {"name": "🏷 25", "value": 25},
+        {"name": "❌", "value": 0},
+        {"name": "🏷 30", "value": 30},
+        {"name": "❌", "value": 0},
+        {"name": "🏷 40", "value": 40},
+    ],
+    "normal": [
+        {"name": "❌", "value": 0},
+        {"name": "🎟 50", "value": 50},
+        {"name": "❌", "value": 0},
+        {"name": "🎟 70", "value": 70},
+        {"name": "❌", "value": 0},
+        {"name": "🎟 100", "value": 100},
+        {"name": "❌", "value": 0},
+        {"name": "🎟 120", "value": 120},
+        {"name": "❌", "value": 0},
+        {"name": "🎟 150", "value": 150},
+        {"name": "❌", "value": 0},
+        {"name": "🎟 200", "value": 200},
+    ],
+    "hard": [
+        {"name": "❌", "value": 0},
+        {"name": "🎫 300", "value": 300},
+        {"name": "❌", "value": 0},
+        {"name": "🎫 400", "value": 400},
+        {"name": "❌", "value": 0},
+        {"name": "🎫 500", "value": 500},
+        {"name": "❌", "value": 0},
+        {"name": "🎫 600", "value": 600},
+        {"name": "❌", "value": 0},
+        {"name": "🎫 800", "value": 800},
+        {"name": "❌", "value": 0},
+        {"name": "🎫 1000", "value": 1000},
+    ]
+}
+
+SLOT_SYMBOLS = ['🍒', '🍋', '🍊', '🍇', '🍉', '🍓', '🍑', '🎰']
+SLOT_WIN_MULTIPLIER = 2
+
+PROMOCODES = {
+    "rifleman": 50,
+    "blant": 50
+}
+
+rocket_rounds = {}
+round_counter = 0
+DB_NAME = "star_drop.db"
+WEBAPP_URL = "https://star-drop.onrender.com"
+REFERRAL_BONUS = 50
+
+# ==================== БАЗА ДАННЫХ ====================
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
@@ -74,7 +115,8 @@ def init_db():
             type TEXT,
             amount INTEGER,
             description TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
         )
     ''')
     cur.execute('''
@@ -84,7 +126,8 @@ def init_db():
             prize_name TEXT,
             prize_value INTEGER,
             mode TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
         )
     ''')
     cur.execute('''
@@ -93,7 +136,8 @@ def init_db():
             user_id INTEGER,
             amount INTEGER,
             status TEXT DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
         )
     ''')
     cur.execute('''
@@ -101,7 +145,9 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             referrer_id INTEGER,
             referred_id INTEGER UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (referrer_id) REFERENCES users(user_id),
+            FOREIGN KEY (referred_id) REFERENCES users(user_id)
         )
     ''')
     cur.execute('''
@@ -110,6 +156,7 @@ def init_db():
             user_id INTEGER,
             code TEXT,
             used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(user_id),
             UNIQUE(user_id, code)
         )
     ''')
@@ -120,9 +167,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-init_db()
-
-# ==================== ФУНКЦИИ БАЗЫ ====================
 def get_user(user_id: int) -> Optional[Dict]:
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
@@ -140,11 +184,11 @@ def create_user(user_id: int, username: str = None, phone: str = None, referrer_
         "INSERT OR IGNORE INTO users (user_id, username, phone, referral_code) VALUES (?, ?, ?, ?)",
         (user_id, username, phone, code)
     )
-    cur.execute("UPDATE users SET balance = ? WHERE user_id = ? AND balance = 0", (START_BALANCE, user_id))
     if phone:
         cur.execute("UPDATE users SET phone = ? WHERE user_id = ?", (phone, user_id))
     if username:
         cur.execute("UPDATE users SET username = ? WHERE user_id = ?", (username, user_id))
+    
     if referrer_code:
         cur.execute("SELECT user_id FROM users WHERE referral_code = ?", (referrer_code,))
         row = cur.fetchone()
@@ -291,28 +335,9 @@ def use_promo(user_id: int, code: str):
     conn.commit()
     conn.close()
 
-# ==================== ИГРОВЫЕ УТИЛИТЫ ====================
-PRIZES_LIGHT = [
-    {"name": "❌", "value": 0},
-    {"name": "🎁 10", "value": 10},
-    {"name": "❌", "value": 0},
-    {"name": "🎁 15", "value": 15},
-    {"name": "❌", "value": 0},
-    {"name": "🎁 20", "value": 20},
-    {"name": "❌", "value": 0},
-    {"name": "🎁 25", "value": 25},
-    {"name": "❌", "value": 0},
-    {"name": "🎁 30", "value": 30},
-    {"name": "❌", "value": 0},
-    {"name": "🎁 40", "value": 40},
-]
+init_db()
 
-SLOT_SYMBOLS = ['🍒', '🍋', '🍊', '🍇', '🍉', '🍓', '🍑', '🎰']
-SLOT_WIN_MULTIPLIER = 2
-PROMOCODES = {"rifleman": 50, "blant": 50}
-rocket_rounds = {}
-round_counter = 0
-
+# ==================== УТИЛИТЫ ====================
 def get_spin_result(mode: str):
     if mode == "light":
         win_chance = 30
@@ -325,40 +350,14 @@ def get_spin_result(mode: str):
 
     win = random.randint(1, 100) <= win_chance
     if win:
-        if mode == "light":
-            available_prizes = [p for p in PRIZES_LIGHT if p["value"] > 0]
-            if available_prizes:
-                prize = random.choice(available_prizes)
-                return True, prize["name"], prize["value"]
-        elif mode == "normal":
-            value = random.randint(1, 100)
-            return True, f"🎁 {value}", value
-        elif mode == "hard":
-            value = random.randint(1, 500)
-            return True, f"🎁 {value}", value
+        available_prizes = [p for p in PRIZES[mode] if p["value"] > 0]
+        if available_prizes:
+            prize = random.choice(available_prizes)
+            return True, prize["name"], prize["value"]
     return False, "❌ Проигрыш", 0
 
 def get_prizes_for_mode(mode: str):
-    if mode == "light":
-        return PRIZES_LIGHT
-    elif mode == "normal":
-        nums = random.sample(range(1, 101), 6)
-        nums.sort()
-        prizes = []
-        for i in range(6):
-            prizes.append({"name": "❌", "value": 0})
-            prizes.append({"name": f"🎁 {nums[i]}", "value": nums[i]})
-        return prizes
-    elif mode == "hard":
-        nums = random.sample(range(1, 501), 6)
-        nums.sort()
-        prizes = []
-        for i in range(6):
-            prizes.append({"name": "❌", "value": 0})
-            prizes.append({"name": f"🎁 {nums[i]}", "value": nums[i]})
-        return prizes
-    else:
-        return PRIZES_LIGHT
+    return PRIZES[mode]
 
 def get_slot_result(bet: int):
     if bet == 20:
@@ -388,10 +387,26 @@ def get_slot_result(bet: int):
         return False, symbols, 0
 
 # ==================== ТЕЛЕГРАМ БОТ ====================
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command, StateFilter
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, ReplyKeyboardRemove
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
+
 logging.basicConfig(level=logging.INFO)
+
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+# Клавиатура для запроса контакта
+def get_phone_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📱 Поделиться номером", request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
+# Клавиатура для открытия приложения
 def get_start_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[[KeyboardButton(text="🎰 Открыть рулетку", web_app=WebAppInfo(url=WEBAPP_URL))]],
@@ -404,17 +419,59 @@ async def cmd_start(message: types.Message):
     referrer_code = None
     if len(args) > 1 and args[1].startswith("ref_"):
         referrer_code = args[1][4:]
+    
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
-    create_user(user_id, username, referrer_code=referrer_code)
+    
+    # Проверяем, есть ли пользователь с таким ID
+    user = get_user(user_id)
+    if user and user.get("phone"):
+        # Уже зарегистрирован (есть номер) – сразу даём доступ
+        await message.answer(
+            f"🎉 С возвращением, {username}!\n"
+            "Добро пожаловать в **Star Drop** – розыгрыш подарков Telegram!\n\n"
+            "Нажми кнопку ниже, чтобы открыть наше мини-приложение и испытать удачу! 🍀",
+            reply_markup=get_start_keyboard()
+        )
+    else:
+        # Нет номера – запрашиваем
+        if not user:
+            # Создаём запись без телефона
+            create_user(user_id, username, referrer_code=referrer_code)
+        await message.answer(
+            f"👋 Привет, {username}!\n\n"
+            "Для доступа к нашему сервису необходимо поделиться номером телефона.\n"
+            "Нажмите кнопку ниже, чтобы отправить контакт.",
+            reply_markup=get_phone_keyboard()
+        )
+
+# Обработчик контакта
+@dp.message(F.contact)
+async def handle_contact(message: types.Message):
+    contact = message.contact
+    user_id = message.from_user.id
+    username = message.from_user.username or message.from_user.first_name
+    
+    if contact.user_id != user_id:
+        await message.answer("⛔ Пожалуйста, отправьте свой собственный номер.", reply_markup=get_phone_keyboard())
+        return
+    
+    phone = contact.phone_number
+    # Сохраняем номер в базу
+    create_user(user_id, username, phone)
+    
     await message.answer(
-        f"🎉 Привет, {username}!\n"
-        "Добро пожаловать в **Star Drop** – розыгрыш подарков Telegram!\n\n"
-        f"Вам начислено {START_BALANCE} токенов в подарок! 🎁\n"
-        "Нажми кнопку ниже, чтобы открыть приложение и начать игру.",
+        "✅ Регистрация успешно завершена!\n\n"
+        "Теперь вы можете пользоваться нашим сервисом. 🎉",
+        reply_markup=ReplyKeyboardRemove()
+    )
+    # Отправляем кнопку для открытия приложения
+    await message.answer(
+        "Нажмите кнопку ниже, чтобы открыть **Star Drop** и начать игру!",
         reply_markup=get_start_keyboard()
     )
 
+# ==================== АДМИН-КОМАНДА /give ====================
 @dp.message(Command("give"))
 async def give_tokens(message: types.Message):
     if message.from_user.id != ADMIN_ID:
@@ -443,8 +500,18 @@ async def give_tokens(message: types.Message):
     except ValueError:
         await message.answer("ID и сумма должны быть числами.")
 
-# ==================== FASTAPI ====================
+# ==================== ВЕБ-СЕРВЕР (FASTAPI) ====================
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+import uvicorn
+import aiofiles
+import aiohttp
+
 app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -458,79 +525,22 @@ AVATARS_DIR = os.path.join(STATIC_DIR, "avatars")
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(AVATARS_DIR, exist_ok=True)
 
-# ==================== МОДЕЛИ ====================
-class RegisterRequest(BaseModel):
-    telegram_id: int
-    phone: str
-
-class SpinRequest(BaseModel):
-    user_id: int
-    mode: str
-
-class WithdrawRequest(BaseModel):
-    user_id: int
-    amount: int
-
-class PromoRequest(BaseModel):
-    user_id: int
-    code: str
-
-class SlotSpinRequest(BaseModel):
-    user_id: int
-    bet: int
-
-class RocketStartRequest(BaseModel):
-    user_id: int
-    bet: int
-
-class RocketCashoutRequest(BaseModel):
-    round_id: int
-    user_id: int
-
-class GiftBattleRequest(BaseModel):
-    user_id: int
-    gift_id: int
-
-# ==================== НОВЫЙ ЭНДПОИНТ ДЛЯ БИТВЫ ====================
-@app.get("/api/gifts")
-async def api_get_gifts():
-    return GIFTS
-
-@app.post("/api/gift_battle")
-async def api_gift_battle(data: GiftBattleRequest):
-    user_id = data.user_id
-    gift_id = data.gift_id
-    gift = next((g for g in GIFTS if g["id"] == gift_id), None)
-    if not gift:
-        raise HTTPException(status_code=404, detail="Подарок не найден")
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user["balance"] < gift["cost"]:
-        raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    update_balance(user_id, -gift["cost"], f"Отправка подарка {gift['name']}")
-    add_win(user_id, f"{gift['emoji']} {gift['name']}", gift["cost"], "gift_battle")
-    new_balance = get_user(user_id)["balance"]
-    return {
-        "success": True,
-        "message": f"Вы отправили {gift['emoji']} {gift['name']}!",
-        "new_balance": new_balance,
-        "gift": gift
-    }
-
-# ==================== ОСТАЛЬНЫЕ ЭНДПОИНТЫ ====================
+# ==================== ЭНДПОИНТ ДЛЯ АВАТАРКИ ====================
 @app.get("/api/avatar/{user_id}")
 async def get_avatar(user_id: int):
     avatar_path = os.path.join(AVATARS_DIR, f"{user_id}.jpg")
     if os.path.exists(avatar_path):
         return {"url": f"/static/avatars/{user_id}.jpg"}
+    
     try:
         photos = await bot.get_user_profile_photos(user_id, limit=1)
         if photos.total_count == 0:
             return {"url": "/static/default_avatar.png"}
+        
         file_id = photos.photos[0][-1].file_id
         file = await bot.get_file(file_id)
         file_path = file.file_path
+        
         async with aiohttp.ClientSession() as session:
             url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
             async with session.get(url) as resp:
@@ -544,247 +554,16 @@ async def get_avatar(user_id: int):
         logging.error(f"Avatar error: {e}")
         return {"url": "/static/default_avatar.png"}
 
-@app.post("/api/register")
-async def register_user(data: RegisterRequest):
-    user = get_user(data.telegram_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user.get("phone"):
-        raise HTTPException(status_code=400, detail="Phone already registered")
-    create_user(data.telegram_id, phone=data.phone)
-    return {"status": "success", "message": "Phone registered"}
-
-@app.get("/api/user/{user_id}")
-async def api_get_user(user_id: int):
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"balance": user["balance"], "username": user["username"], "phone": user.get("phone")}
-
-@app.get("/api/user_bets/{user_id}")
-async def api_user_bets(user_id: int):
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    bets = get_user_bets(user_id, 50)
-    return bets
-
-@app.post("/api/spin")
-async def api_spin(data: SpinRequest):
-    user_id = data.user_id
-    mode = data.mode
-    cost = SPIN_COSTS.get(mode, 25)
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user["balance"] < cost:
-        raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    update_balance(user_id, -cost, f"Спин в режиме {mode}")
-    win, prize_name, prize_value = get_spin_result(mode)
-    if win:
-        update_balance(user_id, prize_value, f"Выигрыш: {prize_name}")
-        add_win(user_id, prize_name, prize_value, mode)
-        message = f"🎉 Вы выиграли {prize_name} (+{prize_value} токенов)!"
-    else:
-        message = "😞 К сожалению, вы проиграли. Попробуйте ещё раз!"
-    new_balance = get_user(user_id)["balance"]
-    return {
-        "win": win,
-        "prize_name": prize_name if win else None,
-        "prize_value": prize_value if win else 0,
-        "new_balance": new_balance,
-        "message": message
-    }
-
-@app.post("/api/slot_spin")
-async def api_slot_spin(data: SlotSpinRequest):
-    user_id = data.user_id
-    bet = data.bet
-    if bet < 20 or bet > 100:
-        raise HTTPException(status_code=400, detail="Ставка должна быть от 20 до 100 токенов")
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user["balance"] < bet:
-        raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    update_balance(user_id, -bet, f"Ставка в игровом автомате {bet} токенов")
-    win, symbols, win_amount = get_slot_result(bet)
-    if win:
-        update_balance(user_id, win_amount, f"Выигрыш в игровом автомате {win_amount} токенов")
-        add_win(user_id, f"🎰 {symbols[0]}{symbols[1]}{symbols[2]}", win_amount, "slot")
-    new_balance = get_user(user_id)["balance"]
-    return {
-        "win": win,
-        "symbols": symbols,
-        "win_amount": win_amount if win else 0,
-        "new_balance": new_balance
-    }
-
-@app.post("/api/rocket/start")
-async def rocket_start(data: RocketStartRequest):
-    user_id = data.user_id
-    bet = data.bet
-    if bet < 1:
-        raise HTTPException(status_code=400, detail="Ставка должна быть больше 0")
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user["balance"] < bet:
-        raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    update_balance(user_id, -bet, f"Ставка в ракетке {bet} токенов")
-    if random.random() < 0.05:
-        crash_display = 0.7 + random.random() * 98.3
-    else:
-        crash_display = random.random() * 0.7
-    global round_counter
-    round_counter += 1
-    round_id = round_counter
-    rocket_rounds[round_id] = {
-        "user_id": user_id,
-        "bet": bet,
-        "crash_display": crash_display,
-        "start_time": time.time(),
-        "status": "active",
-        "current_display": 0.0
-    }
-    return {"round_id": round_id}
-
-@app.get("/api/rocket/status/{round_id}")
-async def rocket_status(round_id: int):
-    if round_id not in rocket_rounds:
-        raise HTTPException(status_code=404, detail="Round not found")
-    round_data = rocket_rounds[round_id]
-    if round_data["status"] == "crashed":
-        return {
-            "display_multiplier": round_data["crash_display"],
-            "crashed": True,
-            "cashed_out": False
-        }
-    if round_data["status"] == "cashed_out":
-        return {
-            "display_multiplier": round_data["current_display"],
-            "crashed": False,
-            "cashed_out": True
-        }
-    elapsed = time.time() - round_data["start_time"]
-    display_multiplier = elapsed * 0.3
-    if display_multiplier >= round_data["crash_display"]:
-        round_data["status"] = "crashed"
-        return {
-            "display_multiplier": round_data["crash_display"],
-            "crashed": True,
-            "cashed_out": False
-        }
-    else:
-        round_data["current_display"] = display_multiplier
-        return {
-            "display_multiplier": display_multiplier,
-            "crashed": False,
-            "cashed_out": False
-        }
-
-@app.post("/api/rocket/cashout")
-async def rocket_cashout(data: RocketCashoutRequest):
-    round_id = data.round_id
-    user_id = data.user_id
-    if round_id not in rocket_rounds:
-        raise HTTPException(status_code=404, detail="Round not found")
-    round_data = rocket_rounds[round_id]
-    if round_data["user_id"] != user_id:
-        raise HTTPException(status_code=403, detail="Not your round")
-    if round_data["status"] != "active":
-        raise HTTPException(status_code=400, detail="Round already finished")
-    elapsed = time.time() - round_data["start_time"]
-    display_multiplier = elapsed * 0.3
-    if display_multiplier >= round_data["crash_display"]:
-        round_data["status"] = "crashed"
-        raise HTTPException(status_code=400, detail="Ракета уже упала")
-    real_multiplier = 1.0 + display_multiplier
-    win_amount = int(round_data["bet"] * real_multiplier)
-    update_balance(user_id, win_amount, f"Выигрыш в ракетке {win_amount} токенов")
-    add_win(user_id, f"🚀 x{real_multiplier:.2f}", win_amount, "rocket")
-    round_data["status"] = "cashed_out"
-    round_data["current_display"] = display_multiplier
-    new_balance = get_user(user_id)["balance"]
-    return {
-        "win_amount": win_amount,
-        "new_balance": new_balance,
-        "multiplier": real_multiplier
-    }
-
-@app.post("/api/withdraw")
-async def api_withdraw(data: WithdrawRequest):
-    user_id = data.user_id
-    amount = data.amount
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user["balance"] < amount:
-        raise HTTPException(status_code=400, detail="Недостаточно токенов")
-    if amount < 500:
-        raise HTTPException(status_code=400, detail="Минимальная сумма вывода – 500 токенов")
-    create_withdraw_request(user_id, amount)
-    return {"status": "success", "message": "Заявка на вывод отправлена администратору"}
-
-@app.get("/api/leaderboard")
-async def api_leaderboard():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10")
-    rows = cur.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
-
-@app.get("/api/recent_wins")
-async def api_recent_wins():
-    return get_recent_wins(limit=10)
-
-@app.get("/api/prizes/{mode}")
-async def api_get_prizes(mode: str):
-    if mode not in SPIN_COSTS:
-        raise HTTPException(status_code=400, detail="Invalid mode")
-    return get_prizes_for_mode(mode)
-
-@app.get("/api/referral/{user_id}")
-async def api_get_referral(user_id: int):
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    info = get_referral_info(user_id)
-    link = get_referral_link(user_id)
-    return {"code": info["code"], "count": info["count"], "link": link}
-
-@app.post("/api/activate_promo")
-async def activate_promo(data: PromoRequest):
-    user_id = data.user_id
-    code = data.code.lower().strip()
-    user = get_user(user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if code not in PROMOCODES:
-        raise HTTPException(status_code=400, detail="Неверный промокод")
-    if is_promo_used(user_id, code):
-        raise HTTPException(status_code=400, detail="Вы уже использовали этот промокод")
-    reward = PROMOCODES[code]
-    update_balance(user_id, reward, f"Промокод {code}")
-    use_promo(user_id, code)
-    new_balance = get_user(user_id)["balance"]
-    return {
-        "status": "success",
-        "message": f"Промокод активирован! Вы получили +{reward} токенов",
-        "new_balance": new_balance
-    }
-
-# ==================== СТАТИЧЕСКИЕ ФАЙЛЫ (обновлённые) ====================
-static_files = {
+# ==================== СТАТИЧЕСКИЕ ФАЙЛЫ ====================
+# Теперь index.html, style.css и script.js обновлены с новым дизайном колеса
+STATIC_FILES = {
     "index.html": """<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Star Drop</title>
-    <link rel="stylesheet" href="/static/style.css?v=10">
+    <link rel="stylesheet" href="/static/style.css?v=4">
 </head>
 <body class="theme-light">
     <div class="stars-background">
@@ -844,7 +623,7 @@ static_files = {
             </div>
         </div>
 
-        <!-- РУЛЕТКА -->
+        <!-- РУЛЕТКА (НОВЫЙ ДИЗАЙН) -->
         <div id="roulette-page">
             <div id="main-title">
                 <h1>РУЛЕТКА STAR DROP</h1>
@@ -863,92 +642,29 @@ static_files = {
                 <button class="mode-btn" data-mode="normal">Normal</button>
                 <button class="mode-btn" data-mode="hard">Hard</button>
             </div>
+
+            <!-- Колесо -->
             <div id="wheel-container">
-                <div class="wheel-wrapper">
-                    <div id="wheel-pointer">▼</div>
-                    <div class="wheel" id="wheel">
-                        <!-- Сектор 1 - зелёный (выигрыш) -->
-                        <div class="sector s1" data-win-index="0">
-                            <div class="sector-content">
-                                <span class="icon icon-gift">🧸</span>
-                                <span class="number">10</span>
-                            </div>
-                        </div>
-                        <!-- Сектор 2 - красный (проигрыш) -->
-                        <div class="sector s2" data-win-index="-1">
-                            <div class="sector-content">
-                                <span class="icon icon-cross">✕</span>
-                            </div>
-                        </div>
-                        <!-- Сектор 3 - зелёный -->
-                        <div class="sector s3" data-win-index="1">
-                            <div class="sector-content">
-                                <span class="icon icon-gift">💎</span>
-                                <span class="number">15</span>
-                            </div>
-                        </div>
-                        <!-- Сектор 4 - красный -->
-                        <div class="sector s4" data-win-index="-1">
-                            <div class="sector-content">
-                                <span class="icon icon-cross">✕</span>
-                            </div>
-                        </div>
-                        <!-- Сектор 5 - зелёный -->
-                        <div class="sector s5" data-win-index="2">
-                            <div class="sector-content">
-                                <span class="icon icon-gift">💍</span>
-                                <span class="number">20</span>
-                            </div>
-                        </div>
-                        <!-- Сектор 6 - красный -->
-                        <div class="sector s6" data-win-index="-1">
-                            <div class="sector-content">
-                                <span class="icon icon-cross">✕</span>
-                            </div>
-                        </div>
-                        <!-- Сектор 7 - зелёный -->
-                        <div class="sector s7" data-win-index="3">
-                            <div class="sector-content">
-                                <span class="icon icon-gift">🧁</span>
-                                <span class="number">25</span>
-                            </div>
-                        </div>
-                        <!-- Сектор 8 - красный -->
-                        <div class="sector s8" data-win-index="-1">
-                            <div class="sector-content">
-                                <span class="icon icon-cross">✕</span>
-                            </div>
-                        </div>
-                        <!-- Сектор 9 - зелёный -->
-                        <div class="sector s9" data-win-index="4">
-                            <div class="sector-content">
-                                <span class="icon icon-gift">🧢</span>
-                                <span class="number">30</span>
-                            </div>
-                        </div>
-                        <!-- Сектор 10 - красный -->
-                        <div class="sector s10" data-win-index="-1">
-                            <div class="sector-content">
-                                <span class="icon icon-cross">✕</span>
-                            </div>
-                        </div>
-                        <!-- Сектор 11 - зелёный -->
-                        <div class="sector s11" data-win-index="5">
-                            <div class="sector-content">
-                                <span class="icon icon-gift">🚀</span>
-                                <span class="number">40</span>
-                            </div>
-                        </div>
-                        <!-- Сектор 12 - красный -->
-                        <div class="sector s12" data-win-index="-1">
-                            <div class="sector-content">
-                                <span class="icon icon-cross">✕</span>
-                            </div>
-                        </div>
-                        <div class="wheel-center"></div>
-                    </div>
+                <div id="wheel-pointer">▼</div>
+                <div class="wheel" id="wheel">
+                    <!-- Сектора генерируются через JS, но мы можем оставить статичную разметку и обновлять числа -->
+                    <!-- Для удобства используем классы .sector и data-атрибуты -->
+                    <div class="sector s1" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
+                    <div class="sector s2" data-win-index="0"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">10</span></div></div>
+                    <div class="sector s3" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
+                    <div class="sector s4" data-win-index="1"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">15</span></div></div>
+                    <div class="sector s5" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
+                    <div class="sector s6" data-win-index="2"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">20</span></div></div>
+                    <div class="sector s7" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
+                    <div class="sector s8" data-win-index="3"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">25</span></div></div>
+                    <div class="sector s9" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
+                    <div class="sector s10" data-win-index="4"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">30</span></div></div>
+                    <div class="sector s11" data-win-index="-1"><div class="sector-content"><span class="icon icon-cross">✕</span></div></div>
+                    <div class="sector s12" data-win-index="5"><div class="sector-content"><span class="icon icon-gift">🎁</span><span class="number">40</span></div></div>
+                    <div class="wheel-center"></div>
                 </div>
             </div>
+
             <div id="spin-area">
                 <div id="spin-info">1 спин = <span id="spin-cost">25</span> монет</div>
                 <button id="spin-btn">КРУТИТЬ <span id="spin-cost-label">25 Токенов</span></button>
@@ -995,9 +711,8 @@ static_files = {
                     <canvas id="rocketCanvas" width="300" height="200"></canvas>
                 </div>
                 <div id="rocket-bet-control">
-                    <label for="rocket-bet-input">Ваша ставка (токены):</label>
-                    <input type="number" id="rocket-bet-input" min="1" step="1" value="50" style="width:100%; padding:8px; border-radius:8px; border:1px solid var(--accent-color); background:#222; color:#fff; font-size:16px; text-align:center; max-width:200px; margin:5px auto;">
-                    <div style="font-size:12px; color:#888; margin-top:4px;">Минимальная ставка – 1 токен</div>
+                    <label>Ставка: <span id="rocket-bet-display">500</span> токенов</label>
+                    <input type="range" id="rocket-bet-range" min="500" max="5000" step="100" value="500">
                 </div>
                 <div id="rocket-buttons">
                     <button id="rocket-start-btn">🚀 Старт</button>
@@ -1006,22 +721,6 @@ static_files = {
                 <div id="rocket-timer">Следующий взлёт через: <span id="rocket-countdown">5</span>с</div>
                 <div id="rocket-result"></div>
             </div>
-        </div>
-
-        <!-- НОВАЯ ВКЛАДКА: БИТВА ПОДАРКОВ -->
-        <div id="battle-page" style="display:none;">
-            <div id="main-title">
-                <h1>⚔️ БИТВА ПОДАРКОВ</h1>
-                <p>Выбери подарок и отправь в бой!</p>
-            </div>
-            <div id="battle-gifts" style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:15px 0;">
-                <!-- Заполняется JS -->
-            </div>
-            <div id="battle-status" style="text-align:center; font-size:18px; min-height:40px; color:var(--accent-color);"></div>
-            <div id="battle-animation" style="display:none; text-align:center; margin:10px 0;">
-                <canvas id="battleCanvas" width="300" height="200" style="border-radius:12px; background:#0a0a0a;"></canvas>
-            </div>
-            <button id="battle-send-btn" style="display:none; background:var(--accent-color); color:#0a0a0a; border:none; padding:12px 30px; border-radius:30px; font-weight:700; font-size:18px; cursor:pointer; width:100%; max-width:280px; margin:10px auto; box-shadow:0 0 20px var(--accent-glow);">Отправить в битву</button>
         </div>
 
         <div id="notification-feed">
@@ -1041,11 +740,10 @@ static_files = {
             <button class="nav-btn active" data-tab="roulette">Рулетка</button>
             <button class="nav-btn" data-tab="slot">Барабан</button>
             <button class="nav-btn" data-tab="rocket">Ракетка</button>
-            <button class="nav-btn" data-tab="battle">⚔️ Битва</button>
         </div>
     </div>
 
-    <script src="/static/script.js?v=10"></script>
+    <script src="/static/script.js?v=4"></script>
 </body>
 </html>""",
     "style.css": """* {
@@ -1062,7 +760,7 @@ static_files = {
     --text-light: #fff;
     --card-bg: #111;
     --border-color: #333;
-    --wheel-size: 280px;
+    --wheel-size: 280px; /* Размер колеса */
     --gold-color: #e6c65c;
     --red-sector: #ab2b44;
     --green-sector: #2b805e;
@@ -1094,6 +792,7 @@ body.theme-hard {
     --accent-glow: #f4433666;
 }
 
+/* Анимированный фон */
 .stars-background {
     position: fixed;
     top: 0;
@@ -1104,6 +803,7 @@ body.theme-hard {
     z-index: -1;
     overflow: hidden;
 }
+
 .stars-background span {
     position: absolute;
     display: block;
@@ -1114,6 +814,7 @@ body.theme-hard {
     animation: float var(--duration) ease-in-out infinite alternate;
     animation-delay: var(--delay);
 }
+
 .stars-background span:nth-child(1) { left: 5%; top: 10%; --duration: 12s; --delay: 0s; animation: float1 12s ease-in-out infinite alternate; }
 .stars-background span:nth-child(2) { left: 15%; top: 20%; --duration: 15s; --delay: 2s; animation: float2 15s ease-in-out infinite alternate; }
 .stars-background span:nth-child(3) { left: 25%; top: 5%; --duration: 10s; --delay: 1s; animation: float3 10s ease-in-out infinite alternate; }
@@ -1164,6 +865,7 @@ body.theme-hard {
 @keyframes float23 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(25px, 10px) rotate(35deg); } }
 @keyframes float24 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-15px, -10px) rotate(-15deg); } }
 
+/* Остальные стили */
 #top-bar {
     display: flex;
     justify-content: space-between;
@@ -1172,12 +874,14 @@ body.theme-hard {
     border-bottom: 1px solid var(--border-color);
     z-index: 2;
 }
+
 #user-info {
     display: flex;
     align-items: center;
     gap: 10px;
     cursor: pointer;
 }
+
 #avatar-container {
     width: 32px;
     height: 32px;
@@ -1186,12 +890,14 @@ body.theme-hard {
     background: var(--accent-color);
     flex-shrink: 0;
 }
+
 #avatar-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: none;
 }
+
 #avatar-placeholder {
     display: flex;
     align-items: center;
@@ -1202,21 +908,27 @@ body.theme-hard {
     font-size: 16px;
     color: #0a0a0a;
 }
+
 #username {
     font-size: 18px;
     font-weight: 600;
     color: var(--accent-color);
+    transition: color 0.3s;
 }
+
 #balance {
     font-size: 18px;
     display: flex;
     align-items: center;
     gap: 8px;
     color: var(--accent-color);
+    transition: color 0.3s;
 }
+
 #balance-amount {
     font-weight: 700;
 }
+
 #deposit-btn, #bets-btn {
     background: var(--accent-color);
     border: none;
@@ -1226,7 +938,9 @@ body.theme-hard {
     color: #0a0a0a;
     cursor: pointer;
     font-size: 12px;
+    transition: background 0.3s;
 }
+
 #deposit-btn {
     border-radius: 50%;
     width: 28px;
@@ -1234,6 +948,7 @@ body.theme-hard {
     font-size: 20px;
     padding: 0;
 }
+
 #deposit-menu {
     background: var(--card-bg);
     border: 1px solid var(--accent-color);
@@ -1246,7 +961,9 @@ body.theme-hard {
     justify-content: center;
     z-index: 10;
     box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    transition: border-color 0.3s;
 }
+
 .deposit-option {
     background: var(--accent-color);
     color: #0a0a0a;
@@ -1255,14 +972,17 @@ body.theme-hard {
     border-radius: 8px;
     font-weight: 600;
     cursor: pointer;
+    transition: background 0.3s, filter 0.2s;
 }
 .deposit-option:hover { filter: brightness(1.1); }
+
 #close-deposit {
     background: transparent;
     color: var(--accent-color);
     border: none;
     font-size: 20px;
     cursor: pointer;
+    transition: color 0.3s;
 }
 
 #main-title {
@@ -1270,13 +990,16 @@ body.theme-hard {
     margin: 20px 0 10px;
     z-index: 2;
 }
+
 #main-title h1 {
     font-size: 24px;
     font-weight: 900;
     color: var(--accent-color);
     letter-spacing: 2px;
     text-shadow: 0 0 10px var(--accent-glow);
+    transition: color 0.3s, text-shadow 0.3s;
 }
+
 #main-title p {
     color: #aaa;
     font-size: 14px;
@@ -1293,6 +1016,7 @@ body.theme-hard {
     max-width: 400px;
     z-index: 2;
 }
+
 .prize-item {
     background: #1a1a1a;
     border: 1px solid var(--border-color);
@@ -1308,6 +1032,7 @@ body.theme-hard {
     margin: 10px 0;
     z-index: 2;
 }
+
 .mode-btn {
     background: #222;
     color: #aaa;
@@ -1316,6 +1041,7 @@ body.theme-hard {
     border-radius: 20px;
     font-weight: 600;
     cursor: pointer;
+    transition: all 0.2s;
     font-size: 13px;
 }
 .mode-btn.active {
@@ -1324,40 +1050,27 @@ body.theme-hard {
     box-shadow: 0 0 15px var(--accent-glow);
 }
 
-/* ===== КОЛЕСО (финальная версия) ===== */
+/* ============ НОВЫЙ ДИЗАЙН КОЛЕСА ============ */
 #wheel-container {
     position: relative;
     width: var(--wheel-size);
     height: var(--wheel-size);
-    margin: 20px auto;
+    margin: 15px auto;
     z-index: 2;
 }
 
-.wheel-wrapper {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    padding: 14px;
-    background: radial-gradient(circle at 30% 30%, #f0e68c, #b8860b);
-    box-shadow: 
-        0 0 40px rgba(255, 215, 0, 0.6),
-        inset 0 0 30px rgba(0, 0, 0, 0.5);
-    box-sizing: border-box;
-}
-
-.wheel-wrapper::before {
-    content: '';
+#wheel-pointer {
     position: absolute;
-    top: -8px;
-    left: -8px;
-    right: -8px;
-    bottom: -8px;
-    border-radius: 50%;
-    background: linear-gradient(145deg, #ffd700, #b8860b);
-    z-index: -1;
-    filter: blur(12px);
-    opacity: 0.5;
+    top: -20px; /* Немного выше обода */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    border-top: 40px solid var(--gold-color);
+    z-index: 10;
+    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5));
 }
 
 .wheel {
@@ -1366,14 +1079,18 @@ body.theme-hard {
     border-radius: 50%;
     position: relative;
     overflow: hidden;
-    background: #1a1a1a;
-    transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
-    will-change: transform;
     box-shadow: 
-        inset 0 0 60px rgba(0, 0, 0, 0.8),
-        0 0 50px rgba(255, 215, 0, 0.3);
+        0 0 0 15px var(--metal-rim),
+        0 0 30px 20px rgba(0, 0, 0, 0.3);
+    background: #000;
+    transition: transform 4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
+.wheel.spinning {
+    animation: none; /* Управляем через JS transform */
+}
+
+/* Базовый стиль для секторов */
 .sector {
     position: absolute;
     width: 50%;
@@ -1384,21 +1101,29 @@ body.theme-hard {
     justify-content: flex-start;
     align-items: center;
     box-sizing: border-box;
-    padding-top: 8%;
+    padding-top: 10%;
     backface-visibility: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: inset 0 -6px 12px rgba(0, 0, 0, 0.4);
 }
 
-/* Зелёные (выигрышные) – нечётные сектора */
-.sector:nth-child(odd) {
-    background: linear-gradient(145deg, #2b805e, #1a5a3e);
-}
-/* Красные (проигрышные) – чётные сектора */
-.sector:nth-child(even) {
-    background: linear-gradient(145deg, #ab2b44, #8b1a2b);
-}
+/* Стилизация секторов (чередование цветов) */
+.sector:nth-child(odd) { background-color: var(--red-sector); }
+.sector:nth-child(even) { background-color: var(--green-sector); }
 
+/* Позиционирование 12 секторов (360deg / 12 = 30deg каждый) */
+.s1 { transform: rotate(0deg) skewY(-60deg); }
+.s2 { transform: rotate(30deg) skewY(-60deg); }
+.s3 { transform: rotate(60deg) skewY(-60deg); }
+.s4 { transform: rotate(90deg) skewY(-60deg); }
+.s5 { transform: rotate(120deg) skewY(-60deg); }
+.s6 { transform: rotate(150deg) skewY(-60deg); }
+.s7 { transform: rotate(180deg) skewY(-60deg); }
+.s8 { transform: rotate(210deg) skewY(-60deg); }
+.s9 { transform: rotate(240deg) skewY(-60deg); }
+.s10 { transform: rotate(270deg) skewY(-60deg); }
+.s11 { transform: rotate(300deg) skewY(-60deg); }
+.s12 { transform: rotate(330deg) skewY(-60deg); }
+
+/* Компенсация skewY для контента внутри сектора */
 .sector-content {
     transform: skewY(60deg);
     display: flex;
@@ -1406,137 +1131,46 @@ body.theme-hard {
     align-items: center;
     width: 100%;
     position: absolute;
-    top: 12%;
-    pointer-events: none;
+    top: 30px; /* Регулировка положения контента внутри сектора */
 }
 
+/* Иконки */
 .icon {
-    font-size: 34px;
-    margin-bottom: 2px;
-    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
-    line-height: 1;
+    font-size: 28px;
+    margin-bottom: 4px;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
 }
-
 .icon-cross {
     color: #ff4d4d;
-    font-size: 38px;
-    font-weight: 900;
-    text-shadow: 0 0 12px #ff4d4d88;
+    font-weight: bold;
 }
-
 .icon-gift {
-    font-size: 36px;
+    color: #fff;
+    font-size: 24px;
 }
 
+/* Числа */
 .number {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    font-weight: 900;
+    font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+    font-weight: bold;
     font-size: 22px;
     color: #fff;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
-    background: rgba(0, 0, 0, 0.55);
-    padding: 2px 14px;
-    border-radius: 30px;
-    backdrop-filter: blur(4px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
 }
 
-/* У красных секторов скрываем число */
-.sector:nth-child(even) .number {
-    display: none;
-}
-
-/* Указатель */
-#wheel-pointer {
-    position: absolute;
-    top: -26px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 20px solid transparent;
-    border-right: 20px solid transparent;
-    border-top: 48px solid #ffd700;
-    z-index: 20;
-    filter: drop-shadow(0 8px 16px rgba(255, 215, 0, 0.8));
-    transition: filter 0.3s;
-}
-
-#wheel-pointer::after {
-    content: '';
-    position: absolute;
-    top: -50px;
-    left: -12px;
-    width: 24px;
-    height: 14px;
-    background: linear-gradient(180deg, #ffd700, #b8860b);
-    border-radius: 50% 50% 0 0;
-    clip-path: polygon(0 0, 100% 0, 50% 100%);
-}
-
-/* Центральная кнопка */
+/* Центральная часть */
 .wheel-center {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 24%;
-    height: 24%;
-    background: radial-gradient(circle at 30% 30%, #f0e68c, #b8860b 80%, #8b6508);
+    width: 20%;
+    height: 20%;
+    background: radial-gradient(circle, #1a1d2a 40%, #000 70%);
     border-radius: 50%;
-    border: 5px solid #ffd700;
-    box-shadow: 
-        inset 0 -8px 16px rgba(0, 0, 0, 0.6),
-        inset 0 8px 16px rgba(255, 215, 0, 0.4),
-        0 0 40px rgba(255, 215, 0, 0.5);
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 900;
-    font-size: 20px;
-    color: #1a1a1a;
-    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
-    cursor: default;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.wheel-center:active {
-    transform: translate(-50%, -50%) scale(0.95);
-    box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.8);
-}
-
-/* Декоративные огоньки */
-.wheel-wrapper::after {
-    content: '';
-    position: absolute;
-    top: -10px;
-    left: -10px;
-    right: -10px;
-    bottom: -10px;
-    border-radius: 50%;
-    background: repeating-conic-gradient(
-        from 0deg,
-        #ffd700 0deg 4deg,
-        transparent 4deg 10deg
-    );
-    opacity: 0.15;
-    z-index: -1;
-    animation: glowPulse 2.5s ease-in-out infinite alternate;
-}
-
-@keyframes glowPulse {
-    0% { opacity: 0.1; }
-    100% { opacity: 0.35; }
-}
-
-/* Адаптация для мобильных */
-@media (max-width: 480px) {
-    .icon { font-size: 28px; }
-    .icon-gift { font-size: 30px; }
-    .number { font-size: 18px; padding: 1px 10px; }
-    #wheel-pointer { border-left-width: 16px; border-right-width: 16px; border-top-width: 38px; top: -22px; }
-    .wheel-center { font-size: 16px; border-width: 4px; }
+    border: 4px solid var(--gold-color);
+    z-index: 5;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
 }
 
 #spin-area {
@@ -1546,11 +1180,13 @@ body.theme-hard {
     margin: 15px 0;
     z-index: 2;
 }
+
 #spin-info {
     font-size: 14px;
     color: #aaa;
     margin-bottom: 8px;
 }
+
 #spin-btn {
     background: var(--accent-color);
     color: #0a0a0a;
@@ -1561,13 +1197,22 @@ body.theme-hard {
     font-size: 18px;
     cursor: pointer;
     box-shadow: 0 0 20px var(--accent-glow);
+    transition: transform 0.1s, box-shadow 0.3s, background 0.3s;
     display: flex;
     flex-direction: column;
     align-items: center;
     line-height: 1.2;
 }
-#spin-btn:active { transform: scale(0.95); }
-#spin-btn span { font-size: 14px; font-weight: 400; }
+
+#spin-btn:active {
+    transform: scale(0.95);
+}
+
+#spin-btn span {
+    font-size: 14px;
+    font-weight: 400;
+}
+
 #result-message {
     margin: 10px 0;
     font-size: 18px;
@@ -1577,6 +1222,7 @@ body.theme-hard {
     z-index: 2;
     color: var(--accent-color);
     text-shadow: 0 0 10px var(--accent-glow);
+    transition: color 0.3s, text-shadow 0.3s;
 }
 
 /* Слот */
@@ -1590,12 +1236,14 @@ body.theme-hard {
     width: 100%;
     max-width: 400px;
 }
+
 #reels {
     display: flex;
     justify-content: center;
     gap: 15px;
     padding: 15px 0;
 }
+
 .reel {
     width: 70px;
     height: 80px;
@@ -1607,10 +1255,13 @@ body.theme-hard {
     font-size: 48px;
     border: 2px solid var(--border-color);
     box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+    transition: transform 0.1s;
 }
+
 .reel.spinning {
     animation: spin 0.2s steps(1) infinite;
 }
+
 @keyframes spin {
     0% { transform: rotate(0deg); }
     25% { transform: rotate(90deg); }
@@ -1618,6 +1269,7 @@ body.theme-hard {
     75% { transform: rotate(270deg); }
     100% { transform: rotate(360deg); }
 }
+
 #slot-controls {
     display: flex;
     flex-direction: column;
@@ -1625,25 +1277,36 @@ body.theme-hard {
     gap: 12px;
     margin-top: 10px;
 }
+
 .bet-control {
     width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
 }
-.bet-control label { font-size: 14px; color: #ccc; }
+
+.bet-control label {
+    font-size: 14px;
+    color: #ccc;
+}
+
 #bet-range {
     width: 80%;
     max-width: 250px;
     margin-top: 5px;
     accent-color: var(--accent-color);
 }
+
 #slot-multiplier {
     font-size: 14px;
     color: #aaa;
     margin-top: 4px;
 }
-#slot-multiplier b { color: var(--accent-color); }
+
+#slot-multiplier b {
+    color: var(--accent-color);
+}
+
 #spin-slot-btn {
     background: var(--accent-color);
     color: #0a0a0a;
@@ -1654,10 +1317,15 @@ body.theme-hard {
     font-size: 18px;
     cursor: pointer;
     box-shadow: 0 0 20px var(--accent-glow);
+    transition: transform 0.1s, box-shadow 0.3s, background 0.3s;
     width: 100%;
     max-width: 280px;
 }
-#spin-slot-btn:active { transform: scale(0.95); }
+
+#spin-slot-btn:active {
+    transform: scale(0.95);
+}
+
 #slot-result {
     margin-top: 15px;
     font-size: 18px;
@@ -1678,63 +1346,64 @@ body.theme-hard {
     width: 100%;
     max-width: 400px;
 }
+
 #rocket-display {
     text-align: center;
     padding: 10px 0;
 }
+
 #rocket-multiplier {
     font-size: 48px;
     font-weight: 900;
     color: var(--accent-color);
     text-shadow: 0 0 20px var(--accent-glow);
+    transition: color 0.3s;
 }
+
 #rocket-status {
     font-size: 16px;
     color: #aaa;
     margin-top: 5px;
 }
+
 #rocket-canvas-container {
     width: 100%;
     text-align: center;
 }
+
 #rocketCanvas {
     width: 100%;
     height: auto;
     background: #0a0a0a;
     border-radius: 12px;
 }
+
 #rocket-bet-control {
     display: flex;
     flex-direction: column;
     align-items: center;
     margin: 10px 0;
 }
+
 #rocket-bet-control label {
     font-size: 14px;
     color: #ccc;
-    margin-bottom: 5px;
 }
-#rocket-bet-input {
-    width: 100%;
-    max-width: 200px;
-    padding: 8px;
-    border-radius: 8px;
-    border: 1px solid var(--accent-color);
-    background: #222;
-    color: #fff;
-    font-size: 16px;
-    text-align: center;
+
+#rocket-bet-range {
+    width: 80%;
+    max-width: 250px;
+    margin-top: 5px;
+    accent-color: var(--accent-color);
 }
-#rocket-bet-input:focus {
-    outline: none;
-    box-shadow: 0 0 10px var(--accent-glow);
-}
+
 #rocket-buttons {
     display: flex;
     justify-content: center;
     gap: 12px;
     margin: 15px 0;
 }
+
 #rocket-start-btn, #rocket-cashout-btn {
     background: var(--accent-color);
     color: #0a0a0a;
@@ -1745,23 +1414,31 @@ body.theme-hard {
     font-size: 18px;
     cursor: pointer;
     box-shadow: 0 0 20px var(--accent-glow);
+    transition: transform 0.1s, box-shadow 0.3s, background 0.3s;
     flex: 1;
     max-width: 150px;
 }
+
 #rocket-start-btn:disabled, #rocket-cashout-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
 #rocket-start-btn:active, #rocket-cashout-btn:active {
     transform: scale(0.95);
 }
+
 #rocket-timer {
     font-size: 14px;
     color: #aaa;
     margin: 5px 0;
     text-align: center;
 }
-#rocket-timer span { color: var(--accent-color); }
+
+#rocket-timer span {
+    color: var(--accent-color);
+}
+
 #rocket-result {
     margin-top: 10px;
     font-size: 18px;
@@ -1771,63 +1448,7 @@ body.theme-hard {
     min-height: 30px;
 }
 
-/* Битва подарков */
-#battle-gifts {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-}
-.battle-gift-card {
-    background: #1a1a1a;
-    border: 2px solid var(--border-color);
-    border-radius: 16px;
-    padding: 12px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-.battle-gift-card.selected {
-    border-color: var(--accent-color);
-    box-shadow: 0 0 20px var(--accent-glow);
-}
-.battle-gift-card .emoji {
-    font-size: 36px;
-}
-.battle-gift-card .name {
-    font-size: 14px;
-    color: #ccc;
-}
-.battle-gift-card .cost {
-    font-size: 12px;
-    color: var(--accent-color);
-}
-#battle-send-btn {
-    background: var(--accent-color);
-    color: #0a0a0a;
-    border: none;
-    padding: 12px 30px;
-    border-radius: 30px;
-    font-weight: 700;
-    font-size: 18px;
-    cursor: pointer;
-    box-shadow: 0 0 20px var(--accent-glow);
-    width: 100%;
-    max-width: 280px;
-    margin: 10px auto;
-}
-#battle-send-btn:active { transform: scale(0.95); }
-#battle-status {
-    min-height: 40px;
-    text-align: center;
-    font-weight: 600;
-}
-#battle-animation canvas {
-    width: 100%;
-    height: auto;
-    border-radius: 12px;
-    background: #0a0a0a;
-}
-
+/* Общие элементы */
 #notification-feed {
     width: 100%;
     max-width: 400px;
@@ -1838,22 +1459,27 @@ body.theme-hard {
     z-index: 2;
     border: 1px solid var(--border-color);
 }
+
 #notification-feed h3 {
     color: var(--accent-color);
     margin-bottom: 8px;
     font-size: 16px;
+    transition: color 0.3s;
 }
+
 #feed-list {
     list-style: none;
     max-height: 150px;
     overflow-y: auto;
 }
+
 #feed-list li {
     padding: 6px 0;
     border-bottom: 1px solid var(--border-color);
     font-size: 13px;
     color: #ddd;
 }
+
 #withdraw-btn {
     background: var(--accent-color);
     color: #0a0a0a;
@@ -1866,7 +1492,9 @@ body.theme-hard {
     cursor: pointer;
     box-shadow: 0 0 15px var(--accent-glow);
     z-index: 2;
+    transition: background 0.3s, box-shadow 0.3s;
 }
+
 #promo-area {
     display: flex;
     flex-wrap: wrap;
@@ -1878,6 +1506,7 @@ body.theme-hard {
     width: 100%;
     max-width: 400px;
 }
+
 #promo-input {
     flex: 1;
     min-width: 140px;
@@ -1888,12 +1517,14 @@ body.theme-hard {
     color: #fff;
     outline: none;
     font-size: 14px;
+    transition: border-color 0.3s, box-shadow 0.3s;
     text-align: center;
 }
 #promo-input:focus {
     border-color: var(--accent-color);
     box-shadow: 0 0 10px var(--accent-glow);
 }
+
 #promo-btn {
     background: var(--accent-color);
     color: #0a0a0a;
@@ -1903,15 +1534,20 @@ body.theme-hard {
     font-weight: bold;
     font-size: 14px;
     cursor: pointer;
+    transition: background 0.3s, box-shadow 0.3s;
     box-shadow: 0 0 10px var(--accent-glow);
 }
-#promo-btn:active { transform: scale(0.95); }
+#promo-btn:active {
+    transform: scale(0.95);
+}
+
 #promo-message {
     width: 100%;
     font-size: 14px;
     text-align: center;
     min-height: 20px;
     color: var(--accent-color);
+    transition: color 0.3s;
 }
 
 #bottom-nav {
@@ -1926,28 +1562,35 @@ body.theme-hard {
     border-top: 1px solid var(--border-color);
     z-index: 10;
 }
+
 .nav-btn {
     background: transparent;
     color: #888;
     border: none;
     font-size: 14px;
     font-weight: 600;
-    padding: 6px 12px;
+    padding: 6px 20px;
     border-radius: 20px;
     cursor: pointer;
+    transition: 0.2s;
 }
 .nav-btn.active {
     color: var(--accent-color);
     background: rgba(255,215,0,0.1);
 }
+
 #bets-modal ul li {
     padding: 8px 0;
     border-bottom: 1px solid var(--border-color);
     color: #ddd;
     font-size: 14px;
 }
-#bets-modal ul li span.positive { color: #4CAF50; }
-#bets-modal ul li span.negative { color: #f44336; }
+#bets-modal ul li span.positive {
+    color: #4CAF50;
+}
+#bets-modal ul li span.negative {
+    color: #f44336;
+}
 """,
     "script.js": """const BASE_URL = window.location.origin;
 let user_id = null;
@@ -1956,10 +1599,7 @@ let currentMode = 'light';
 let isSpinning = false;
 let currentRotation = 0;
 
-// === Битва подарков ===
-let selectedGiftId = null;
-let battleAnimationId = null;
-
+// === Получение данных пользователя из Telegram ===
 function showAuthError(message) {
     document.body.innerHTML = `
         <div style="display:flex; justify-content:center; align-items:center; height:100vh; flex-direction:column; background:#0a0a0a; color:#fff; text-align:center; padding:20px;">
@@ -2014,6 +1654,12 @@ async function loadAvatar(userId) {
     }
 }
 
+fetchUserData().then(() => {
+    initGames();
+}).catch(() => {
+    initGames();
+});
+
 async function fetchUserData() {
     if (!user_id) return;
     try {
@@ -2025,52 +1671,9 @@ async function fetchUserData() {
         if (data.username && data.username !== '') {
             document.getElementById('username').textContent = '@' + data.username;
         }
-        if (!data.phone) {
-            showRegistrationForm();
-        }
     } catch (e) {
         console.error('Ошибка загрузки пользователя:', e);
     }
-}
-
-function showRegistrationForm() {
-    const form = document.createElement('div');
-    form.id = 'registration-form';
-    form.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999;';
-    form.innerHTML = `
-        <div style="background:#1a1a1a; padding:30px; border-radius:12px; max-width:320px; width:90%; text-align:center; border:1px solid var(--accent-color);">
-            <h2 style="color:var(--accent-color); margin-bottom:10px;">Регистрация</h2>
-            <p style="color:#ccc; font-size:14px;">Введите ваш номер телефона для регистрации:</p>
-            <input type="tel" id="phone-input" placeholder="+7XXXXXXXXXX" style="width:100%; padding:12px; margin:15px 0; border-radius:8px; border:1px solid var(--accent-color); background:#222; color:#fff; font-size:16px; text-align:center;">
-            <button id="register-submit" style="background:var(--accent-color); border:none; padding:12px 30px; border-radius:8px; font-weight:bold; cursor:pointer; width:100%;">Зарегистрироваться</button>
-        </div>
-    `;
-    document.body.appendChild(form);
-
-    document.getElementById('register-submit').addEventListener('click', async () => {
-        const phone = document.getElementById('phone-input').value.trim();
-        if (!phone) {
-            alert('Введите номер телефона');
-            return;
-        }
-        try {
-            const resp = await fetch('/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ telegram_id: user_id, phone })
-            });
-            const data = await resp.json();
-            if (resp.ok) {
-                alert('Регистрация успешна!');
-                document.getElementById('registration-form').remove();
-                fetchUserData();
-            } else {
-                alert('Ошибка: ' + data.detail);
-            }
-        } catch (e) {
-            alert('Ошибка соединения');
-        }
-    });
 }
 
 function updateBalanceUI(newBalance) {
@@ -2078,6 +1681,7 @@ function updateBalanceUI(newBalance) {
     document.getElementById('balance-amount').textContent = newBalance;
 }
 
+// === Клик по юзеру — рефералка ===
 document.getElementById('user-info').addEventListener('click', async () => {
     if (!user_id) return;
     try {
@@ -2115,6 +1719,7 @@ function fallbackCopy(text) {
     document.body.removeChild(input);
 }
 
+// === Мои ставки ===
 document.getElementById('bets-btn').addEventListener('click', async () => {
     if (!user_id) return;
     try {
@@ -2143,6 +1748,7 @@ document.getElementById('bets-modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) document.getElementById('bets-modal').style.display = 'none';
 });
 
+// === Промокоды ===
 document.getElementById('promo-btn').addEventListener('click', async () => {
     if (!user_id) return;
     const input = document.getElementById('promo-input');
@@ -2165,6 +1771,7 @@ document.getElementById('promo-btn').addEventListener('click', async () => {
     } catch (e) { msg.textContent = 'Ошибка соединения'; console.error(e); }
 });
 
+// === Инициализация игр ===
 function initGames() {
     applyTheme('light');
     updateWheel(currentMode);
@@ -2174,9 +1781,9 @@ function initGames() {
     drawRocket(0, 'idle');
     document.getElementById('rocket-countdown').textContent = '0';
     startAutoRocket();
-    loadGifts();
 }
 
+// === Автоматические раунды ракетки ===
 let autoRocketTimer = null;
 function startAutoRocket() {
     if (autoRocketTimer) clearInterval(autoRocketTimer);
@@ -2233,6 +1840,7 @@ function addFakeWin(amount) {
     if (list.children.length > 10) list.removeChild(list.lastChild);
 }
 
+// ===== НОВАЯ ЛОГИКА РУЛЕТКИ =====
 function applyTheme(mode) {
     document.body.classList.remove('theme-light', 'theme-normal', 'theme-hard');
     if (mode === 'light') document.body.classList.add('theme-light');
@@ -2249,6 +1857,7 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
         updateSpinCost();
         applyTheme(currentMode);
         updateWheel(currentMode);
+        // Сброс поворота, чтобы колесо смотрело на 0
         document.getElementById('wheel').style.transform = 'rotate(0deg)';
         currentRotation = 0;
     });
@@ -2261,29 +1870,73 @@ function updateSpinCost() {
     document.getElementById('spin-cost-label').textContent = cost + ' Токенов';
 }
 
-async function updateWheel(mode) {
-    try {
-        const resp = await fetch(`/api/prizes/${mode}`);
-        const prizes = await resp.json();
-        const sectors = document.querySelectorAll('.sector');
-        sectors.forEach((sector, index) => {
-            const content = sector.querySelector('.sector-content');
-            const icon = content.querySelector('.icon');
-            const number = content.querySelector('.number');
-            const prize = prizes[index];
-            if (prize.value > 0) {
-                icon.textContent = '🎁';
-                number.textContent = prize.value;
-            } else {
-                icon.textContent = '✕';
-                number.textContent = '';
+// Обновление чисел в секторах при смене режима
+function updateWheel(mode) {
+    const prizes = getPrizesForMode(mode);
+    // Зеленые сектора имеют data-win-index от 0 до 5
+    const winSectors = document.querySelectorAll('.sector[data-win-index]');
+    winSectors.forEach(sector => {
+        const idx = parseInt(sector.dataset.winIndex);
+        if (idx >= 0 && idx < prizes.length) {
+            const numberSpan = sector.querySelector('.number');
+            if (numberSpan) {
+                // Берём значение из prizes (только зелёные)
+                const winPrizes = prizes.filter(p => p.value > 0);
+                numberSpan.textContent = winPrizes[idx].value;
             }
-        });
-    } catch (e) {
-        console.error('Ошибка загрузки призов:', e);
-    }
+        }
+    });
 }
 
+function getPrizesForMode(mode) {
+    const allPrizes = {
+        light: [
+            { name: '❌', value: 0 },
+            { name: '🎁 10', value: 10 },
+            { name: '❌', value: 0 },
+            { name: '🎁 15', value: 15 },
+            { name: '❌', value: 0 },
+            { name: '🎁 20', value: 20 },
+            { name: '❌', value: 0 },
+            { name: '🎁 25', value: 25 },
+            { name: '❌', value: 0 },
+            { name: '🎁 30', value: 30 },
+            { name: '❌', value: 0 },
+            { name: '🎁 40', value: 40 }
+        ],
+        normal: [
+            { name: '❌', value: 0 },
+            { name: '🎁 50', value: 50 },
+            { name: '❌', value: 0 },
+            { name: '🎁 70', value: 70 },
+            { name: '❌', value: 0 },
+            { name: '🎁 100', value: 100 },
+            { name: '❌', value: 0 },
+            { name: '🎁 120', value: 120 },
+            { name: '❌', value: 0 },
+            { name: '🎁 150', value: 150 },
+            { name: '❌', value: 0 },
+            { name: '🎁 200', value: 200 }
+        ],
+        hard: [
+            { name: '❌', value: 0 },
+            { name: '🎁 300', value: 300 },
+            { name: '❌', value: 0 },
+            { name: '🎁 400', value: 400 },
+            { name: '❌', value: 0 },
+            { name: '🎁 500', value: 500 },
+            { name: '❌', value: 0 },
+            { name: '🎁 600', value: 600 },
+            { name: '❌', value: 0 },
+            { name: '🎁 800', value: 800 },
+            { name: '❌', value: 0 },
+            { name: '🎁 1000', value: 1000 }
+        ]
+    };
+    return allPrizes[mode] || allPrizes.light;
+}
+
+// === Обработчик нажатия кнопки "КРУТИТЬ" ===
 document.getElementById('spin-btn').addEventListener('click', async () => {
     if (!user_id || isSpinning) return;
     isSpinning = true;
@@ -2291,6 +1944,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     btn.disabled = true;
     btn.innerHTML = 'КРУТИТЬ <span>Загрузка...</span>';
     document.getElementById('result-message').textContent = '';
+    
     try {
         const resp = await fetch('/api/spin', {
             method: 'POST',
@@ -2300,12 +1954,15 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
         const data = await resp.json();
         if (resp.ok) {
             updateBalanceUI(data.new_balance);
+            // Запускаем анимацию вращения
             const extraSpins = 5 + Math.floor(Math.random() * 3);
             const randomAngle = Math.random() * 360;
             const targetRotation = currentRotation + extraSpins * 360 + randomAngle;
             currentRotation = targetRotation;
             const wheel = document.getElementById('wheel');
             wheel.style.transform = `rotate(${targetRotation}deg)`;
+            
+            // После окончания анимации (4с) показываем результат
             setTimeout(() => {
                 document.getElementById('result-message').textContent = data.message;
                 document.getElementById('result-message').style.color = data.win ? '#4CAF50' : '#f44336';
@@ -2314,7 +1971,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
                 btn.disabled = false;
                 const cost = { light:25, normal:50, hard:100 }[currentMode];
                 btn.innerHTML = 'КРУТИТЬ <span>' + cost + ' Токенов</span>';
-            }, 4000);
+            }, 4000); // синхронизировано с transition-duration
         } else {
             document.getElementById('result-message').textContent = '❌ ' + data.detail;
             isSpinning = false;
@@ -2441,18 +2098,15 @@ function drawRocket(multiplier, status) {
     rctx.fillText(multiplier.toFixed(2)+'x', rocketX, rocketY-30);
 }
 
+document.getElementById('rocket-bet-range').addEventListener('input', function() {
+    document.getElementById('rocket-bet-display').textContent = this.value;
+});
+
 document.getElementById('rocket-start-btn').addEventListener('click', async () => {
     if (!user_id || rocketActive) return;
-    const betInput = document.getElementById('rocket-bet-input');
-    const bet = parseInt(betInput.value);
-    if (isNaN(bet) || bet < 1) {
-        alert('Введите корректную ставку (минимум 1 токен)');
-        return;
-    }
-    if (balance < bet) {
-        alert('Недостаточно токенов!');
-        return;
-    }
+    const bet = parseInt(document.getElementById('rocket-bet-range').value);
+    if (isNaN(bet) || bet<500 || bet>5000) { alert('Ставка от 500 до 5000'); return; }
+    if (balance < bet) { alert('Недостаточно токенов!'); return; }
     try {
         const resp = await fetch('/api/rocket/start', {
             method: 'POST',
@@ -2588,112 +2242,6 @@ function startCountdown() {
     }, 1000);
 }
 
-// === БИТВА ПОДАРКОВ ===
-async function loadGifts() {
-    try {
-        const resp = await fetch('/api/gifts');
-        const gifts = await resp.json();
-        const container = document.getElementById('battle-gifts');
-        container.innerHTML = '';
-        gifts.forEach(g => {
-            const card = document.createElement('div');
-            card.className = 'battle-gift-card';
-            card.dataset.id = g.id;
-            card.innerHTML = `
-                <div class="emoji">${g.emoji}</div>
-                <div class="name">${g.name}</div>
-                <div class="cost">⭐ ${g.cost}</div>
-            `;
-            card.addEventListener('click', () => {
-                document.querySelectorAll('.battle-gift-card').forEach(c => c.classList.remove('selected'));
-                card.classList.add('selected');
-                selectedGiftId = g.id;
-                document.getElementById('battle-send-btn').style.display = 'block';
-                document.getElementById('battle-status').textContent = `Выбран: ${g.emoji} ${g.name} (${g.cost} токенов)`;
-            });
-            container.appendChild(card);
-        });
-    } catch (e) {
-        console.error('Ошибка загрузки подарков:', e);
-    }
-}
-
-document.getElementById('battle-send-btn').addEventListener('click', async () => {
-    if (!user_id || !selectedGiftId) return;
-    const btn = document.getElementById('battle-send-btn');
-    btn.disabled = true;
-    btn.textContent = 'Отправка...';
-    document.getElementById('battle-status').textContent = '⏳ Битва началась...';
-    try {
-        const resp = await fetch('/api/gift_battle', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id, gift_id: selectedGiftId })
-        });
-        const data = await resp.json();
-        if (resp.ok) {
-            updateBalanceUI(data.new_balance);
-            document.getElementById('battle-status').textContent = '🎉 ' + data.message;
-            startBattleAnimation(data.gift);
-            fetchFeed();
-            document.querySelectorAll('.battle-gift-card').forEach(c => c.classList.remove('selected'));
-            selectedGiftId = null;
-            btn.style.display = 'none';
-        } else {
-            document.getElementById('battle-status').textContent = '❌ ' + data.detail;
-        }
-    } catch (e) {
-        document.getElementById('battle-status').textContent = 'Ошибка соединения';
-        console.error(e);
-    }
-    btn.disabled = false;
-    btn.textContent = 'Отправить в битву';
-});
-
-function startBattleAnimation(gift) {
-    const canvas = document.getElementById('battleCanvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = 300;
-    canvas.height = 200;
-    document.getElementById('battle-animation').style.display = 'block';
-    let frame = 0;
-
-    if (battleAnimationId) cancelAnimationFrame(battleAnimationId);
-
-    function animate() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const t = frame / 60;
-        const x1 = 50 + 120 * (0.5 + 0.5 * Math.sin(t * 2.5));
-        const x2 = 250 - 120 * (0.5 + 0.5 * Math.sin(t * 2.5));
-        const y = 100 + 30 * Math.sin(t * 4);
-
-        ctx.font = '50px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(gift.emoji, x1, y);
-        ctx.fillText('⚔️', 150, y - 10);
-        ctx.fillText('🎁', x2, y);
-
-        for (let i = 0; i < 8; i++) {
-            const angle = t * 8 + i * 1.2;
-            const r = 30 + 15 * Math.sin(t * 6 + i);
-            ctx.fillStyle = `hsl(${i * 45}, 100%, 60%)`;
-            ctx.beginPath();
-            ctx.arc(150 + r * Math.cos(angle), y + r * Math.sin(angle), 3, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        frame++;
-        if (frame < 120) {
-            battleAnimationId = requestAnimationFrame(animate);
-        } else {
-            document.getElementById('battle-animation').style.display = 'none';
-            battleAnimationId = null;
-        }
-    }
-    animate();
-}
-
 // === ОБЩИЕ ФУНКЦИИ ===
 document.getElementById('deposit-btn').addEventListener('click', () => {
     const menu = document.getElementById('deposit-menu');
@@ -2702,7 +2250,7 @@ document.getElementById('deposit-btn').addEventListener('click', () => {
 
 document.querySelectorAll('.deposit-option').forEach(btn => {
     btn.addEventListener('click', () => {
-        const amount = parseInt(btn.dataset.amount);
+        const amount = btn.dataset.amount;
         const links = {
             100: 'https://yookassa.ru/my/i/amMy2QzHTXRI/l',
             200: 'https://yookassa.ru/my/i/amMzHkXK55Uk/l',
@@ -2762,24 +2310,17 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
         document.getElementById('roulette-page').style.display = tab==='roulette' ? 'block' : 'none';
         document.getElementById('slot-page').style.display = tab==='slot' ? 'block' : 'none';
         document.getElementById('rocket-page').style.display = tab==='rocket' ? 'block' : 'none';
-        document.getElementById('battle-page').style.display = tab==='battle' ? 'block' : 'none';
-        if (tab==='rocket' || tab==='battle') fetchUserData();
+        if (tab==='rocket') fetchUserData();
     });
-});
-
-fetchUserData().then(() => {
-    initGames();
-}).catch(() => {
-    initGames();
 });
 """
 }
 
-for filename, content in static_files.items():
+for filename, content in STATIC_FILES.items():
     filepath = os.path.join(STATIC_DIR, filename)
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(content)
-    print(f"✅ Создан {filepath}")
+    print(f"✅ Обновлён {filepath}")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -2797,8 +2338,269 @@ async def webhook(request: Request):
     await dp.feed_update(bot, update)
     return {"status": "ok"}
 
+# API модели
+class SpinRequest(BaseModel):
+    user_id: int
+    mode: str
+
+class WithdrawRequest(BaseModel):
+    user_id: int
+    amount: int
+
+class PromoRequest(BaseModel):
+    user_id: int
+    code: str
+
+class SlotSpinRequest(BaseModel):
+    user_id: int
+    bet: int
+
+class RocketStartRequest(BaseModel):
+    user_id: int
+    bet: int
+
+class RocketCashoutRequest(BaseModel):
+    round_id: int
+    user_id: int
+
+@app.get("/api/user/{user_id}")
+async def api_get_user(user_id: int):
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"balance": user["balance"], "username": user["username"]}
+
+@app.get("/api/user_bets/{user_id}")
+async def api_user_bets(user_id: int):
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    bets = get_user_bets(user_id, 50)
+    return bets
+
+@app.post("/api/spin")
+async def api_spin(data: SpinRequest):
+    user_id = data.user_id
+    mode = data.mode
+    cost = SPIN_COSTS.get(mode, 25)
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < cost:
+        raise HTTPException(status_code=400, detail="Недостаточно токенов")
+    update_balance(user_id, -cost, f"Спин в режиме {mode}")
+    win, prize_name, prize_value = get_spin_result(mode)
+    if win:
+        update_balance(user_id, prize_value, f"Выигрыш: {prize_name}")
+        add_win(user_id, prize_name, prize_value, mode)
+        message = f"🎉 Вы выиграли {prize_name} (+{prize_value} токенов)!"
+    else:
+        message = "😞 К сожалению, вы проиграли. Попробуйте ещё раз!"
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "win": win,
+        "prize_name": prize_name if win else None,
+        "prize_value": prize_value if win else 0,
+        "new_balance": new_balance,
+        "message": message
+    }
+
+@app.post("/api/slot_spin")
+async def api_slot_spin(data: SlotSpinRequest):
+    user_id = data.user_id
+    bet = data.bet
+    if bet < 20 or bet > 100:
+        raise HTTPException(status_code=400, detail="Ставка должна быть от 20 до 100 токенов")
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < bet:
+        raise HTTPException(status_code=400, detail="Недостаточно токенов")
+    
+    update_balance(user_id, -bet, f"Ставка в игровом автомате {bet} токенов")
+    win, symbols, win_amount = get_slot_result(bet)
+    if win:
+        update_balance(user_id, win_amount, f"Выигрыш в игровом автомате {win_amount} токенов")
+        add_win(user_id, f"🎰 {symbols[0]}{symbols[1]}{symbols[2]}", win_amount, "slot")
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "win": win,
+        "symbols": symbols,
+        "win_amount": win_amount if win else 0,
+        "new_balance": new_balance
+    }
+
+@app.post("/api/rocket/start")
+async def rocket_start(data: RocketStartRequest):
+    user_id = data.user_id
+    bet = data.bet
+    if bet < 500 or bet > 5000:
+        raise HTTPException(status_code=400, detail="Ставка должна быть от 500 до 5000 токенов")
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < bet:
+        raise HTTPException(status_code=400, detail="Недостаточно токенов")
+    
+    update_balance(user_id, -bet, f"Ставка в ракетке {bet} токенов")
+    
+    if random.random() < 0.05:
+        crash_display = 0.7 + random.random() * 98.3
+    else:
+        crash_display = random.random() * 0.7
+    
+    global round_counter
+    round_counter += 1
+    round_id = round_counter
+    rocket_rounds[round_id] = {
+        "user_id": user_id,
+        "bet": bet,
+        "crash_display": crash_display,
+        "start_time": time.time(),
+        "status": "active",
+        "current_display": 0.0
+    }
+    
+    return {"round_id": round_id}
+
+@app.get("/api/rocket/status/{round_id}")
+async def rocket_status(round_id: int):
+    if round_id not in rocket_rounds:
+        raise HTTPException(status_code=404, detail="Round not found")
+    round_data = rocket_rounds[round_id]
+    
+    if round_data["status"] == "crashed":
+        return {
+            "display_multiplier": round_data["crash_display"],
+            "crashed": True,
+            "cashed_out": False
+        }
+    if round_data["status"] == "cashed_out":
+        return {
+            "display_multiplier": round_data["current_display"],
+            "crashed": False,
+            "cashed_out": True
+        }
+    
+    elapsed = time.time() - round_data["start_time"]
+    display_multiplier = elapsed * 0.3
+    if display_multiplier >= round_data["crash_display"]:
+        round_data["status"] = "crashed"
+        return {
+            "display_multiplier": round_data["crash_display"],
+            "crashed": True,
+            "cashed_out": False
+        }
+    else:
+        round_data["current_display"] = display_multiplier
+        return {
+            "display_multiplier": display_multiplier,
+            "crashed": False,
+            "cashed_out": False
+        }
+
+@app.post("/api/rocket/cashout")
+async def rocket_cashout(data: RocketCashoutRequest):
+    round_id = data.round_id
+    user_id = data.user_id
+    if round_id not in rocket_rounds:
+        raise HTTPException(status_code=404, detail="Round not found")
+    round_data = rocket_rounds[round_id]
+    if round_data["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Not your round")
+    if round_data["status"] != "active":
+        raise HTTPException(status_code=400, detail="Round already finished")
+    
+    elapsed = time.time() - round_data["start_time"]
+    display_multiplier = elapsed * 0.3
+    if display_multiplier >= round_data["crash_display"]:
+        round_data["status"] = "crashed"
+        raise HTTPException(status_code=400, detail="Ракета уже упала")
+    
+    real_multiplier = 1.0 + display_multiplier
+    win_amount = int(round_data["bet"] * real_multiplier)
+    update_balance(user_id, win_amount, f"Выигрыш в ракетке {win_amount} токенов")
+    add_win(user_id, f"🚀 x{real_multiplier:.2f}", win_amount, "rocket")
+    round_data["status"] = "cashed_out"
+    round_data["current_display"] = display_multiplier
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "win_amount": win_amount,
+        "new_balance": new_balance,
+        "multiplier": real_multiplier
+    }
+
+@app.post("/api/withdraw")
+async def api_withdraw(data: WithdrawRequest):
+    user_id = data.user_id
+    amount = data.amount
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user["balance"] < amount:
+        raise HTTPException(status_code=400, detail="Недостаточно токенов")
+    if amount < 500:
+        raise HTTPException(status_code=400, detail="Минимальная сумма вывода – 500 токенов")
+    create_withdraw_request(user_id, amount)
+    return {"status": "success", "message": "Заявка на вывод отправлена администратору"}
+
+@app.get("/api/leaderboard")
+async def api_leaderboard():
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT username, balance FROM users ORDER BY balance DESC LIMIT 10")
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+@app.get("/api/recent_wins")
+async def api_recent_wins():
+    return get_recent_wins(limit=10)
+
+@app.get("/api/prizes/{mode}")
+async def api_get_prizes(mode: str):
+    if mode not in SPIN_COSTS:
+        raise HTTPException(status_code=400, detail="Invalid mode")
+    return get_prizes_for_mode(mode)
+
+@app.get("/api/referral/{user_id}")
+async def api_get_referral(user_id: int):
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    info = get_referral_info(user_id)
+    link = get_referral_link(user_id)
+    return {"code": info["code"], "count": info["count"], "link": link}
+
+@app.post("/api/activate_promo")
+async def activate_promo(data: PromoRequest):
+    user_id = data.user_id
+    code = data.code.lower().strip()
+    user = get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if code not in PROMOCODES:
+        raise HTTPException(status_code=400, detail="Неверный промокод")
+    
+    if is_promo_used(user_id, code):
+        raise HTTPException(status_code=400, detail="Вы уже использовали этот промокод")
+    
+    reward = PROMOCODES[code]
+    update_balance(user_id, reward, f"Промокод {code}")
+    use_promo(user_id, code)
+    
+    new_balance = get_user(user_id)["balance"]
+    return {
+        "status": "success",
+        "message": f"Промокод активирован! Вы получили +{reward} токенов",
+        "new_balance": new_balance
+    }
+
 # ==================== ЗАПУСК ====================
 async def set_webhook():
+    port = int(os.environ.get("PORT", 10000))
     webhook_url = f"https://star-drop.onrender.com/webhook"
     await bot.set_webhook(url=webhook_url, drop_pending_updates=True)
     logging.info(f"Webhook установлен на {webhook_url}")
