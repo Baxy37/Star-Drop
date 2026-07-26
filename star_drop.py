@@ -523,7 +523,8 @@ async def serve_root_files(filename: str):
     """Раздача файлов из корневой папки"""
     allowed_files = [
         'IMGlow.png', 'IMGnorm.jpg', 'IMGhard.jpg',
-        'Start_img.JPG', 'win_symbol.png', 'lose_symbol.png'
+        'Start_img.JPG', 'win_symbol.png', 'lose_symbol.png',
+        'case.jpg', 'raketa.jpg', 'slot.jpg', 'cloker.jpg'
     ]
     
     if filename in allowed_files:
@@ -571,7 +572,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=8">
+    <link rel="stylesheet" href="/static/style.css?v=9">
 </head>
 <body>
 
@@ -664,25 +665,25 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
             <div class="games-grid">
                 <div class="game-card" data-tab="roulette">
-                    <div class="game-icon">🎡</div>
+                    <img src="/case.jpg" alt="Кейсы" class="game-image">
                     <span class="game-name">Кейсы</span>
                 </div>
                 <div class="game-card" data-tab="slot">
-                    <div class="game-icon">🎰</div>
+                    <img src="/slot.jpg" alt="Слоты" class="game-image">
                     <span class="game-name">Слоты</span>
                 </div>
                 <div class="game-card" data-tab="rocket">
-                    <div class="game-icon">🚀</div>
+                    <img src="/raketa.jpg" alt="Ракетка" class="game-image">
                     <span class="game-name">Ракетка</span>
                 </div>
                 <div class="game-card" data-tab="clicker">
-                    <div class="game-icon">👆</div>
+                    <img src="/cloker.jpg" alt="Кликер" class="game-image">
                     <span class="game-name">Кликер</span>
                 </div>
             </div>
         </div>
 
-        <!-- СТРАНИЦА КЕЙСОВ (бывшая рулетка) -->
+        <!-- СТРАНИЦА КЕЙСОВ -->
         <div id="roulette-page" class="page">
             <div class="game-header">
                 <button class="btn-back" data-back="home">←</button>
@@ -883,7 +884,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
     </div>
 
-    <script src="/static/script.js?v=8"></script>
+    <script src="/static/script.js?v=9"></script>
 </body>
 </html>""")
 
@@ -1423,25 +1424,37 @@ body {
     backdrop-filter: blur(10px);
     border: 1px solid var(--border-glass);
     border-radius: var(--radius-medium);
-    padding: 20px 12px;
+    padding: 12px;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 140px;
 }
 .game-card:hover {
     transform: translateY(-4px);
     border-color: var(--accent-gold);
     box-shadow: var(--shadow-glow);
 }
-.game-card .game-icon {
-    font-size: 32px;
-    display: block;
-    margin-bottom: 8px;
+.game-card .game-image {
+    width: 100%;
+    height: 100px;
+    object-fit: contain;
+    margin-bottom: 6px;
+    border-radius: var(--radius-small);
+    transition: transform 0.3s ease;
+}
+.game-card:hover .game-image {
+    transform: scale(1.05);
 }
 .game-card .game-name {
     font-size: 12px;
     font-weight: 600;
     color: var(--text-secondary);
+    margin-top: 2px;
 }
 
 /* ===== GAME HEADERS ===== */
@@ -2003,10 +2016,14 @@ body {
         gap: 8px;
     }
     .game-card {
-        padding: 16px 8px;
+        padding: 10px;
+        min-height: 110px;
     }
-    .game-card .game-icon {
-        font-size: 28px;
+    .game-card .game-image {
+        height: 80px;
+    }
+    .game-card .game-name {
+        font-size: 11px;
     }
     .reel {
         width: 64px;
