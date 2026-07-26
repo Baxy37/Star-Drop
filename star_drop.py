@@ -572,7 +572,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=15">
+    <link rel="stylesheet" href="/static/style.css?v=16">
 </head>
 <body>
 
@@ -698,18 +698,9 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                 <span class="game-title">Кейсы</span>
             </div>
             <div id="mode-selector" class="mode-selector">
-                <button class="mode-btn active" data-mode="light">
-                    <img src="/IMGlow.png" alt="Low" class="mode-icon">
-                    <span>Low</span>
-                </button>
-                <button class="mode-btn" data-mode="normal">
-                    <img src="/IMGnorm.jpg" alt="Normal" class="mode-icon">
-                    <span>Normal</span>
-                </button>
-                <button class="mode-btn" data-mode="hard">
-                    <img src="/IMGhard.jpg" alt="Hard" class="mode-icon">
-                    <span>Hard</span>
-                </button>
+                <button class="mode-btn active" data-mode="light">Low</button>
+                <button class="mode-btn" data-mode="normal">Normal</button>
+                <button class="mode-btn" data-mode="hard">Hard</button>
             </div>
             <div id="key-container" class="key-container">
                 <div id="key-display" class="key-display">
@@ -901,7 +892,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
     </div>
 
-    <script src="/static/script.js?v=15"></script>
+    <script src="/static/script.js?v=16"></script>
 </body>
 </html>""")
 
@@ -1439,8 +1430,8 @@ body {
     transition: all 0.3s ease;
 }
 .game-card-content {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    background: transparent !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
     border-radius: var(--radius-medium);
     padding: 12px;
     display: flex;
@@ -1450,38 +1441,9 @@ body {
     min-height: 200px;
     transition: all 0.3s ease;
     position: relative;
-    overflow: hidden;
-}
-/* Прозрачный фон, виден только контур */
-.game-card-content {
-    background: transparent !important;
-}
-.game-card-content::before {
-    content: '';
-    position: absolute;
-    top: -2px;
-    left: -2px;
-    right: -2px;
-    bottom: -2px;
-    background: linear-gradient(45deg, 
-        transparent 30%, 
-        rgba(255, 255, 255, 0.05) 40%, 
-        rgba(255, 255, 255, 0.15) 50%, 
-        rgba(255, 255, 255, 0.05) 60%, 
-        transparent 70%
-    );
-    background-size: 300% 300%;
-    animation: borderShine 4s ease-in-out infinite;
-    border-radius: var(--radius-medium);
-    z-index: 0;
-    pointer-events: none;
-}
-@keyframes borderShine {
-    0% { background-position: -100% -100%; }
-    100% { background-position: 200% 200%; }
 }
 .game-card:hover .game-card-content {
-    border-color: rgba(255, 255, 255, 0.5);
+    border-color: rgba(255, 255, 255, 0.4);
     transform: translateY(-4px);
 }
 .game-card:hover .game-image {
@@ -1494,8 +1456,6 @@ body {
     margin-bottom: 6px;
     border-radius: var(--radius-small);
     transition: all 0.3s ease;
-    position: relative;
-    z-index: 1;
 }
 .game-card .game-name {
     font-size: 14px;
@@ -1503,8 +1463,6 @@ body {
     color: var(--text-secondary);
     margin-top: 2px;
     text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
-    position: relative;
-    z-index: 1;
 }
 
 /* ===== GAME HEADERS ===== */
@@ -1525,30 +1483,17 @@ body {
     display: flex;
     gap: 12px;
     margin-bottom: 20px;
-    flex-wrap: wrap;
     justify-content: center;
 }
 .mode-btn {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border-glass);
     border-radius: 20px;
-    padding: 8px 16px;
+    padding: 8px 24px;
     color: var(--text-secondary);
     font-weight: 600;
-    font-size: 13px;
+    font-size: 14px;
     cursor: pointer;
-    transition: all 0.3s ease;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    min-width: 80px;
-}
-.mode-btn .mode-icon {
-    width: 100px;
-    height: 100px;
-    object-fit: contain;
-    border-radius: 12px;
     transition: all 0.3s ease;
 }
 .mode-btn.active {
@@ -1556,12 +1501,6 @@ body {
     color: #0a0a0a;
     border-color: transparent;
     box-shadow: 0 0 20px rgba(255, 213, 74, 0.2);
-}
-.mode-btn.active .mode-icon {
-    filter: drop-shadow(0 0 15px rgba(255, 213, 74, 0.3));
-}
-.mode-btn span {
-    font-size: 12px;
 }
 .key-container {
     display: flex;
@@ -2121,9 +2060,9 @@ body {
         width: 220px;
         height: 220px;
     }
-    .mode-btn .mode-icon {
-        width: 70px;
-        height: 70px;
+    .mode-btn {
+        padding: 6px 16px;
+        font-size: 12px;
     }
 }
 """)
