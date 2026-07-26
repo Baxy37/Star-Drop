@@ -89,8 +89,8 @@ def init_db():
             auto_click_level INTEGER DEFAULT 0,
             multiplier_level INTEGER DEFAULT 0,
             crystal_boost_level INTEGER DEFAULT 0,
-            energy INTEGER DEFAULT 15,
-            max_energy INTEGER DEFAULT 15
+            energy INTEGER DEFAULT 50,
+            max_energy INTEGER DEFAULT 50
         )
     ''')
     cur.execute('''
@@ -193,7 +193,7 @@ def create_user(username: str, password: str, telegram_id: int = None) -> Option
     code = hashlib.md5(username.encode()).hexdigest()[:8]
     cur.execute(
         "INSERT INTO users (username, password, telegram_id, referral_code, balance, clicker_balance, energy, max_energy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (username, password, telegram_id, code, START_BALANCE, 0, 15, 15)
+        (username, password, telegram_id, code, START_BALANCE, 0, 50, 50)
     )
     user_id = cur.lastrowid
     
@@ -572,7 +572,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=16">
+    <link rel="stylesheet" href="/static/style.css?v=17">
 </head>
 <body>
 
@@ -723,25 +723,41 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
             <div id="result-message" class="result-message"></div>
         </div>
 
-        <!-- СТРАНИЦА СЛОТОВ -->
+        <!-- СТРАНИЦА СЛОТОВ (ИГРОВОЙ АВТОМАТ) -->
         <div id="slot-page" class="page">
             <div class="game-header">
                 <button class="btn-back" data-back="home">←</button>
                 <span class="game-title">Слоты</span>
             </div>
             <div id="slot-machine" class="slot-machine glass-panel">
-                <div id="reels" class="reels">
-                    <div class="reel" id="reel1">🍒</div>
-                    <div class="reel" id="reel2">🍋</div>
-                    <div class="reel" id="reel3">🍊</div>
+                <div class="slot-machine-frame">
+                    <div class="slot-reels-container">
+                        <div id="reels" class="reels">
+                            <div class="reel" id="reel1">🍒</div>
+                            <div class="reel" id="reel2">🍋</div>
+                            <div class="reel" id="reel3">🍊</div>
+                        </div>
+                        <div class="slot-overlay-top"></div>
+                        <div class="slot-overlay-bottom"></div>
+                    </div>
+                    <div class="slot-lights">
+                        <span class="light"></span>
+                        <span class="light"></span>
+                        <span class="light"></span>
+                        <span class="light"></span>
+                        <span class="light"></span>
+                        <span class="light"></span>
+                        <span class="light"></span>
+                        <span class="light"></span>
+                    </div>
                 </div>
                 <div class="slot-controls">
                     <div class="bet-control">
                         <label>Ставка: <span id="bet-display">20</span> токенов</label>
                         <input type="range" id="bet-range" min="20" max="100" step="10" value="20">
-                        <div id="slot-multiplier">При выигрыше: <b>x2</b></div>
+                        <div id="slot-multiplier">🎰 Выигрыш: <b>x2</b></div>
                     </div>
-                    <button id="spin-slot-btn" class="btn-primary btn-large btn-shimmer">Дёрнуть рычаг 🎰</button>
+                    <button id="spin-slot-btn" class="btn-primary btn-large btn-shimmer">🎰 Крутить!</button>
                 </div>
                 <div id="slot-result" class="slot-result"></div>
             </div>
@@ -801,7 +817,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                     <div class="resource-item">
                         <span class="resource-icon">⚡</span>
                         <div class="resource-info">
-                            <span class="resource-value" id="clicker-energy">15/15</span>
+                            <span class="resource-value" id="clicker-energy">50/50</span>
                             <span class="resource-label">ENERGY</span>
                         </div>
                     </div>
@@ -892,7 +908,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
     </div>
 
-    <script src="/static/script.js?v=16"></script>
+    <script src="/static/script.js?v=17"></script>
 </body>
 </html>""")
 
@@ -1540,22 +1556,22 @@ body {
     width: max-content;
 }
 .wheel-cell {
-    flex: 0 0 60px;
-    height: 80px;
-    background: rgba(255, 255, 255, 0.05);
+    flex: 0 0 120px;
+    height: 100px;
+    background: rgba(255, 255, 255, 0.08);
     border-radius: var(--radius-small);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 32px;
-    border: 1px solid var(--border-glass);
+    font-size: 48px;
+    border: 2px solid rgba(255, 255, 255, 0.15);
 }
 .wheel-arrow {
     position: absolute;
     top: -8px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 28px;
+    font-size: 32px;
     color: var(--accent-gold);
     text-shadow: 0 0 20px rgba(255, 213, 74, 0.3);
     pointer-events: none;
@@ -1584,10 +1600,74 @@ body {
     margin: 8px 0;
 }
 
-/* ===== SLOT ===== */
+/* ===== SLOT (ИГРОВОЙ АВТОМАТ) ===== */
 .slot-machine {
     padding: 20px;
     width: 100%;
+}
+.slot-machine-frame {
+    background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+    border-radius: var(--radius-large);
+    padding: 20px;
+    border: 2px solid #FFD54A;
+    box-shadow: 0 0 40px rgba(255, 213, 74, 0.1), inset 0 0 40px rgba(255, 213, 74, 0.05);
+    position: relative;
+}
+.slot-reels-container {
+    position: relative;
+    background: #111;
+    border-radius: var(--radius-medium);
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.slot-overlay-top {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    height: 20px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+    border-radius: var(--radius-small) var(--radius-small) 0 0;
+    pointer-events: none;
+    z-index: 2;
+}
+.slot-overlay-bottom {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    height: 20px;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    border-radius: 0 0 var(--radius-small) var(--radius-small);
+    pointer-events: none;
+    z-index: 2;
+}
+.slot-lights {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 0 4px 0;
+}
+.slot-lights .light {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #FFD54A;
+    animation: lightBlink 1.5s ease-in-out infinite;
+    box-shadow: 0 0 10px rgba(255, 213, 74, 0.3);
+}
+.slot-lights .light:nth-child(1) { animation-delay: 0s; }
+.slot-lights .light:nth-child(2) { animation-delay: 0.2s; }
+.slot-lights .light:nth-child(3) { animation-delay: 0.4s; }
+.slot-lights .light:nth-child(4) { animation-delay: 0.6s; }
+.slot-lights .light:nth-child(5) { animation-delay: 0.8s; }
+.slot-lights .light:nth-child(6) { animation-delay: 1.0s; }
+.slot-lights .light:nth-child(7) { animation-delay: 1.2s; }
+.slot-lights .light:nth-child(8) { animation-delay: 1.4s; }
+
+@keyframes lightBlink {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.2); }
 }
 .reels {
     display: flex;
@@ -1596,21 +1676,34 @@ body {
     padding: 16px 0;
 }
 .reel {
-    width: 80px;
-    height: 96px;
+    width: 100px;
+    height: 120px;
     background: rgba(255, 255, 255, 0.05);
     border-radius: var(--radius-medium);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 48px;
-    border: 1px solid var(--border-glass);
+    font-size: 64px;
+    border: 2px solid rgba(255, 215, 0, 0.2);
+    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 215, 0, 0.05);
+    transition: border-color 0.3s;
+}
+.reel.spinning {
+    animation: reelSpin 0.15s steps(1) infinite;
+}
+@keyframes reelSpin {
+    0% { transform: rotate(0deg) scale(1); }
+    25% { transform: rotate(90deg) scale(1.05); }
+    50% { transform: rotate(180deg) scale(0.95); }
+    75% { transform: rotate(270deg) scale(1.05); }
+    100% { transform: rotate(360deg) scale(1); }
 }
 .slot-controls {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 12px;
+    margin-top: 16px;
 }
 .bet-control {
     width: 100%;
@@ -1635,12 +1728,34 @@ body {
 #slot-multiplier b {
     color: var(--accent-gold);
 }
-.slot-result {
+#spin-slot-btn {
+    background: var(--accent-gold-gradient);
+    border: none;
+    border-radius: var(--radius-medium);
+    padding: 14px 40px;
+    font-weight: 700;
     font-size: 18px;
+    color: #0a0a0a;
+    cursor: pointer;
+    box-shadow: 0 0 30px rgba(255, 213, 74, 0.2);
+    transition: all 0.3s ease;
+}
+#spin-slot-btn:hover {
+    transform: scale(1.03);
+    box-shadow: 0 0 40px rgba(255, 213, 74, 0.4);
+}
+#spin-slot-btn:active {
+    transform: scale(0.95);
+}
+.slot-result {
+    font-size: 20px;
     font-weight: 700;
     text-align: center;
-    min-height: 30px;
+    min-height: 40px;
     margin-top: 12px;
+    padding: 8px;
+    border-radius: var(--radius-small);
+    background: rgba(0, 0, 0, 0.3);
 }
 
 /* ===== ROCKET ===== */
@@ -2035,9 +2150,9 @@ body {
         font-size: 11px;
     }
     .reel {
-        width: 64px;
-        height: 80px;
-        font-size: 36px;
+        width: 70px;
+        height: 90px;
+        font-size: 44px;
     }
     .rocket-multiplier {
         font-size: 36px;
@@ -2064,10 +2179,23 @@ body {
         padding: 6px 16px;
         font-size: 12px;
     }
+    .wheel-cell {
+        flex: 0 0 80px;
+        height: 80px;
+        font-size: 32px;
+    }
+    .slot-machine-frame {
+        padding: 12px;
+    }
+    .reel {
+        width: 80px;
+        height: 100px;
+        font-size: 48px;
+    }
 }
 """)
 
-# JavaScript (исправленная анимация)
+# JavaScript (без изменений, но с обновленными значениями энергии)
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
 let current_user = null;
@@ -2078,8 +2206,8 @@ let isSpinning = false;
 // ========== КЛИКЕР ПЕРЕМЕННЫЕ ==========
 let clickerStars = 0;
 let clickerCrystals = 0;
-let clickerEnergy = 15;
-let maxEnergy = 15;
+let clickerEnergy = 50;
+let maxEnergy = 50;
 let clickPower = 1;
 let autoClickLevel = 0;
 let multiplierLevel = 0;
@@ -2418,7 +2546,7 @@ function animateRouletteWheel(win) {
         const container = document.getElementById('wheel-container');
         const strip = document.getElementById('wheel-strip');
         const cells = strip.children;
-        const cellWidth = cells[0]?.offsetWidth + 4 || 64;
+        const cellWidth = cells[0]?.offsetWidth + 4 || 124;
         const containerWidth = container.offsetWidth || 300;
         const targetSymbol = win ? '🎫' : '❌';
         
@@ -2562,6 +2690,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
     btn.textContent = '🎰 Крутим...';
     let interval = setInterval(() => {
         reels.forEach(reel => { reel.textContent = slotSymbols[Math.floor(Math.random()*slotSymbols.length)]; });
+        reels.forEach(reel => reel.classList.add('spinning'));
     }, 100);
     try {
         const resp = await fetch('/api/slot_spin', {
@@ -2571,6 +2700,7 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
         });
         const data = await resp.json();
         clearInterval(interval);
+        reels.forEach(reel => reel.classList.remove('spinning'));
         if (resp.ok) {
             reels[0].textContent = data.symbols[0];
             reels[1].textContent = data.symbols[1];
@@ -2588,11 +2718,12 @@ document.getElementById('spin-slot-btn').addEventListener('click', async () => {
         } else { document.getElementById('slot-result').textContent = '❌ ' + data.detail; }
     } catch (e) {
         clearInterval(interval);
+        reels.forEach(reel => reel.classList.remove('spinning'));
         document.getElementById('slot-result').textContent = 'Ошибка соединения';
     }
     slotSpinning = false;
     btn.disabled = false;
-    btn.textContent = 'Дёрнуть рычаг 🎰';
+    btn.textContent = '🎰 Крутить!';
 });
 
 // ========== РАКЕТКА ==========
@@ -2865,8 +2996,8 @@ async function loadClickerData() {
         if (resp.ok) {
             clickerStars = data.clicker_balance || 0;
             clickerCrystals = data.crystal_boost_level * 10 || 0;
-            clickerEnergy = data.energy || 15;
-            maxEnergy = data.max_energy || 15;
+            clickerEnergy = data.energy || 50;
+            maxEnergy = data.max_energy || 50;
             clickPower = data.click_power || 1;
             autoClickLevel = data.auto_click_level || 0;
             multiplierLevel = data.multiplier_level || 0;
