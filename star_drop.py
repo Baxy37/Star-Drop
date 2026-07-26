@@ -366,7 +366,7 @@ def get_slot_result(bet: int):
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, ReplyKeyboardRemove
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, WebAppInfo, ReplyKeyboardRemove, InputFile, BufferedInputFile
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
@@ -395,12 +395,41 @@ async def cmd_start(message: types.Message):
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
     
-    await message.answer(
-        "👋 Добро пожаловать в **Star Drop**!\n\n"
-        "Для входа в игру используйте наше мини-приложение.\n"
-        "Нажмите кнопку ниже, чтобы открыть приложение и войти в свой аккаунт.",
-        reply_markup=get_start_keyboard()
-    )
+    # Отправляем изображение
+    try:
+        # Пробуем загрузить изображение из папки
+        image_path = os.path.join(os.path.dirname(__file__), "Start_img.JPG")
+        
+        if os.path.exists(image_path):
+            with open(image_path, 'rb') as img_file:
+                photo = BufferedInputFile(img_file.read(), filename="start_img.jpg")
+                await message.answer_photo(
+                    photo=photo,
+                    caption=(
+                        "👋 Добро пожаловать в **Star Drop**!\n\n"
+                        "Для входа в игру используйте наше мини-приложение.\n"
+                        "Нажмите кнопку ниже, чтобы открыть приложение и войти в свой аккаунт."
+                    ),
+                    reply_markup=get_start_keyboard()
+                )
+        else:
+            # Если изображение не найдено, отправляем только текст
+            logging.warning(f"Изображение не найдено по пути: {image_path}")
+            await message.answer(
+                "👋 Добро пожаловать в **Star Drop**!\n\n"
+                "Для входа в игру используйте наше мини-приложение.\n"
+                "Нажмите кнопку ниже, чтобы открыть приложение и войти в свой аккаунт.",
+                reply_markup=get_start_keyboard()
+            )
+    except Exception as e:
+        logging.error(f"Ошибка при отправке изображения: {e}")
+        # В случае ошибки отправляем только текст
+        await message.answer(
+            "👋 Добро пожаловать в **Star Drop**!\n\n"
+            "Для входа в игру используйте наше мини-приложение.\n"
+            "Нажмите кнопку ниже, чтобы открыть приложение и войти в свой аккаунт.",
+            reply_markup=get_start_keyboard()
+        )
 
 @dp.message(F.contact)
 async def handle_contact(message: types.Message):
