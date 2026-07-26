@@ -571,7 +571,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=7">
+    <link rel="stylesheet" href="/static/style.css?v=8">
 </head>
 <body>
 
@@ -595,8 +595,12 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <!-- ОСНОВНОЙ ИНТЕРФЕЙС -->
     <div id="app-content" class="app-content" style="display:none;">
         
-        <!-- Фоновые частицы -->
+        <!-- Фоновые частицы (ВСЕГДА ВИДНЫ) -->
         <div class="particles">
+            <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+            <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+            <div class="particle"></div><div class="particle"></div><div class="particle"></div>
+            <div class="particle"></div><div class="particle"></div><div class="particle"></div>
             <div class="particle"></div><div class="particle"></div><div class="particle"></div>
             <div class="particle"></div><div class="particle"></div><div class="particle"></div>
             <div class="particle"></div><div class="particle"></div><div class="particle"></div>
@@ -661,7 +665,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
             <div class="games-grid">
                 <div class="game-card" data-tab="roulette">
                     <div class="game-icon">🎡</div>
-                    <span class="game-name">Рулетка</span>
+                    <span class="game-name">Кейсы</span>
                 </div>
                 <div class="game-card" data-tab="slot">
                     <div class="game-icon">🎰</div>
@@ -678,11 +682,11 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
             </div>
         </div>
 
-        <!-- СТРАНИЦА РУЛЕТКИ -->
+        <!-- СТРАНИЦА КЕЙСОВ (бывшая рулетка) -->
         <div id="roulette-page" class="page">
             <div class="game-header">
                 <button class="btn-back" data-back="home">←</button>
-                <span class="game-title">Рулетка</span>
+                <span class="game-title">Кейсы</span>
             </div>
             <div id="mode-selector" class="mode-selector">
                 <button class="mode-btn active" data-mode="light">Low</button>
@@ -701,9 +705,9 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                 </div>
             </div>
             <div id="spin-area" class="spin-area">
-                <div id="spin-info" class="spin-info">1 спин = <span id="spin-cost">25</span> монет</div>
+                <div id="spin-info" class="spin-info">1 кейс = <span id="spin-cost">25</span> монет</div>
                 <button id="spin-btn" class="btn-primary btn-large btn-glow btn-shimmer">
-                    КРУТИТЬ
+                    ОТКРЫТЬ
                     <span id="spin-cost-label">25 Токенов</span>
                 </button>
             </div>
@@ -775,7 +779,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                         <span class="resource-icon">⭐</span>
                         <div class="resource-info">
                             <span class="resource-value" id="clicker-stars">0</span>
-                            <span class="resource-label">STAR</span>
+                            <span class="resource-label">КЛИКИ</span>
                         </div>
                     </div>
                     <div class="resource-item">
@@ -879,7 +883,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
     </div>
 
-    <script src="/static/script.js?v=7"></script>
+    <script src="/static/script.js?v=8"></script>
 </body>
 </html>""")
 
@@ -937,7 +941,7 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--accent-gold); border-radius: 10px; }
 
-/* ===== PARTICLES BACKGROUND ===== */
+/* ===== PARTICLES BACKGROUND - ВСЕГДА ВИДНЫ И БОЛЕЕ ЯРКИЕ ===== */
 .particles {
     position: fixed;
     top: 0;
@@ -947,34 +951,46 @@ body {
     pointer-events: none;
     z-index: 0;
     overflow: hidden;
+    opacity: 1;
 }
 .particle {
     position: absolute;
-    width: 4px;
-    height: 4px;
-    background: var(--accent-gold);
     border-radius: 50%;
-    opacity: 0.2;
+    opacity: 0.6;
     animation: floatParticle linear infinite;
+    box-shadow: 0 0 10px rgba(255, 213, 74, 0.2);
 }
-.particle:nth-child(1) { left: 10%; animation-duration: 12s; animation-delay: 0s; width: 6px; height: 6px; }
-.particle:nth-child(2) { left: 20%; animation-duration: 15s; animation-delay: 2s; }
-.particle:nth-child(3) { left: 30%; animation-duration: 10s; animation-delay: 1s; width: 8px; height: 8px; }
-.particle:nth-child(4) { left: 40%; animation-duration: 18s; animation-delay: 3s; }
-.particle:nth-child(5) { left: 50%; animation-duration: 13s; animation-delay: 0.5s; }
-.particle:nth-child(6) { left: 60%; animation-duration: 11s; animation-delay: 4s; width: 6px; height: 6px; }
-.particle:nth-child(7) { left: 70%; animation-duration: 16s; animation-delay: 1.5s; }
-.particle:nth-child(8) { left: 80%; animation-duration: 14s; animation-delay: 2.5s; width: 8px; height: 8px; }
-.particle:nth-child(9) { left: 90%; animation-duration: 9s; animation-delay: 0.8s; }
-.particle:nth-child(10) { left: 15%; animation-duration: 17s; animation-delay: 3.5s; }
-.particle:nth-child(11) { left: 45%; animation-duration: 12s; animation-delay: 5s; }
-.particle:nth-child(12) { left: 75%; animation-duration: 14s; animation-delay: 2.8s; }
+.particle:nth-child(1) { left: 5%; animation-duration: 14s; animation-delay: 0s; width: 8px; height: 8px; background: #FFD54A; }
+.particle:nth-child(2) { left: 12%; animation-duration: 18s; animation-delay: 2s; width: 5px; height: 5px; background: #FF6B6B; }
+.particle:nth-child(3) { left: 20%; animation-duration: 12s; animation-delay: 1s; width: 10px; height: 10px; background: #4FC3F7; }
+.particle:nth-child(4) { left: 28%; animation-duration: 20s; animation-delay: 3s; width: 6px; height: 6px; background: #FFD54A; }
+.particle:nth-child(5) { left: 35%; animation-duration: 15s; animation-delay: 0.5s; width: 7px; height: 7px; background: #CE93D8; }
+.particle:nth-child(6) { left: 42%; animation-duration: 13s; animation-delay: 4s; width: 9px; height: 9px; background: #FFD54A; }
+.particle:nth-child(7) { left: 50%; animation-duration: 17s; animation-delay: 1.5s; width: 5px; height: 5px; background: #81C784; }
+.particle:nth-child(8) { left: 58%; animation-duration: 16s; animation-delay: 2.5s; width: 11px; height: 11px; background: #FFD54A; }
+.particle:nth-child(9) { left: 65%; animation-duration: 11s; animation-delay: 0.8s; width: 6px; height: 6px; background: #FF8A65; }
+.particle:nth-child(10) { left: 72%; animation-duration: 19s; animation-delay: 3.5s; width: 8px; height: 8px; background: #FFD54A; }
+.particle:nth-child(11) { left: 80%; animation-duration: 14s; animation-delay: 5s; width: 7px; height: 7px; background: #4FC3F7; }
+.particle:nth-child(12) { left: 88%; animation-duration: 16s; animation-delay: 2.8s; width: 10px; height: 10px; background: #FFD54A; }
+.particle:nth-child(13) { left: 15%; animation-duration: 22s; animation-delay: 1.2s; width: 4px; height: 4px; background: #FFD54A; }
+.particle:nth-child(14) { left: 45%; animation-duration: 18s; animation-delay: 4.2s; width: 12px; height: 12px; background: #CE93D8; }
+.particle:nth-child(15) { left: 70%; animation-duration: 15s; animation-delay: 3.8s; width: 6px; height: 6px; background: #FFD54A; }
+.particle:nth-child(16) { left: 92%; animation-duration: 13s; animation-delay: 0.3s; width: 8px; height: 8px; background: #81C784; }
+.particle:nth-child(17) { left: 8%; animation-duration: 17s; animation-delay: 2.2s; width: 5px; height: 5px; background: #FFD54A; }
+.particle:nth-child(18) { left: 55%; animation-duration: 14s; animation-delay: 1.8s; width: 9px; height: 9px; background: #FF6B6B; }
+.particle:nth-child(19) { left: 25%; animation-duration: 19s; animation-delay: 4.8s; width: 7px; height: 7px; background: #FFD54A; }
+.particle:nth-child(20) { left: 78%; animation-duration: 16s; animation-delay: 0.7s; width: 11px; height: 11px; background: #4FC3F7; }
+.particle:nth-child(21) { left: 48%; animation-duration: 21s; animation-delay: 3.2s; width: 4px; height: 4px; background: #FFD54A; }
+.particle:nth-child(22) { left: 62%; animation-duration: 14s; animation-delay: 5.5s; width: 8px; height: 8px; background: #CE93D8; }
+.particle:nth-child(23) { left: 18%; animation-duration: 18s; animation-delay: 0.9s; width: 6px; height: 6px; background: #FFD54A; }
+.particle:nth-child(24) { left: 85%; animation-duration: 15s; animation-delay: 2.1s; width: 10px; height: 10px; background: #81C784; }
 
 @keyframes floatParticle {
-    0% { transform: translateY(100vh) scale(0); opacity: 0; }
-    10% { opacity: 0.2; }
-    90% { opacity: 0.2; }
-    100% { transform: translateY(-20vh) scale(1); opacity: 0; }
+    0% { transform: translate(0, 0) scale(1); opacity: 0.6; }
+    25% { transform: translate(20px, -30px) scale(1.2); opacity: 0.9; }
+    50% { transform: translate(-10px, -60px) scale(0.8); opacity: 0.5; }
+    75% { transform: translate(30px, -90px) scale(1.1); opacity: 0.8; }
+    100% { transform: translate(0, -120px) scale(1); opacity: 0.4; }
 }
 
 /* ===== LOGIN SCREEN ===== */
@@ -1117,7 +1133,6 @@ body {
     }
 }
 
-/* Разные скорости для разных кнопок */
 .btn-shimmer:nth-child(1)::before { animation-duration: 3s; }
 .btn-shimmer:nth-child(2)::before { animation-duration: 4s; }
 .btn-shimmer:nth-child(3)::before { animation-duration: 3.5s; }
@@ -1126,7 +1141,6 @@ body {
     animation-duration: 1.5s;
 }
 
-/* Специальный эффект для главной кнопки КРУТИТЬ */
 #spin-btn.btn-shimmer::before {
     background: linear-gradient(
         45deg,
@@ -1372,6 +1386,8 @@ body {
     max-width: 400px;
     flex-direction: column;
     align-items: center;
+    position: relative;
+    z-index: 1;
 }
 .page.active {
     display: flex;
@@ -1441,7 +1457,7 @@ body {
     font-weight: 700;
 }
 
-/* ===== ROULETTE ===== */
+/* ===== ROULETTE / CASES ===== */
 .mode-selector {
     display: flex;
     gap: 12px;
@@ -1478,7 +1494,6 @@ body {
     width: 240px;
     height: 240px;
     object-fit: contain;
-    /* Убрано свечение */
 }
 .key-icon:hover {
     transform: scale(1.02);
@@ -2022,7 +2037,7 @@ body {
 }
 """)
 
-# JavaScript (без изменений)
+# JavaScript (обновлен)
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
 let current_user = null;
@@ -2342,7 +2357,7 @@ async function initGames() {
     initClicker();
 }
 
-// ========== РУЛЕТКА ==========
+// ========== РУЛЕТКА / КЕЙСЫ ==========
 function updateKeyImage(mode) {
     const keyImage = document.getElementById('key-image');
     const images = {
@@ -2423,7 +2438,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     isSpinning = true;
     const btn = document.getElementById('spin-btn');
     btn.disabled = true;
-    btn.innerHTML = 'КРУТИТЬ <span>Загрузка...</span>';
+    btn.innerHTML = 'ОТКРЫТЬ <span>Загрузка...</span>';
     document.getElementById('result-message').textContent = '';
     document.getElementById('key-container').style.display = 'none';
     const wheelWrapper = document.getElementById('wheel-wrapper');
@@ -2455,7 +2470,7 @@ document.getElementById('spin-btn').addEventListener('click', async () => {
     isSpinning = false;
     btn.disabled = false;
     const cost2 = { light:25, normal:50, hard:100 }[currentMode];
-    btn.innerHTML = 'КРУТИТЬ <span>' + cost2 + ' Токенов</span>';
+    btn.innerHTML = 'ОТКРЫТЬ <span>' + cost2 + ' Токенов</span>';
 });
 
 // ========== СЛОТ ==========
@@ -3079,7 +3094,7 @@ function startFakeWins() {
                            'gamer_' + (300000 + Math.floor(Math.random()*700000)), 
                            'winner_' + (400000 + Math.floor(Math.random()*600000))];
         const username = fakeUsers[Math.floor(Math.random()*fakeUsers.length)];
-        const prizes = ['🎰 Слот', '🎡 Рулетка', '🚀 Ракетка', '🎁 Подарок'];
+        const prizes = ['🎰 Слот', '🎡 Кейсы', '🚀 Ракетка', '🎁 Подарок'];
         const prize = prizes[Math.floor(Math.random()*prizes.length)];
         const amount = Math.floor(Math.random() * 150) + 10;
         if (isWin) addFakeWinToFeed(username, prize, amount);
