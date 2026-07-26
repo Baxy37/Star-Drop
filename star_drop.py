@@ -555,7 +555,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=3">
+    <link rel="stylesheet" href="/static/style.css?v=4">
 </head>
 <body>
 
@@ -674,7 +674,9 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                 <button class="mode-btn" data-mode="hard">Hard</button>
             </div>
             <div id="key-container" class="key-container">
-                <div id="key-display" class="key-display">🔑</div>
+                <div id="key-display" class="key-display">
+                    <img id="key-image" src="/static/IMGlow.png" alt="Key" class="key-icon">
+                </div>
             </div>
             <div id="wheel-wrapper" style="display:none;">
                 <div id="wheel-container" class="wheel-container">
@@ -861,7 +863,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
     </div>
 
-    <script src="/static/script.js?v=3"></script>
+    <script src="/static/script.js?v=4"></script>
 </body>
 </html>""")
 
@@ -1391,9 +1393,20 @@ body {
     margin: 8px 0 16px;
 }
 .key-display {
-    font-size: 72px;
-    color: var(--accent-gold);
-    text-shadow: 0 0 40px rgba(255, 213, 74, 0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.key-icon {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 30px rgba(255, 213, 74, 0.3));
+    transition: all 0.3s ease;
+}
+.key-icon:hover {
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 40px rgba(255, 213, 74, 0.5));
 }
 .wheel-container {
     width: 100%;
@@ -1422,8 +1435,12 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 32px;
     border: 1px solid var(--border-glass);
+}
+.wheel-cell img {
+    width: 50px;
+    height: 50px;
+    object-fit: contain;
 }
 .wheel-arrow {
     position: absolute;
@@ -1925,6 +1942,14 @@ body {
         grid-template-columns: 32px 1fr auto auto;
         padding: 10px 12px;
     }
+    .key-icon {
+        width: 64px;
+        height: 64px;
+    }
+    .wheel-cell img {
+        width: 40px;
+        height: 40px;
+    }
 }
 """)
 
@@ -2241,7 +2266,7 @@ async function initGames() {
             this.classList.add('active');
             currentMode = this.dataset.mode;
             updateSpinCost();
-            updateKeyColor(currentMode);
+            updateKeyImage(currentMode);
         });
     });
     
@@ -2249,329 +2274,33 @@ async function initGames() {
     initClicker();
 }
 
-// ========== КЛИКЕР ==========
-async function loadClickerData() {
-    if (!current_user) return;
-    try {
-        const resp = await fetch(`/api/clicker_data/${current_user.id}`);
-        const data = await resp.json();
-        if (resp.ok) {
-            clickerStars = data.clicker_balance || 0;
-            clickerCrystals = data.crystal_boost_level * 10 || 0;
-            clickerEnergy = data.energy || 15;
-            maxEnergy = data.max_energy || 15;
-            clickPower = data.click_power || 1;
-            autoClickLevel = data.auto_click_level || 0;
-            multiplierLevel = data.multiplier_level || 0;
-            crystalBoostLevel = data.crystal_boost_level || 0;
-            
-            updateClickerUI();
-            updateBoostButtons();
-        }
-    } catch (e) { console.error('Ошибка загрузки данных кликера:', e); }
+// ========== РУЛЕТКА С ИЗОБРАЖЕНИЯМИ ==========
+function updateKeyImage(mode) {
+    const keyImage = document.getElementById('key-image');
+    const images = {
+        light: '/static/IMGlow.png',
+        normal: '/static/IMGnorm.jpg',
+        hard: '/static/IMGhard.jpg'
+    };
+    keyImage.src = images[mode] || images.light;
 }
 
-function updateClickerUI() {
-    document.getElementById('clicker-stars').textContent = formatNumber(clickerStars);
-    document.getElementById('clicker-crystals').textContent = formatNumber(clickerCrystals);
-    document.getElementById('clicker-energy').textContent = `${clickerEnergy}/${maxEnergy}`;
-    document.getElementById('clicker-plus').textContent = `+${clickPower}`;
-    document.getElementById('auto-level').textContent = autoClickLevel;
-    document.getElementById('multiplier-level').textContent = multiplierLevel;
-    document.getElementById('crystal-level').textContent = crystalBoostLevel;
-    
-    // Обновляем цены бустов
-    const autoPrice = 500 * Math.pow(1.5, autoClickLevel);
-    const multiplierPrice = 1000 * Math.pow(2, multiplierLevel);
-    const crystalPrice = 2000 * Math.pow(1.8, crystalBoostLevel);
-    
-    document.getElementById('auto-price').textContent = formatNumber(Math.floor(autoPrice));
-    document.getElementById('multiplier-price').textContent = formatNumber(Math.floor(multiplierPrice));
-    document.getElementById('crystal-price').textContent = formatNumber(Math.floor(crystalPrice));
-}
-
-function updateBoostButtons() {
-    const autoPrice = 500 * Math.pow(1.5, autoClickLevel);
-    const multiplierPrice = 1000 * Math.pow(2, multiplierLevel);
-    const crystalPrice = 2000 * Math.pow(1.8, crystalBoostLevel);
-    
-    document.querySelectorAll('.boost-btn').forEach(btn => {
-        const boost = btn.dataset.boost;
-        let price = 0;
-        if (boost === 'auto') price = Math.floor(autoPrice);
-        else if (boost === 'multiplier') price = Math.floor(multiplierPrice);
-        else if (boost === 'crystal') price = Math.floor(crystalPrice);
-        
-        btn.disabled = clickerStars < price;
-        btn.parentElement.classList.toggle('disabled', clickerStars < price);
-    });
-}
-
-function initClicker() {
-    // Клик по кругу
-    const circle = document.getElementById('clicker-circle');
-    const area = document.getElementById('clicker-area');
-    
-    circle.addEventListener('click', handleClick);
-    area.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        handleClick(e);
-    });
-    
-    // Кнопки бустов
-    document.querySelectorAll('.boost-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const boost = btn.dataset.boost;
-            await buyBoost(boost);
-        });
-    });
-    
-    // Кнопка продажи кликов
-    document.getElementById('sell-clicks-btn').addEventListener('click', sellClicks);
-    
-    // Автокликер
-    startAutoClicker();
-    
-    // Регенерация энергии
-    startEnergyRegeneration();
-}
-
-function handleClick(e) {
-    if (!current_user || clickerEnergy <= 0) {
-        if (clickerEnergy <= 0) {
-            const msg = document.getElementById('sell-message');
-            msg.textContent = '❌ Нет энергии! Подождите восстановления.';
-            msg.style.color = '#ff6b6b';
-            setTimeout(() => { msg.textContent = ''; }, 2000);
-        }
-        return;
-    }
-    
-    // Уменьшаем энергию
-    clickerEnergy--;
-    const starsEarned = clickPower * (1 + multiplierLevel * 0.1);
-    clickerStars += starsEarned;
-    clickerCrystals += 0.1 * (1 + crystalBoostLevel * 0.05);
-    
-    // Анимация
-    animateClick(e);
-    
-    // Обновляем UI
-    updateClickerUI();
-    updateBoostButtons();
-    
-    // Сохраняем в БД
-    saveClickerData(starsEarned);
-}
-
-function animateClick(e) {
-    const circle = document.getElementById('clicker-circle');
-    const plus = document.getElementById('clicker-plus');
-    
-    // Эффект нажатия
-    circle.style.transform = 'scale(0.92)';
-    setTimeout(() => {
-        circle.style.transform = 'scale(1)';
-    }, 100);
-    
-    // Анимация "+N"
-    const clone = plus.cloneNode(true);
-    clone.style.position = 'absolute';
-    clone.style.left = '50%';
-    clone.style.top = '50%';
-    clone.style.transform = 'translate(-50%, -50%)';
-    clone.style.fontSize = '28px';
-    clone.style.color = '#4FC3F7';
-    clone.style.pointerEvents = 'none';
-    clone.style.opacity = '1';
-    circle.appendChild(clone);
-    
-    let y = -30;
-    const anim = setInterval(() => {
-        y -= 2;
-        clone.style.transform = `translate(-50%, ${y}px)`;
-        clone.style.opacity -= 0.02;
-        if (y < -100) {
-            clearInterval(anim);
-            clone.remove();
-        }
-    }, 16);
-}
-
-async function saveClickerData(starsEarned) {
-    if (!current_user) return;
-    try {
-        await fetch('/api/clicker_update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: current_user.id,
-                stars: Math.floor(starsEarned),
-                energy: -1
-            })
-        });
-    } catch (e) { console.error('Ошибка сохранения кликера:', e); }
-}
-
-async function buyBoost(boost) {
-    if (!current_user) return;
-    
-    let price = 0;
-    let level = 0;
-    let type = boost;
-    
-    if (boost === 'auto') {
-        price = Math.floor(500 * Math.pow(1.5, autoClickLevel));
-        level = autoClickLevel;
-    } else if (boost === 'multiplier') {
-        price = Math.floor(1000 * Math.pow(2, multiplierLevel));
-        level = multiplierLevel;
-    } else if (boost === 'crystal') {
-        price = Math.floor(2000 * Math.pow(1.8, crystalBoostLevel));
-        level = crystalBoostLevel;
-    }
-    
-    if (clickerStars < price) {
-        const msg = document.getElementById('sell-message');
-        msg.textContent = '❌ Недостаточно звезд!';
-        msg.style.color = '#ff6b6b';
-        setTimeout(() => { msg.textContent = ''; }, 2000);
-        return;
-    }
-    
-    // Списываем звезды
-    clickerStars -= price;
-    
-    // Повышаем уровень
-    if (boost === 'auto') autoClickLevel++;
-    else if (boost === 'multiplier') multiplierLevel++;
-    else if (boost === 'crystal') crystalBoostLevel++;
-    
-    // Обновляем UI
-    updateClickerUI();
-    updateBoostButtons();
-    
-    // Сохраняем в БД
-    try {
-        await fetch('/api/clicker_update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: current_user.id,
-                stars: -price,
-                auto_level: autoClickLevel,
-                multiplier_level: multiplierLevel,
-                crystal_level: crystalBoostLevel
-            })
-        });
-        
-        const msg = document.getElementById('sell-message');
-        msg.textContent = '✅ Улучшение куплено!';
-        msg.style.color = '#4CAF50';
-        setTimeout(() => { msg.textContent = ''; }, 2000);
-        
-        // Перезапускаем автокликер с новым уровнем
-        startAutoClicker();
-    } catch (e) {
-        console.error('Ошибка покупки буста:', e);
-    }
-}
-
-function startAutoClicker() {
-    if (autoClickInterval) clearInterval(autoClickInterval);
-    
-    if (autoClickLevel > 0) {
-        const interval = Math.max(1000, 3000 - autoClickLevel * 150);
-        autoClickInterval = setInterval(() => {
-            if (current_user && clickerEnergy > 0 && autoClickLevel > 0) {
-                const starsEarned = clickPower * (1 + multiplierLevel * 0.1) * 0.3 * (1 + autoClickLevel * 0.1);
-                clickerStars += Math.floor(starsEarned);
-                clickerEnergy = Math.max(0, clickerEnergy - 0.5);
-                
-                updateClickerUI();
-                updateBoostButtons();
-                
-                saveClickerData(Math.floor(starsEarned));
-            }
-        }, interval);
-    }
-}
-
-function startEnergyRegeneration() {
-    if (energyRegenInterval) clearInterval(energyRegenInterval);
-    
-    energyRegenInterval = setInterval(() => {
-        if (clickerEnergy < maxEnergy) {
-            clickerEnergy = Math.min(maxEnergy, clickerEnergy + 1);
-            updateClickerUI();
-        }
-    }, 3000);
-}
-
-async function sellClicks() {
-    if (!current_user) return;
-    
-    // Проверяем, сколько кликов можно продать
-    const clicksToSell = Math.floor(clickerStars);
-    if (clicksToSell < 1000) {
-        const msg = document.getElementById('sell-message');
-        msg.textContent = '❌ Нужно минимум 1000 кликов для продажи!';
-        msg.style.color = '#ff6b6b';
-        setTimeout(() => { msg.textContent = ''; }, 3000);
-        return;
-    }
-    
-    const tokensEarned = Math.floor(clicksToSell / 1000);
-    
-    try {
-        const resp = await fetch('/api/sell_clicks', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: current_user.id,
-                clicks: clicksToSell
-            })
-        });
-        const data = await resp.json();
-        
-        if (resp.ok) {
-            clickerStars = data.remaining_clicks;
-            balance = data.new_balance;
-            document.getElementById('balance-amount').textContent = balance;
-            updateClickerUI();
-            updateBoostButtons();
-            
-            const msg = document.getElementById('sell-message');
-            msg.textContent = `✅ Продано ${clicksToSell} кликов! Получено ${tokensEarned} токенов!`;
-            msg.style.color = '#4CAF50';
-            setTimeout(() => { msg.textContent = ''; }, 4000);
-        } else {
-            const msg = document.getElementById('sell-message');
-            msg.textContent = '❌ ' + data.detail;
-            msg.style.color = '#ff6b6b';
-            setTimeout(() => { msg.textContent = ''; }, 3000);
-        }
-    } catch (e) {
-        console.error('Ошибка продажи кликов:', e);
-    }
-}
-
-function formatNumber(num) {
-    if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
-    if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
-    return Math.floor(num).toString();
-}
-
-// ========== РУЛЕТКА ==========
 function buildRouletteStrip() {
     const strip = document.getElementById('wheel-strip');
     strip.innerHTML = '';
-    const symbols = ['❌', '🎫'];
+    // Используем изображения для ячеек рулетки
+    const symbols = [
+        '/static/lose_symbol.png',  // ❌
+        '/static/win_symbol.png'    // 🎫
+    ];
     for (let i = 0; i < 2000; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
         cell.dataset.index = i;
-        cell.textContent = symbols[i % 2];
+        const img = document.createElement('img');
+        img.src = symbols[i % 2];
+        img.alt = i % 2 === 0 ? 'Lose' : 'Win';
+        cell.appendChild(img);
         strip.appendChild(cell);
     }
 }
@@ -2583,15 +2312,23 @@ function animateRouletteWheel(win) {
         const cells = strip.children;
         const cellWidth = cells[0]?.offsetWidth + 4 || 64;
         const containerWidth = container.offsetWidth || 300;
-        const targetSymbol = win ? '🎫' : '❌';
+        const targetSymbol = win ? '/static/win_symbol.png' : '/static/lose_symbol.png';
         let targetIndex = -1;
         const startRange = 550, endRange = 580;
         for (let i = startRange; i <= endRange && i < cells.length; i++) {
-            if (cells[i].textContent === targetSymbol) { targetIndex = i; break; }
+            const img = cells[i].querySelector('img');
+            if (img && img.src.includes(targetSymbol)) {
+                targetIndex = i;
+                break;
+            }
         }
         if (targetIndex === -1) {
             for (let i = 0; i < cells.length; i++) {
-                if (cells[i].textContent === targetSymbol) { targetIndex = i; break; }
+                const img = cells[i].querySelector('img');
+                if (img && img.src.includes(targetSymbol)) {
+                    targetIndex = i;
+                    break;
+                }
             }
         }
         if (targetIndex === -1) targetIndex = startRange;
@@ -2621,13 +2358,6 @@ function updateSpinCost() {
     const cost = costs[currentMode];
     document.getElementById('spin-cost').textContent = cost;
     document.getElementById('spin-cost-label').textContent = cost + ' Токенов';
-}
-
-function updateKeyColor(mode) {
-    const keyDisplay = document.getElementById('key-display');
-    if (mode === 'light') keyDisplay.textContent = '🔑';
-    else if (mode === 'normal') keyDisplay.textContent = '🎟️';
-    else if (mode === 'hard') keyDisplay.textContent = '🎫';
 }
 
 document.getElementById('spin-btn').addEventListener('click', async () => {
@@ -2993,6 +2723,300 @@ function simulateRocketRound(bet) {
     }, 150);
 }
 
+// ========== КЛИКЕР ==========
+async function loadClickerData() {
+    if (!current_user) return;
+    try {
+        const resp = await fetch(`/api/clicker_data/${current_user.id}`);
+        const data = await resp.json();
+        if (resp.ok) {
+            clickerStars = data.clicker_balance || 0;
+            clickerCrystals = data.crystal_boost_level * 10 || 0;
+            clickerEnergy = data.energy || 15;
+            maxEnergy = data.max_energy || 15;
+            clickPower = data.click_power || 1;
+            autoClickLevel = data.auto_click_level || 0;
+            multiplierLevel = data.multiplier_level || 0;
+            crystalBoostLevel = data.crystal_boost_level || 0;
+            
+            updateClickerUI();
+            updateBoostButtons();
+        }
+    } catch (e) { console.error('Ошибка загрузки данных кликера:', e); }
+}
+
+function updateClickerUI() {
+    document.getElementById('clicker-stars').textContent = formatNumber(clickerStars);
+    document.getElementById('clicker-crystals').textContent = formatNumber(clickerCrystals);
+    document.getElementById('clicker-energy').textContent = `${clickerEnergy}/${maxEnergy}`;
+    document.getElementById('clicker-plus').textContent = `+${clickPower}`;
+    document.getElementById('auto-level').textContent = autoClickLevel;
+    document.getElementById('multiplier-level').textContent = multiplierLevel;
+    document.getElementById('crystal-level').textContent = crystalBoostLevel;
+    
+    const autoPrice = 500 * Math.pow(1.5, autoClickLevel);
+    const multiplierPrice = 1000 * Math.pow(2, multiplierLevel);
+    const crystalPrice = 2000 * Math.pow(1.8, crystalBoostLevel);
+    
+    document.getElementById('auto-price').textContent = formatNumber(Math.floor(autoPrice));
+    document.getElementById('multiplier-price').textContent = formatNumber(Math.floor(multiplierPrice));
+    document.getElementById('crystal-price').textContent = formatNumber(Math.floor(crystalPrice));
+}
+
+function updateBoostButtons() {
+    const autoPrice = 500 * Math.pow(1.5, autoClickLevel);
+    const multiplierPrice = 1000 * Math.pow(2, multiplierLevel);
+    const crystalPrice = 2000 * Math.pow(1.8, crystalBoostLevel);
+    
+    document.querySelectorAll('.boost-btn').forEach(btn => {
+        const boost = btn.dataset.boost;
+        let price = 0;
+        if (boost === 'auto') price = Math.floor(autoPrice);
+        else if (boost === 'multiplier') price = Math.floor(multiplierPrice);
+        else if (boost === 'crystal') price = Math.floor(crystalPrice);
+        
+        btn.disabled = clickerStars < price;
+        btn.parentElement.classList.toggle('disabled', clickerStars < price);
+    });
+}
+
+function initClicker() {
+    const circle = document.getElementById('clicker-circle');
+    const area = document.getElementById('clicker-area');
+    
+    circle.addEventListener('click', handleClick);
+    area.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        handleClick(e);
+    });
+    
+    document.querySelectorAll('.boost-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const boost = btn.dataset.boost;
+            await buyBoost(boost);
+        });
+    });
+    
+    document.getElementById('sell-clicks-btn').addEventListener('click', sellClicks);
+    
+    startAutoClicker();
+    startEnergyRegeneration();
+}
+
+function handleClick(e) {
+    if (!current_user || clickerEnergy <= 0) {
+        if (clickerEnergy <= 0) {
+            const msg = document.getElementById('sell-message');
+            msg.textContent = '❌ Нет энергии! Подождите восстановления.';
+            msg.style.color = '#ff6b6b';
+            setTimeout(() => { msg.textContent = ''; }, 2000);
+        }
+        return;
+    }
+    
+    clickerEnergy--;
+    const starsEarned = clickPower * (1 + multiplierLevel * 0.1);
+    clickerStars += starsEarned;
+    clickerCrystals += 0.1 * (1 + crystalBoostLevel * 0.05);
+    
+    animateClick(e);
+    
+    updateClickerUI();
+    updateBoostButtons();
+    
+    saveClickerData(starsEarned);
+}
+
+function animateClick(e) {
+    const circle = document.getElementById('clicker-circle');
+    const plus = document.getElementById('clicker-plus');
+    
+    circle.style.transform = 'scale(0.92)';
+    setTimeout(() => {
+        circle.style.transform = 'scale(1)';
+    }, 100);
+    
+    const clone = plus.cloneNode(true);
+    clone.style.position = 'absolute';
+    clone.style.left = '50%';
+    clone.style.top = '50%';
+    clone.style.transform = 'translate(-50%, -50%)';
+    clone.style.fontSize = '28px';
+    clone.style.color = '#4FC3F7';
+    clone.style.pointerEvents = 'none';
+    clone.style.opacity = '1';
+    circle.appendChild(clone);
+    
+    let y = -30;
+    const anim = setInterval(() => {
+        y -= 2;
+        clone.style.transform = `translate(-50%, ${y}px)`;
+        clone.style.opacity -= 0.02;
+        if (y < -100) {
+            clearInterval(anim);
+            clone.remove();
+        }
+    }, 16);
+}
+
+async function saveClickerData(starsEarned) {
+    if (!current_user) return;
+    try {
+        await fetch('/api/clicker_update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: current_user.id,
+                stars: Math.floor(starsEarned),
+                energy: -1
+            })
+        });
+    } catch (e) { console.error('Ошибка сохранения кликера:', e); }
+}
+
+async function buyBoost(boost) {
+    if (!current_user) return;
+    
+    let price = 0;
+    let level = 0;
+    let type = boost;
+    
+    if (boost === 'auto') {
+        price = Math.floor(500 * Math.pow(1.5, autoClickLevel));
+        level = autoClickLevel;
+    } else if (boost === 'multiplier') {
+        price = Math.floor(1000 * Math.pow(2, multiplierLevel));
+        level = multiplierLevel;
+    } else if (boost === 'crystal') {
+        price = Math.floor(2000 * Math.pow(1.8, crystalBoostLevel));
+        level = crystalBoostLevel;
+    }
+    
+    if (clickerStars < price) {
+        const msg = document.getElementById('sell-message');
+        msg.textContent = '❌ Недостаточно звезд!';
+        msg.style.color = '#ff6b6b';
+        setTimeout(() => { msg.textContent = ''; }, 2000);
+        return;
+    }
+    
+    clickerStars -= price;
+    
+    if (boost === 'auto') autoClickLevel++;
+    else if (boost === 'multiplier') multiplierLevel++;
+    else if (boost === 'crystal') crystalBoostLevel++;
+    
+    updateClickerUI();
+    updateBoostButtons();
+    
+    try {
+        await fetch('/api/clicker_update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: current_user.id,
+                stars: -price,
+                auto_level: autoClickLevel,
+                multiplier_level: multiplierLevel,
+                crystal_level: crystalBoostLevel
+            })
+        });
+        
+        const msg = document.getElementById('sell-message');
+        msg.textContent = '✅ Улучшение куплено!';
+        msg.style.color = '#4CAF50';
+        setTimeout(() => { msg.textContent = ''; }, 2000);
+        
+        startAutoClicker();
+    } catch (e) {
+        console.error('Ошибка покупки буста:', e);
+    }
+}
+
+function startAutoClicker() {
+    if (autoClickInterval) clearInterval(autoClickInterval);
+    
+    if (autoClickLevel > 0) {
+        const interval = Math.max(1000, 3000 - autoClickLevel * 150);
+        autoClickInterval = setInterval(() => {
+            if (current_user && clickerEnergy > 0 && autoClickLevel > 0) {
+                const starsEarned = clickPower * (1 + multiplierLevel * 0.1) * 0.3 * (1 + autoClickLevel * 0.1);
+                clickerStars += Math.floor(starsEarned);
+                clickerEnergy = Math.max(0, clickerEnergy - 0.5);
+                
+                updateClickerUI();
+                updateBoostButtons();
+                
+                saveClickerData(Math.floor(starsEarned));
+            }
+        }, interval);
+    }
+}
+
+function startEnergyRegeneration() {
+    if (energyRegenInterval) clearInterval(energyRegenInterval);
+    
+    energyRegenInterval = setInterval(() => {
+        if (clickerEnergy < maxEnergy) {
+            clickerEnergy = Math.min(maxEnergy, clickerEnergy + 1);
+            updateClickerUI();
+        }
+    }, 3000);
+}
+
+async function sellClicks() {
+    if (!current_user) return;
+    
+    const clicksToSell = Math.floor(clickerStars);
+    if (clicksToSell < 1000) {
+        const msg = document.getElementById('sell-message');
+        msg.textContent = '❌ Нужно минимум 1000 кликов для продажи!';
+        msg.style.color = '#ff6b6b';
+        setTimeout(() => { msg.textContent = ''; }, 3000);
+        return;
+    }
+    
+    const tokensEarned = Math.floor(clicksToSell / 1000);
+    
+    try {
+        const resp = await fetch('/api/sell_clicks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: current_user.id,
+                clicks: clicksToSell
+            })
+        });
+        const data = await resp.json();
+        
+        if (resp.ok) {
+            clickerStars = data.remaining_clicks;
+            balance = data.new_balance;
+            document.getElementById('balance-amount').textContent = balance;
+            updateClickerUI();
+            updateBoostButtons();
+            
+            const msg = document.getElementById('sell-message');
+            msg.textContent = `✅ Продано ${clicksToSell} кликов! Получено ${tokensEarned} токенов!`;
+            msg.style.color = '#4CAF50';
+            setTimeout(() => { msg.textContent = ''; }, 4000);
+        } else {
+            const msg = document.getElementById('sell-message');
+            msg.textContent = '❌ ' + data.detail;
+            msg.style.color = '#ff6b6b';
+            setTimeout(() => { msg.textContent = ''; }, 3000);
+        }
+    } catch (e) {
+        console.error('Ошибка продажи кликов:', e);
+    }
+}
+
+function formatNumber(num) {
+    if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
+    if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+    return Math.floor(num).toString();
+}
+
 // ========== ФИД ПОБЕД ==========
 function startFakeWins() {
     setInterval(() => {
@@ -3157,13 +3181,9 @@ async def api_sell_clicks(data: SellClicksRequest):
     conn = sqlite3.connect(DB_NAME)
     cur = conn.cursor()
     
-    # Обновляем баланс токенов
     cur.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (tokens, data.user_id))
-    
-    # Обновляем баланс кликов
     cur.execute("UPDATE users SET clicker_balance = clicker_balance - ? WHERE id = ?", (data.clicks, data.user_id))
     
-    # Добавляем транзакцию
     cur.execute("SELECT username FROM users WHERE id = ?", (data.user_id,))
     username_row = cur.fetchone()
     username = username_row[0] if username_row else None
