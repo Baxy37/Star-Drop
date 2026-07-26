@@ -572,7 +572,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=14">
+    <link rel="stylesheet" href="/static/style.css?v=15">
 </head>
 <body>
 
@@ -901,7 +901,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
     </div>
 
-    <script src="/static/script.js?v=14"></script>
+    <script src="/static/script.js?v=15"></script>
 </body>
 </html>""")
 
@@ -1439,8 +1439,8 @@ body {
     transition: all 0.3s ease;
 }
 .game-card-content {
-    background: rgba(255, 255, 255, 0.03);
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.02);
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
     border-radius: var(--radius-medium);
     padding: 12px;
     display: flex;
@@ -1449,9 +1449,12 @@ body {
     justify-content: center;
     min-height: 200px;
     transition: all 0.3s ease;
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.05), inset 0 0 20px rgba(255, 255, 255, 0.03);
     position: relative;
     overflow: hidden;
+}
+/* Прозрачный фон, виден только контур */
+.game-card-content {
+    background: transparent !important;
 }
 .game-card-content::before {
     content: '';
@@ -1462,13 +1465,13 @@ body {
     bottom: -2px;
     background: linear-gradient(45deg, 
         transparent 30%, 
-        rgba(255, 255, 255, 0.1) 40%, 
-        rgba(255, 255, 255, 0.3) 50%, 
-        rgba(255, 255, 255, 0.1) 60%, 
+        rgba(255, 255, 255, 0.05) 40%, 
+        rgba(255, 255, 255, 0.15) 50%, 
+        rgba(255, 255, 255, 0.05) 60%, 
         transparent 70%
     );
     background-size: 300% 300%;
-    animation: borderShine 3s ease-in-out infinite;
+    animation: borderShine 4s ease-in-out infinite;
     border-radius: var(--radius-medium);
     z-index: 0;
     pointer-events: none;
@@ -1478,13 +1481,11 @@ body {
     100% { background-position: 200% 200%; }
 }
 .game-card:hover .game-card-content {
-    border-color: rgba(255, 255, 255, 0.6);
+    border-color: rgba(255, 255, 255, 0.5);
     transform: translateY(-4px);
-    box-shadow: 0 0 40px rgba(255, 255, 255, 0.1), inset 0 0 40px rgba(255, 255, 255, 0.05);
 }
 .game-card:hover .game-image {
     transform: scale(1.05);
-    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.2));
 }
 .game-card .game-image {
     width: 100%;
