@@ -572,7 +572,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=10">
+    <link rel="stylesheet" href="/static/style.css?v=11">
 </head>
 <body>
 
@@ -884,7 +884,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
     </div>
 
-    <script src="/static/script.js?v=10"></script>
+    <script src="/static/script.js?v=11"></script>
 </body>
 </html>""")
 
@@ -942,7 +942,7 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--accent-gold); border-radius: 10px; }
 
-/* ===== PARTICLES BACKGROUND - ВСЕГДА ВИДНЫ И БОЛЕЕ ЯРКИЕ ===== */
+/* ===== PARTICLES BACKGROUND - ВСЕГДА ВИДНЫ ===== */
 .particles {
     position: fixed;
     top: 0;
@@ -1098,7 +1098,7 @@ body {
     box-shadow: 0 0 30px rgba(255, 213, 74, 0.15);
 }
 
-/* ===== SHIMMER EFFECT FOR BUTTONS ===== */
+/* ===== SHIMMER EFFECT ===== */
 .btn-shimmer {
     position: relative;
     overflow: hidden;
@@ -1126,21 +1126,14 @@ body {
 }
 
 @keyframes shimmer {
-    0% {
-        transform: translateX(-100%) rotate(25deg);
-    }
-    100% {
-        transform: translateX(100%) rotate(25deg);
-    }
+    0% { transform: translateX(-100%) rotate(25deg); }
+    100% { transform: translateX(100%) rotate(25deg); }
 }
 
 .btn-shimmer:nth-child(1)::before { animation-duration: 3s; }
 .btn-shimmer:nth-child(2)::before { animation-duration: 4s; }
 .btn-shimmer:nth-child(3)::before { animation-duration: 3.5s; }
-
-.btn-shimmer:hover::before {
-    animation-duration: 1.5s;
-}
+.btn-shimmer:hover::before { animation-duration: 1.5s; }
 
 #spin-btn.btn-shimmer::before {
     background: linear-gradient(
@@ -2054,7 +2047,7 @@ body {
 }
 """)
 
-# JavaScript (без изменений)
+# JavaScript (обновлен с правильной анимацией рулетки)
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
 let current_user = null;
@@ -2374,7 +2367,7 @@ async function initGames() {
     initClicker();
 }
 
-// ========== РУЛЕТКА / КЕЙСЫ ==========
+// ========== РУЛЕТКА / КЕЙСЫ С ИСПРАВЛЕННОЙ АНИМАЦИЕЙ ==========
 function updateKeyImage(mode) {
     const keyImage = document.getElementById('key-image');
     const images = {
@@ -2389,7 +2382,9 @@ function buildRouletteStrip() {
     const strip = document.getElementById('wheel-strip');
     strip.innerHTML = '';
     const symbols = ['❌', '🎫'];
-    for (let i = 0; i < 2000; i++) {
+    // УВЕЛИЧЕНО КОЛИЧЕСТВО ЯЧЕЕК ДЛЯ БЕСКОНЕЧНОГО ЭФФЕКТА
+    const totalCells = 3000;
+    for (let i = 0; i < totalCells; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
         cell.dataset.index = i;
@@ -2406,33 +2401,64 @@ function animateRouletteWheel(win) {
         const cellWidth = cells[0]?.offsetWidth + 4 || 64;
         const containerWidth = container.offsetWidth || 300;
         const targetSymbol = win ? '🎫' : '❌';
+        
+        // Находим целевую ячейку в середине ленты
         let targetIndex = -1;
-        const startRange = 550, endRange = 580;
-        for (let i = startRange; i <= endRange && i < cells.length; i++) {
-            if (cells[i].textContent === targetSymbol) { targetIndex = i; break; }
-        }
-        if (targetIndex === -1) {
-            for (let i = 0; i < cells.length; i++) {
-                if (cells[i].textContent === targetSymbol) { targetIndex = i; break; }
+        const midPoint = Math.floor(cells.length / 2);
+        const searchRange = 200;
+        
+        for (let i = midPoint - searchRange; i <= midPoint + searchRange && i < cells.length; i++) {
+            if (i >= 0 && cells[i].textContent === targetSymbol) {
+                targetIndex = i;
+                break;
             }
         }
-        if (targetIndex === -1) targetIndex = startRange;
+        
+        if (targetIndex === -1) {
+            for (let i = 0; i < cells.length; i++) {
+                if (cells[i].textContent === targetSymbol) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+        }
+        if (targetIndex === -1) targetIndex = midPoint;
+        
+        // Расчитываем смещение
         let targetOffset = targetIndex * cellWidth + cellWidth/2 - containerWidth/2;
-        const extraLoops = 20 + Math.floor(Math.random() * 10);
+        
+        // МАЛОЕ КОЛИЧЕСТВО ОБОРОТОВ (3-5), чтобы ячейки не улетали
+        const minLoops = 3;
+        const maxLoops = 6;
+        const extraLoops = minLoops + Math.floor(Math.random() * (maxLoops - minLoops + 1));
         const totalOffset = targetOffset + extraLoops * cells.length * cellWidth;
+        
+        // Убеждаемся, что ячейки всегда видны
         strip.style.transform = `translateX(0px)`;
-        const duration = 15000;
+        
+        // ОПТИМАЛЬНОЕ ВРЕМЯ ДЛЯ ПЛАВНОСТИ (10-14 секунд)
+        const duration = 10000 + Math.random() * 4000;
         const startTime = performance.now();
-        const startOffset = 0;
-        function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+        
+        // Плавное замедление
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+        
         function animate(now) {
             const elapsed = now - startTime;
             const progress = Math.min(elapsed / duration, 1);
-            const easedProgress = easeOutCubic(progress);
-            const currentOffset = startOffset + (totalOffset - startOffset) * easedProgress;
+            const easedProgress = easeInOutCubic(progress);
+            
+            // Плавное движение с замедлением
+            const currentOffset = totalOffset * easedProgress;
             strip.style.transform = `translateX(-${currentOffset}px)`;
-            if (progress < 1) requestAnimationFrame(animate);
-            else resolve();
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                resolve();
+            }
         }
         requestAnimationFrame(animate);
     });
