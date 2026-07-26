@@ -571,7 +571,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=6">
+    <link rel="stylesheet" href="/static/style.css?v=7">
 </head>
 <body>
 
@@ -702,7 +702,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
             </div>
             <div id="spin-area" class="spin-area">
                 <div id="spin-info" class="spin-info">1 спин = <span id="spin-cost">25</span> монет</div>
-                <button id="spin-btn" class="btn-primary btn-large btn-glow">
+                <button id="spin-btn" class="btn-primary btn-large btn-glow btn-shimmer">
                     КРУТИТЬ
                     <span id="spin-cost-label">25 Токенов</span>
                 </button>
@@ -728,7 +728,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                         <input type="range" id="bet-range" min="20" max="100" step="10" value="20">
                         <div id="slot-multiplier">При выигрыше: <b>x2</b></div>
                     </div>
-                    <button id="spin-slot-btn" class="btn-primary btn-large">Дёрнуть рычаг 🎰</button>
+                    <button id="spin-slot-btn" class="btn-primary btn-large btn-shimmer">Дёрнуть рычаг 🎰</button>
                 </div>
                 <div id="slot-result" class="slot-result"></div>
             </div>
@@ -753,7 +753,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                     <input type="range" id="rocket-bet-range" min="100" max="1000" step="10" value="500">
                 </div>
                 <div class="rocket-buttons">
-                    <button id="rocket-start-btn" class="btn-primary btn-large">🚀 Старт</button>
+                    <button id="rocket-start-btn" class="btn-primary btn-large btn-shimmer">🚀 Старт</button>
                     <button id="rocket-cashout-btn" class="btn-secondary btn-large" disabled>💸 Забрать</button>
                 </div>
                 <div id="rocket-timer" class="rocket-timer">Следующий взлёт через: <span id="rocket-countdown">5</span>с</div>
@@ -814,7 +814,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                             <span class="price-icon">⭐</span>
                             <span class="price-value" id="auto-price">500</span>
                         </div>
-                        <button class="boost-btn" data-boost="auto">Buy</button>
+                        <button class="boost-btn btn-shimmer" data-boost="auto">Buy</button>
                     </div>
 
                     <div class="boost-card" id="boost-multiplier">
@@ -827,7 +827,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                             <span class="price-icon">⭐</span>
                             <span class="price-value" id="multiplier-price">1000</span>
                         </div>
-                        <button class="boost-btn" data-boost="multiplier">Buy</button>
+                        <button class="boost-btn btn-shimmer" data-boost="multiplier">Buy</button>
                     </div>
 
                     <div class="boost-card" id="boost-crystal">
@@ -840,12 +840,12 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                             <span class="price-icon">⭐</span>
                             <span class="price-value" id="crystal-price">2000</span>
                         </div>
-                        <button class="boost-btn" data-boost="crystal">Buy</button>
+                        <button class="boost-btn btn-shimmer" data-boost="crystal">Buy</button>
                     </div>
                 </div>
 
                 <!-- Кнопка продажи кликов -->
-                <button id="sell-clicks-btn" class="btn-primary btn-large sell-btn">
+                <button id="sell-clicks-btn" class="btn-primary btn-large sell-btn btn-shimmer">
                     💰 Продать клики (1000 = 1 токен)
                 </button>
                 <div id="sell-message" class="sell-message"></div>
@@ -871,15 +871,15 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
         <!-- ПРОМОКОД -->
         <div id="promo-area" class="promo-area">
             <input type="text" id="promo-input" placeholder="Введите промокод" class="promo-input">
-            <button id="promo-btn" class="btn-primary">Активировать</button>
+            <button id="promo-btn" class="btn-primary btn-shimmer">Активировать</button>
             <div id="promo-message" class="promo-message"></div>
         </div>
 
-        <button id="withdraw-btn" class="btn-primary btn-large">Вывести токены</button>
+        <button id="withdraw-btn" class="btn-primary btn-large btn-shimmer">Вывести токены</button>
 
     </div>
 
-    <script src="/static/script.js?v=6"></script>
+    <script src="/static/script.js?v=7"></script>
 </body>
 </html>""")
 
@@ -1055,12 +1055,14 @@ body {
     font-weight: 700;
     font-size: 16px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
     box-shadow: 0 4px 15px rgba(255, 213, 74, 0.2);
+    position: relative;
+    overflow: hidden;
 }
 .btn-primary:hover {
     transform: scale(1.02);
-    box-shadow: 0 6px 25px rgba(255, 213, 74, 0.3);
+    box-shadow: 0 6px 25px rgba(255, 213, 74, 0.4);
 }
 .btn-primary:active {
     transform: scale(0.97);
@@ -1077,6 +1079,65 @@ body {
 }
 .btn-glow {
     box-shadow: 0 0 30px rgba(255, 213, 74, 0.15);
+}
+
+/* ===== SHIMMER EFFECT FOR BUTTONS ===== */
+.btn-shimmer {
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+}
+
+.btn-shimmer::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+        45deg,
+        transparent 30%,
+        rgba(255, 255, 255, 0.15) 40%,
+        rgba(255, 215, 0, 0.3) 50%,
+        rgba(255, 255, 255, 0.15) 60%,
+        transparent 70%
+    );
+    background-size: 200% 200%;
+    animation: shimmer 3s ease-in-out infinite;
+    z-index: -1;
+}
+
+@keyframes shimmer {
+    0% {
+        transform: translateX(-100%) rotate(25deg);
+    }
+    100% {
+        transform: translateX(100%) rotate(25deg);
+    }
+}
+
+/* Разные скорости для разных кнопок */
+.btn-shimmer:nth-child(1)::before { animation-duration: 3s; }
+.btn-shimmer:nth-child(2)::before { animation-duration: 4s; }
+.btn-shimmer:nth-child(3)::before { animation-duration: 3.5s; }
+
+.btn-shimmer:hover::before {
+    animation-duration: 1.5s;
+}
+
+/* Специальный эффект для главной кнопки КРУТИТЬ */
+#spin-btn.btn-shimmer::before {
+    background: linear-gradient(
+        45deg,
+        transparent 25%,
+        rgba(255, 215, 0, 0.2) 35%,
+        rgba(255, 215, 0, 0.5) 45%,
+        rgba(255, 255, 255, 0.3) 55%,
+        rgba(255, 215, 0, 0.2) 65%,
+        transparent 75%
+    );
+    animation-duration: 2.5s;
 }
 
 .btn-secondary {
@@ -1417,12 +1478,10 @@ body {
     width: 240px;
     height: 240px;
     object-fit: contain;
-    filter: drop-shadow(0 0 30px rgba(255, 213, 74, 0.3));
-    transition: all 0.3s ease;
+    /* Убрано свечение */
 }
 .key-icon:hover {
-    transform: scale(1.05);
-    filter: drop-shadow(0 0 40px rgba(255, 213, 74, 0.5));
+    transform: scale(1.02);
 }
 .wheel-container {
     width: 100%;
@@ -1781,6 +1840,8 @@ body {
     color: #0a0a0a;
     cursor: pointer;
     transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
 }
 
 .boost-btn:hover:not(:disabled) {
