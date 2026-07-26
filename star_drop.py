@@ -521,19 +521,16 @@ app.add_middleware(
 @app.get("/{filename}")
 async def serve_root_files(filename: str):
     """Раздача файлов из корневой папки"""
-    # Разрешенные файлы
     allowed_files = [
         'IMGlow.png', 'IMGnorm.jpg', 'IMGhard.jpg',
         'Start_img.JPG', 'win_symbol.png', 'lose_symbol.png'
     ]
     
-    # Проверяем, разрешен ли файл
     if filename in allowed_files:
         file_path = os.path.join(os.path.dirname(__file__), filename)
         if os.path.exists(file_path):
             return FileResponse(file_path)
     
-    # Если файл не найден или не разрешен
     raise HTTPException(status_code=404, detail="File not found")
 
 STATIC_DIR = "static"
@@ -574,7 +571,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=5">
+    <link rel="stylesheet" href="/static/style.css?v=6">
 </head>
 <body>
 
@@ -882,7 +879,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
     </div>
 
-    <script src="/static/script.js?v=5"></script>
+    <script src="/static/script.js?v=6"></script>
 </body>
 </html>""")
 
@@ -897,7 +894,7 @@ with open(os.path.join(STATIC_DIR, "style.css"), "w", encoding="utf-8") as f:
 }
 
 :root {
-    --bg-primary: #090909;
+    --bg-primary: #090B0F;
     --bg-secondary: #141414;
     --bg-card: rgba(255, 255, 255, 0.05);
     --border-glass: rgba(255, 255, 255, 0.1);
@@ -1417,8 +1414,8 @@ body {
     align-items: center;
 }
 .key-icon {
-    width: 80px;
-    height: 80px;
+    width: 240px;
+    height: 240px;
     object-fit: contain;
     filter: drop-shadow(0 0 30px rgba(255, 213, 74, 0.3));
     transition: all 0.3s ease;
@@ -1472,7 +1469,7 @@ body {
     flex-direction: column;
     align-items: center;
     width: 100%;
-    margin: 8px 0;
+    margin-top: 20px;
 }
 .spin-info {
     color: var(--text-secondary);
@@ -1820,7 +1817,7 @@ body {
     bottom: 0;
     left: 0;
     width: 100%;
-    background: rgba(9, 9, 9, 0.95);
+    background: rgba(9, 11, 15, 0.95);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-top: 1px solid var(--border-glass);
@@ -1958,13 +1955,13 @@ body {
         padding: 10px 12px;
     }
     .key-icon {
-        width: 64px;
-        height: 64px;
+        width: 180px;
+        height: 180px;
     }
 }
 """)
 
-# JavaScript
+# JavaScript (без изменений)
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
 let current_user = null;
@@ -2281,11 +2278,10 @@ async function initGames() {
         });
     });
     
-    // Инициализация кликера
     initClicker();
 }
 
-// ========== РУЛЕТКА С ИЗОБРАЖЕНИЯМИ ==========
+// ========== РУЛЕТКА ==========
 function updateKeyImage(mode) {
     const keyImage = document.getElementById('key-image');
     const images = {
@@ -2299,7 +2295,6 @@ function updateKeyImage(mode) {
 function buildRouletteStrip() {
     const strip = document.getElementById('wheel-strip');
     strip.innerHTML = '';
-    // Используем эмоджи для ячеек рулетки (так было и остается)
     const symbols = ['❌', '🎫'];
     for (let i = 0; i < 2000; i++) {
         const cell = document.createElement('div');
