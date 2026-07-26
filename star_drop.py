@@ -502,7 +502,7 @@ async def give_tokens(message: types.Message):
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
 from pydantic import BaseModel
 import uvicorn
 import aiofiles
@@ -516,6 +516,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==================== МАРШРУТ ДЛЯ РАЗДАЧИ ФАЙЛОВ ИЗ КОРНЯ ====================
+@app.get("/{filename}")
+async def serve_root_files(filename: str):
+    """Раздача файлов из корневой папки"""
+    # Разрешенные файлы
+    allowed_files = [
+        'IMGlow.png', 'IMGnorm.jpg', 'IMGhard.jpg',
+        'Start_img.JPG', 'win_symbol.png', 'lose_symbol.png'
+    ]
+    
+    # Проверяем, разрешен ли файл
+    if filename in allowed_files:
+        file_path = os.path.join(os.path.dirname(__file__), filename)
+        if os.path.exists(file_path):
+            return FileResponse(file_path)
+    
+    # Если файл не найден или не разрешен
+    raise HTTPException(status_code=404, detail="File not found")
 
 STATIC_DIR = "static"
 AVATARS_DIR = os.path.join(STATIC_DIR, "avatars")
@@ -547,7 +566,7 @@ async def get_avatar(user_id: int):
         logging.error(f"Avatar error: {e}")
         return {"url": "/static/default_avatar.png"}
 
-# СОЗДАНИЕ СТАТИЧЕСКИХ ФАЙЛОВ - пути к изображениям без /static/
+# СОЗДАНИЕ СТАТИЧЕСКИХ ФАЙЛОВ
 with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     f.write("""<!DOCTYPE html>
 <html lang="ru">
@@ -1435,12 +1454,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 32px;
     border: 1px solid var(--border-glass);
-}
-.wheel-cell img {
-    width: 50px;
-    height: 50px;
-    object-fit: contain;
 }
 .wheel-arrow {
     position: absolute;
@@ -1946,10 +1961,6 @@ body {
         width: 64px;
         height: 64px;
     }
-    .wheel-cell img {
-        width: 40px;
-        height: 40px;
-    }
 }
 """)
 
@@ -2288,19 +2299,13 @@ function updateKeyImage(mode) {
 function buildRouletteStrip() {
     const strip = document.getElementById('wheel-strip');
     strip.innerHTML = '';
-    // Используем изображения для ячеек рулетки
-    const symbols = [
-        '/lose_symbol.png',   // ❌
-        '/win_symbol.png'     // 🎫
-    ];
+    // Используем эмоджи для ячеек рулетки (так было и остается)
+    const symbols = ['❌', '🎫'];
     for (let i = 0; i < 2000; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
         cell.dataset.index = i;
-        const img = document.createElement('img');
-        img.src = symbols[i % 2];
-        img.alt = i % 2 === 0 ? 'Lose' : 'Win';
-        cell.appendChild(img);
+        cell.textContent = symbols[i % 2];
         strip.appendChild(cell);
     }
 }
@@ -2312,23 +2317,15 @@ function animateRouletteWheel(win) {
         const cells = strip.children;
         const cellWidth = cells[0]?.offsetWidth + 4 || 64;
         const containerWidth = container.offsetWidth || 300;
-        const targetSymbol = win ? '/win_symbol.png' : '/lose_symbol.png';
+        const targetSymbol = win ? '🎫' : '❌';
         let targetIndex = -1;
         const startRange = 550, endRange = 580;
         for (let i = startRange; i <= endRange && i < cells.length; i++) {
-            const img = cells[i].querySelector('img');
-            if (img && img.src.includes(targetSymbol)) {
-                targetIndex = i;
-                break;
-            }
+            if (cells[i].textContent === targetSymbol) { targetIndex = i; break; }
         }
         if (targetIndex === -1) {
             for (let i = 0; i < cells.length; i++) {
-                const img = cells[i].querySelector('img');
-                if (img && img.src.includes(targetSymbol)) {
-                    targetIndex = i;
-                    break;
-                }
+                if (cells[i].textContent === targetSymbol) { targetIndex = i; break; }
             }
         }
         if (targetIndex === -1) targetIndex = startRange;
