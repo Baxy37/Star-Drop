@@ -572,7 +572,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=11">
+    <link rel="stylesheet" href="/static/style.css?v=12">
 </head>
 <body>
 
@@ -596,7 +596,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <!-- ОСНОВНОЙ ИНТЕРФЕЙС -->
     <div id="app-content" class="app-content" style="display:none;">
         
-        <!-- Фоновые частицы (ВСЕГДА ВИДНЫ) -->
+        <!-- Фоновые частицы -->
         <div class="particles">
             <div class="particle"></div><div class="particle"></div><div class="particle"></div>
             <div class="particle"></div><div class="particle"></div><div class="particle"></div>
@@ -884,7 +884,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
     </div>
 
-    <script src="/static/script.js?v=11"></script>
+    <script src="/static/script.js?v=12"></script>
 </body>
 </html>""")
 
@@ -942,7 +942,7 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--accent-gold); border-radius: 10px; }
 
-/* ===== PARTICLES BACKGROUND - ВСЕГДА ВИДНЫ ===== */
+/* ===== PARTICLES BACKGROUND ===== */
 .particles {
     position: fixed;
     top: 0;
@@ -2047,7 +2047,7 @@ body {
 }
 """)
 
-# JavaScript (обновлен с правильной анимацией рулетки)
+# JavaScript (исправленная анимация рулетки)
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
 let current_user = null;
@@ -2367,7 +2367,7 @@ async function initGames() {
     initClicker();
 }
 
-// ========== РУЛЕТКА / КЕЙСЫ С ИСПРАВЛЕННОЙ АНИМАЦИЕЙ ==========
+// ========== РУЛЕТКА / КЕЙСЫ С БЕСКОНЕЧНОЙ ЛЕНТОЙ ==========
 function updateKeyImage(mode) {
     const keyImage = document.getElementById('key-image');
     const images = {
@@ -2382,8 +2382,9 @@ function buildRouletteStrip() {
     const strip = document.getElementById('wheel-strip');
     strip.innerHTML = '';
     const symbols = ['❌', '🎫'];
-    // УВЕЛИЧЕНО КОЛИЧЕСТВО ЯЧЕЕК ДЛЯ БЕСКОНЕЧНОГО ЭФФЕКТА
-    const totalCells = 3000;
+    
+    // СОЗДАЕМ БЕСКОНЕЧНУЮ ЛЕНТУ (очень много ячеек)
+    const totalCells = 8000;
     for (let i = 0; i < totalCells; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
@@ -2405,7 +2406,7 @@ function animateRouletteWheel(win) {
         // Находим целевую ячейку в середине ленты
         let targetIndex = -1;
         const midPoint = Math.floor(cells.length / 2);
-        const searchRange = 200;
+        const searchRange = 500;
         
         for (let i = midPoint - searchRange; i <= midPoint + searchRange && i < cells.length; i++) {
             if (i >= 0 && cells[i].textContent === targetSymbol) {
@@ -2424,20 +2425,21 @@ function animateRouletteWheel(win) {
         }
         if (targetIndex === -1) targetIndex = midPoint;
         
-        // Расчитываем смещение
+        // Расчитываем конечное смещение
         let targetOffset = targetIndex * cellWidth + cellWidth/2 - containerWidth/2;
         
-        // МАЛОЕ КОЛИЧЕСТВО ОБОРОТОВ (3-5), чтобы ячейки не улетали
-        const minLoops = 3;
-        const maxLoops = 6;
+        // МИНИМАЛЬНЫЕ ОБОРОТЫ (1-2)
+        const minLoops = 1;
+        const maxLoops = 3;
         const extraLoops = minLoops + Math.floor(Math.random() * (maxLoops - minLoops + 1));
         const totalOffset = targetOffset + extraLoops * cells.length * cellWidth;
         
-        // Убеждаемся, что ячейки всегда видны
-        strip.style.transform = `translateX(0px)`;
+        // Начинаем с середины ленты, чтобы ячейки сразу были видны
+        const startOffset = midPoint * cellWidth - containerWidth / 2;
+        strip.style.transform = `translateX(-${startOffset}px)`;
         
-        // ОПТИМАЛЬНОЕ ВРЕМЯ ДЛЯ ПЛАВНОСТИ (10-14 секунд)
-        const duration = 10000 + Math.random() * 4000;
+        // Длительность анимации (8-12 секунд)
+        const duration = 8000 + Math.random() * 4000;
         const startTime = performance.now();
         
         // Плавное замедление
@@ -2450,8 +2452,7 @@ function animateRouletteWheel(win) {
             const progress = Math.min(elapsed / duration, 1);
             const easedProgress = easeInOutCubic(progress);
             
-            // Плавное движение с замедлением
-            const currentOffset = totalOffset * easedProgress;
+            const currentOffset = startOffset + (totalOffset - startOffset) * easedProgress;
             strip.style.transform = `translateX(-${currentOffset}px)`;
             
             if (progress < 1) {
