@@ -572,7 +572,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=9">
+    <link rel="stylesheet" href="/static/style.css?v=10">
 </head>
 <body>
 
@@ -664,19 +664,19 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
             </div>
 
             <div class="games-grid">
-                <div class="game-card" data-tab="roulette">
+                <div class="game-card transparent" data-tab="roulette">
                     <img src="/case.jpg" alt="Кейсы" class="game-image">
                     <span class="game-name">Кейсы</span>
                 </div>
-                <div class="game-card" data-tab="slot">
+                <div class="game-card transparent" data-tab="slot">
                     <img src="/slot.jpg" alt="Слоты" class="game-image">
                     <span class="game-name">Слоты</span>
                 </div>
-                <div class="game-card" data-tab="rocket">
+                <div class="game-card transparent" data-tab="rocket">
                     <img src="/raketa.jpg" alt="Ракетка" class="game-image">
                     <span class="game-name">Ракетка</span>
                 </div>
-                <div class="game-card" data-tab="clicker">
+                <div class="game-card transparent" data-tab="clicker">
                     <img src="/cloker.jpg" alt="Кликер" class="game-image">
                     <span class="game-name">Кликер</span>
                 </div>
@@ -884,7 +884,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
     </div>
 
-    <script src="/static/script.js?v=9"></script>
+    <script src="/static/script.js?v=10"></script>
 </body>
 </html>""")
 
@@ -1420,11 +1420,11 @@ body {
     margin-bottom: 24px;
 }
 .game-card {
-    background: var(--bg-card);
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--border-glass);
+    background: transparent;
+    backdrop-filter: none;
+    border: none;
     border-radius: var(--radius-medium);
-    padding: 12px;
+    padding: 8px;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -1432,29 +1432,29 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 140px;
+    min-height: 180px;
 }
 .game-card:hover {
     transform: translateY(-4px);
-    border-color: var(--accent-gold);
-    box-shadow: var(--shadow-glow);
+}
+.game-card:hover .game-image {
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 20px rgba(255, 213, 74, 0.3));
 }
 .game-card .game-image {
     width: 100%;
-    height: 100px;
+    height: 200px;
     object-fit: contain;
     margin-bottom: 6px;
     border-radius: var(--radius-small);
-    transition: transform 0.3s ease;
-}
-.game-card:hover .game-image {
-    transform: scale(1.05);
+    transition: all 0.3s ease;
 }
 .game-card .game-name {
     font-size: 12px;
     font-weight: 600;
     color: var(--text-secondary);
     margin-top: 2px;
+    text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
 }
 
 /* ===== GAME HEADERS ===== */
@@ -2016,11 +2016,11 @@ body {
         gap: 8px;
     }
     .game-card {
-        padding: 10px;
-        min-height: 110px;
+        padding: 6px;
+        min-height: 140px;
     }
     .game-card .game-image {
-        height: 80px;
+        height: 160px;
     }
     .game-card .game-name {
         font-size: 11px;
@@ -2054,7 +2054,7 @@ body {
 }
 """)
 
-# JavaScript (обновлен)
+# JavaScript (без изменений)
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
 let current_user = null;
