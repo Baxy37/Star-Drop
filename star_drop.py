@@ -547,7 +547,7 @@ async def get_avatar(user_id: int):
         logging.error(f"Avatar error: {e}")
         return {"url": "/static/default_avatar.png"}
 
-# СОЗДАНИЕ СТАТИЧЕСКИХ ФАЙЛОВ
+# СОЗДАНИЕ СТАТИЧЕСКИХ ФАЙЛОВ - пути к изображениям без /static/
 with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     f.write("""<!DOCTYPE html>
 <html lang="ru">
@@ -555,7 +555,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=4">
+    <link rel="stylesheet" href="/static/style.css?v=5">
 </head>
 <body>
 
@@ -675,7 +675,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
             </div>
             <div id="key-container" class="key-container">
                 <div id="key-display" class="key-display">
-                    <img id="key-image" src="/static/IMGlow.png" alt="Key" class="key-icon">
+                    <img id="key-image" src="/IMGlow.png" alt="Key" class="key-icon">
                 </div>
             </div>
             <div id="wheel-wrapper" style="display:none;">
@@ -863,7 +863,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
     </div>
 
-    <script src="/static/script.js?v=4"></script>
+    <script src="/static/script.js?v=5"></script>
 </body>
 </html>""")
 
@@ -2278,9 +2278,9 @@ async function initGames() {
 function updateKeyImage(mode) {
     const keyImage = document.getElementById('key-image');
     const images = {
-        light: '/static/IMGlow.png',
-        normal: '/static/IMGnorm.jpg',
-        hard: '/static/IMGhard.jpg'
+        light: '/IMGlow.png',
+        normal: '/IMGnorm.jpg',
+        hard: '/IMGhard.jpg'
     };
     keyImage.src = images[mode] || images.light;
 }
@@ -2290,8 +2290,8 @@ function buildRouletteStrip() {
     strip.innerHTML = '';
     // Используем изображения для ячеек рулетки
     const symbols = [
-        '/static/lose_symbol.png',  // ❌
-        '/static/win_symbol.png'    // 🎫
+        '/lose_symbol.png',   // ❌
+        '/win_symbol.png'     // 🎫
     ];
     for (let i = 0; i < 2000; i++) {
         const cell = document.createElement('div');
@@ -2312,7 +2312,7 @@ function animateRouletteWheel(win) {
         const cells = strip.children;
         const cellWidth = cells[0]?.offsetWidth + 4 || 64;
         const containerWidth = container.offsetWidth || 300;
-        const targetSymbol = win ? '/static/win_symbol.png' : '/static/lose_symbol.png';
+        const targetSymbol = win ? '/win_symbol.png' : '/lose_symbol.png';
         let targetIndex = -1;
         const startRange = 550, endRange = 580;
         for (let i = startRange; i <= endRange && i < cells.length; i++) {
