@@ -572,7 +572,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=13">
+    <link rel="stylesheet" href="/static/style.css?v=14">
 </head>
 <body>
 
@@ -664,21 +664,29 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
             </div>
 
             <div class="games-grid">
-                <div class="game-card transparent" data-tab="roulette">
-                    <img src="/case.jpg" alt="Кейсы" class="game-image">
-                    <span class="game-name">Кейсы</span>
+                <div class="game-card" data-tab="roulette">
+                    <div class="game-card-content">
+                        <img src="/case.jpg" alt="Кейсы" class="game-image">
+                        <span class="game-name">Кейсы</span>
+                    </div>
                 </div>
-                <div class="game-card transparent" data-tab="slot">
-                    <img src="/slot.jpg" alt="Слоты" class="game-image">
-                    <span class="game-name">Слоты</span>
+                <div class="game-card" data-tab="slot">
+                    <div class="game-card-content">
+                        <img src="/slot.jpg" alt="Слоты" class="game-image">
+                        <span class="game-name">Слоты</span>
+                    </div>
                 </div>
-                <div class="game-card transparent" data-tab="rocket">
-                    <img src="/raketa.jpg" alt="Ракетка" class="game-image">
-                    <span class="game-name">Ракетка</span>
+                <div class="game-card" data-tab="rocket">
+                    <div class="game-card-content">
+                        <img src="/raketa.jpg" alt="Ракетка" class="game-image">
+                        <span class="game-name">Ракетка</span>
+                    </div>
                 </div>
-                <div class="game-card transparent" data-tab="clicker">
-                    <img src="/cloker.jpg" alt="Кликер" class="game-image">
-                    <span class="game-name">Кликер</span>
+                <div class="game-card" data-tab="clicker">
+                    <div class="game-card-content">
+                        <img src="/cloker.jpg" alt="Кликер" class="game-image">
+                        <span class="game-name">Кликер</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -690,9 +698,18 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
                 <span class="game-title">Кейсы</span>
             </div>
             <div id="mode-selector" class="mode-selector">
-                <button class="mode-btn active" data-mode="light">Low</button>
-                <button class="mode-btn" data-mode="normal">Normal</button>
-                <button class="mode-btn" data-mode="hard">Hard</button>
+                <button class="mode-btn active" data-mode="light">
+                    <img src="/IMGlow.png" alt="Low" class="mode-icon">
+                    <span>Low</span>
+                </button>
+                <button class="mode-btn" data-mode="normal">
+                    <img src="/IMGnorm.jpg" alt="Normal" class="mode-icon">
+                    <span>Normal</span>
+                </button>
+                <button class="mode-btn" data-mode="hard">
+                    <img src="/IMGhard.jpg" alt="Hard" class="mode-icon">
+                    <span>Hard</span>
+                </button>
             </div>
             <div id="key-container" class="key-container">
                 <div id="key-display" class="key-display">
@@ -884,7 +901,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
     </div>
 
-    <script src="/static/script.js?v=13"></script>
+    <script src="/static/script.js?v=14"></script>
 </body>
 </html>""")
 
@@ -1414,40 +1431,79 @@ body {
 }
 .game-card {
     background: transparent;
-    backdrop-filter: none;
     border: none;
     border-radius: var(--radius-medium);
-    padding: 8px;
+    padding: 0;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
+}
+.game-card-content {
+    background: rgba(255, 255, 255, 0.03);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--radius-medium);
+    padding: 12px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 180px;
+    min-height: 200px;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.05), inset 0 0 20px rgba(255, 255, 255, 0.03);
+    position: relative;
+    overflow: hidden;
 }
-.game-card:hover {
+.game-card-content::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, 
+        transparent 30%, 
+        rgba(255, 255, 255, 0.1) 40%, 
+        rgba(255, 255, 255, 0.3) 50%, 
+        rgba(255, 255, 255, 0.1) 60%, 
+        transparent 70%
+    );
+    background-size: 300% 300%;
+    animation: borderShine 3s ease-in-out infinite;
+    border-radius: var(--radius-medium);
+    z-index: 0;
+    pointer-events: none;
+}
+@keyframes borderShine {
+    0% { background-position: -100% -100%; }
+    100% { background-position: 200% 200%; }
+}
+.game-card:hover .game-card-content {
+    border-color: rgba(255, 255, 255, 0.6);
     transform: translateY(-4px);
+    box-shadow: 0 0 40px rgba(255, 255, 255, 0.1), inset 0 0 40px rgba(255, 255, 255, 0.05);
 }
 .game-card:hover .game-image {
-    transform: scale(1.08);
-    filter: drop-shadow(0 0 20px rgba(255, 213, 74, 0.3));
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.2));
 }
 .game-card .game-image {
     width: 100%;
-    height: 200px;
+    height: 160px;
     object-fit: contain;
     margin-bottom: 6px;
     border-radius: var(--radius-small);
     transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
 }
 .game-card .game-name {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--text-secondary);
     margin-top: 2px;
     text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+    position: relative;
+    z-index: 1;
 }
 
 /* ===== GAME HEADERS ===== */
@@ -1468,16 +1524,30 @@ body {
     display: flex;
     gap: 12px;
     margin-bottom: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
 }
 .mode-btn {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border-glass);
     border-radius: 20px;
-    padding: 6px 20px;
+    padding: 8px 16px;
     color: var(--text-secondary);
     font-weight: 600;
     font-size: 13px;
     cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 80px;
+}
+.mode-btn .mode-icon {
+    width: 100px;
+    height: 100px;
+    object-fit: contain;
+    border-radius: 12px;
     transition: all 0.3s ease;
 }
 .mode-btn.active {
@@ -1485,6 +1555,12 @@ body {
     color: #0a0a0a;
     border-color: transparent;
     box-shadow: 0 0 20px rgba(255, 213, 74, 0.2);
+}
+.mode-btn.active .mode-icon {
+    filter: drop-shadow(0 0 15px rgba(255, 213, 74, 0.3));
+}
+.mode-btn span {
+    font-size: 12px;
 }
 .key-container {
     display: flex;
@@ -1497,8 +1573,8 @@ body {
     align-items: center;
 }
 .key-icon {
-    width: 240px;
-    height: 240px;
+    width: 300px;
+    height: 300px;
     object-fit: contain;
 }
 .key-icon:hover {
@@ -2008,12 +2084,12 @@ body {
     .games-grid {
         gap: 8px;
     }
-    .game-card {
-        padding: 6px;
+    .game-card-content {
+        padding: 8px;
         min-height: 140px;
     }
     .game-card .game-image {
-        height: 160px;
+        height: 120px;
     }
     .game-card .game-name {
         font-size: 11px;
@@ -2041,13 +2117,17 @@ body {
         padding: 10px 12px;
     }
     .key-icon {
-        width: 180px;
-        height: 180px;
+        width: 220px;
+        height: 220px;
+    }
+    .mode-btn .mode-icon {
+        width: 70px;
+        height: 70px;
     }
 }
 """)
 
-# JavaScript (ИСПРАВЛЕННАЯ БЕСКОНЕЧНАЯ АНИМАЦИЯ)
+# JavaScript (исправленная анимация)
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
 let current_user = null;
@@ -2383,8 +2463,7 @@ function buildRouletteStrip() {
     strip.innerHTML = '';
     const symbols = ['❌', '🎫'];
     
-    // СОЗДАЕМ БЕСКОНЕЧНУЮ ЛЕНТУ (БОЛЬШОЙ ЗАПАС)
-    const totalCells = 6000;
+    const totalCells = 3000;
     for (let i = 0; i < totalCells; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
@@ -2403,13 +2482,13 @@ function animateRouletteWheel(win) {
         const containerWidth = container.offsetWidth || 300;
         const targetSymbol = win ? '🎫' : '❌';
         
-        // Ищем целевую ячейку в середине ленты
+        // Ищем целевую ячейку
         let targetIndex = -1;
-        const midPoint = Math.floor(cells.length * 0.4);
-        const searchRange = Math.floor(cells.length * 0.3);
+        const midPoint = Math.floor(cells.length / 2);
+        const searchRange = 300;
         
-        for (let i = midPoint; i < midPoint + searchRange && i < cells.length; i++) {
-            if (cells[i].textContent === targetSymbol) {
+        for (let i = midPoint - searchRange; i <= midPoint + searchRange && i < cells.length; i++) {
+            if (i >= 0 && cells[i].textContent === targetSymbol) {
                 targetIndex = i;
                 break;
             }
@@ -2423,23 +2502,24 @@ function animateRouletteWheel(win) {
                 }
             }
         }
-        if (targetIndex === -1) targetIndex = midPoint + 50;
+        if (targetIndex === -1) targetIndex = midPoint;
         
-        // Расчитываем конечное смещение
+        // ОГРАНИЧИВАЕМ СМЕЩЕНИЕ
         let targetOffset = targetIndex * cellWidth + cellWidth/2 - containerWidth/2;
+        const maxOffset = (cells.length - 10) * cellWidth - containerWidth;
+        targetOffset = Math.min(targetOffset, maxOffset);
+        targetOffset = Math.max(targetOffset, 0);
         
-        // МИНИМАЛЬНЫЕ ОБОРОТЫ (2-4)
-        const minLoops = 2;
-        const maxLoops = 5;
-        const loops = minLoops + Math.floor(Math.random() * (maxLoops - minLoops + 1));
-        const totalOffset = targetOffset + loops * (cells.length * 0.6) * cellWidth;
+        // МИНИМАЛЬНЫЕ ОБОРОТЫ (1-2)
+        const loops = 1 + Math.floor(Math.random() * 2);
+        const usableLength = cells.length * 0.2;
+        const totalOffset = targetOffset + loops * usableLength * cellWidth;
         
-        // Начинаем с начала, чтобы ячейки были видны
-        const startOffset = 0;
-        strip.style.transform = `translateX(0px)`;
+        // НАЧАЛО С СЕРЕДИНЫ
+        const startOffset = midPoint * cellWidth - containerWidth / 2;
+        strip.style.transform = `translateX(-${startOffset}px)`;
         
-        // ВРЕМЯ АНИМАЦИИ (10-14 секунд)
-        const duration = 10000 + Math.random() * 4000;
+        const duration = 8000 + Math.random() * 4000;
         const startTime = performance.now();
         const startPos = startOffset;
         const endPos = totalOffset;
