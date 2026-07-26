@@ -572,7 +572,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>StarDrop</title>
-    <link rel="stylesheet" href="/static/style.css?v=12">
+    <link rel="stylesheet" href="/static/style.css?v=13">
 </head>
 <body>
 
@@ -884,7 +884,7 @@ with open(os.path.join(STATIC_DIR, "index.html"), "w", encoding="utf-8") as f:
 
     </div>
 
-    <script src="/static/script.js?v=12"></script>
+    <script src="/static/script.js?v=13"></script>
 </body>
 </html>""")
 
@@ -2047,7 +2047,7 @@ body {
 }
 """)
 
-# JavaScript (исправленная анимация рулетки)
+# JavaScript (ИСПРАВЛЕННАЯ БЕСКОНЕЧНАЯ АНИМАЦИЯ)
 with open(os.path.join(STATIC_DIR, "script.js"), "w", encoding="utf-8") as f:
     f.write("""const BASE_URL = window.location.origin;
 let current_user = null;
@@ -2367,7 +2367,7 @@ async function initGames() {
     initClicker();
 }
 
-// ========== РУЛЕТКА / КЕЙСЫ С БЕСКОНЕЧНОЙ ЛЕНТОЙ ==========
+// ========== РУЛЕТКА / КЕЙСЫ - БЕСКОНЕЧНАЯ ЛЕНТА ==========
 function updateKeyImage(mode) {
     const keyImage = document.getElementById('key-image');
     const images = {
@@ -2383,8 +2383,8 @@ function buildRouletteStrip() {
     strip.innerHTML = '';
     const symbols = ['❌', '🎫'];
     
-    // СОЗДАЕМ БЕСКОНЕЧНУЮ ЛЕНТУ (очень много ячеек)
-    const totalCells = 8000;
+    // СОЗДАЕМ БЕСКОНЕЧНУЮ ЛЕНТУ (БОЛЬШОЙ ЗАПАС)
+    const totalCells = 6000;
     for (let i = 0; i < totalCells; i++) {
         const cell = document.createElement('div');
         cell.className = 'wheel-cell';
@@ -2403,13 +2403,13 @@ function animateRouletteWheel(win) {
         const containerWidth = container.offsetWidth || 300;
         const targetSymbol = win ? '🎫' : '❌';
         
-        // Находим целевую ячейку в середине ленты
+        // Ищем целевую ячейку в середине ленты
         let targetIndex = -1;
-        const midPoint = Math.floor(cells.length / 2);
-        const searchRange = 500;
+        const midPoint = Math.floor(cells.length * 0.4);
+        const searchRange = Math.floor(cells.length * 0.3);
         
-        for (let i = midPoint - searchRange; i <= midPoint + searchRange && i < cells.length; i++) {
-            if (i >= 0 && cells[i].textContent === targetSymbol) {
+        for (let i = midPoint; i < midPoint + searchRange && i < cells.length; i++) {
+            if (cells[i].textContent === targetSymbol) {
                 targetIndex = i;
                 break;
             }
@@ -2423,26 +2423,27 @@ function animateRouletteWheel(win) {
                 }
             }
         }
-        if (targetIndex === -1) targetIndex = midPoint;
+        if (targetIndex === -1) targetIndex = midPoint + 50;
         
         // Расчитываем конечное смещение
         let targetOffset = targetIndex * cellWidth + cellWidth/2 - containerWidth/2;
         
-        // МИНИМАЛЬНЫЕ ОБОРОТЫ (1-2)
-        const minLoops = 1;
-        const maxLoops = 3;
-        const extraLoops = minLoops + Math.floor(Math.random() * (maxLoops - minLoops + 1));
-        const totalOffset = targetOffset + extraLoops * cells.length * cellWidth;
+        // МИНИМАЛЬНЫЕ ОБОРОТЫ (2-4)
+        const minLoops = 2;
+        const maxLoops = 5;
+        const loops = minLoops + Math.floor(Math.random() * (maxLoops - minLoops + 1));
+        const totalOffset = targetOffset + loops * (cells.length * 0.6) * cellWidth;
         
-        // Начинаем с середины ленты, чтобы ячейки сразу были видны
-        const startOffset = midPoint * cellWidth - containerWidth / 2;
-        strip.style.transform = `translateX(-${startOffset}px)`;
+        // Начинаем с начала, чтобы ячейки были видны
+        const startOffset = 0;
+        strip.style.transform = `translateX(0px)`;
         
-        // Длительность анимации (8-12 секунд)
-        const duration = 8000 + Math.random() * 4000;
+        // ВРЕМЯ АНИМАЦИИ (10-14 секунд)
+        const duration = 10000 + Math.random() * 4000;
         const startTime = performance.now();
+        const startPos = startOffset;
+        const endPos = totalOffset;
         
-        // Плавное замедление
         function easeInOutCubic(t) {
             return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
         }
@@ -2452,7 +2453,7 @@ function animateRouletteWheel(win) {
             const progress = Math.min(elapsed / duration, 1);
             const easedProgress = easeInOutCubic(progress);
             
-            const currentOffset = startOffset + (totalOffset - startOffset) * easedProgress;
+            const currentOffset = startPos + (endPos - startPos) * easedProgress;
             strip.style.transform = `translateX(-${currentOffset}px)`;
             
             if (progress < 1) {
